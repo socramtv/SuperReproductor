@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Súper Reproductor</string>
+    <string name="action_search">Buscar</string>
+    <string name="action_load_playlist">Cargar lista (JSON)</string>
+    <string name="action_favorites">Favoritos</string>
+    <string name="favorites_category_name">⭐ Favoritos</string>
+    <string name="empty_categories">No hay categorías todavía. Toca el icono de carpeta para cargar un archivo JSON.</string>
+    <string name="empty_streams">No hay canales en esta categoría.</string>
+    <string name="load_success">Lista cargada: %1$d categorías, %2$d canales</string>
+    <string name="player_error">Error de reproducción: %1$s</string>
+    <string name="stream_count">%1$d canales</string>
+    <string name="search_hint">Buscar canal…</string>
+    <string name="added_to_favorites">Añadido a favoritos</string>
+    <string name="removed_from_favorites">Quitado de favoritos</string>
+</resources>
