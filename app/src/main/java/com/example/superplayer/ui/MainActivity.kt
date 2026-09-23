@@ -73,7 +73,16 @@ class MainActivity : AppCompatActivity() {
                 // Seguimos abajo con la lista de ejemplo.
             }
         }
-        setPlaylist(PlaylistRepository.loadFromAssets(this, "sample_playlist.json"))
+        try {
+            setPlaylist(PlaylistRepository.loadFromAssets(this, "sample_playlist.json"))
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "No se pudo cargar la lista de ejemplo (${e.message}). Carga tu propio JSON.",
+                Toast.LENGTH_LONG
+            ).show()
+            setPlaylist(PlaylistData(emptyList()))
+        }
     }
 
     private fun loadFromUri(uri: Uri, announce: Boolean = true) {

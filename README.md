@@ -76,6 +76,14 @@ tanto en la portada como dentro de una categoría), favoritos persistentes
 (categoría "⭐ Favoritos" arriba de todo cuando hay alguno) y carga de
 JSON desde el propio dispositivo.
 
+## Si la app se cierra sola
+
+`SuperPlayerApp` captura cualquier error no controlado y, en vez de
+cerrar la app en silencio, abre una pantalla de texto (`CrashActivity`)
+con el error completo. Si te pasa, haz captura de esa pantalla — con eso
+se puede diagnosticar exactamente qué falló, sin necesidad de `adb` ni
+de un PC.
+
 ## Limitaciones conocidas / próximos pasos
 
 - La navegación entre pantallas pasa la lista de canales en memoria
