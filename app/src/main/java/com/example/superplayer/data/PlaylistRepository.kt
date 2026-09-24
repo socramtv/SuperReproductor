@@ -32,6 +32,19 @@ object PlaylistRepository {
         return parse(text)
     }
 
+    /** Descarga y lee una playlist alojada en una URL (p. ej. un raw de GitHub). */
+    fun loadFromUrl(urlString: String): PlaylistData {
+        val connection = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
+        val text = try {
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 10_000
+            connection.inputStream.bufferedReader().readText()
+        } finally {
+            connection.disconnect()
+        }
+        return parse(text)
+    }
+
     fun parse(text: String): PlaylistData {
         val trimmed = text.trim()
         return if (trimmed.startsWith("#EXTM3U", ignoreCase = true)) {

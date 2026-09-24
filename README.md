@@ -116,6 +116,16 @@ ninguno, carga una lista de ejemplo (`app/src/main/assets/sample_playlist.json`)
 con dos streams públicos de prueba (Big Buck Bunny en DASH y el stream de
 ejemplo de Apple en HLS).
 
+## Listas remotas (Lista 1 / 2 / 3)
+
+En la portada hay tres botones para cargar una lista directamente desde
+una URL (por ejemplo, un enlace "raw" de un archivo en GitHub), en vez de
+tener que elegir un archivo local cada vez. La primera vez que tocas uno
+te pide la URL; a partir de ahí, tocarlo vuelve a descargar y leer esa
+misma URL (para recoger cambios que hayas hecho en el archivo remoto).
+Mantén pulsado el botón para cambiar la URL guardada en ese hueco. Acepta
+tanto JSON como M3U, igual que la carga desde archivo.
+
 ## Estructura
 
 ```

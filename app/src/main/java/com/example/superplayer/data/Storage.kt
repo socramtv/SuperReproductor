@@ -43,6 +43,13 @@ object AppPrefs {
     fun getLastPlaylistUri(context: Context): String? =
         prefs(context).getString(KEY_LAST_URI, null)
 
+    fun getListUrl(context: Context, slot: Int): String? =
+        prefs(context).getString("list_url_$slot", null)
+
+    fun saveListUrl(context: Context, slot: Int, url: String) {
+        prefs(context).edit().putString("list_url_$slot", url).apply()
+    }
+
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 }

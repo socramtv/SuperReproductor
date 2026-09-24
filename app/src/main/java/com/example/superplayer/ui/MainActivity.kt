@@ -55,7 +55,77 @@ class MainActivity : AppCompatActivity() {
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = categoryAdapter
 
+        setupListSlotButtons()
         loadInitialPlaylist()
+    }
+
+    private fun setupListSlotButtons() {
+        val slots = listOf(
+            Triple(1, binding.listButton1, getString(R.string.list_slot_1)),
+            Triple(2, binding.listButton2, getString(R.string.list_slot_2)),
+            Triple(3, binding.listButton3, getString(R.string.list_slot_3))
+        )
+        for ((slot, button, label) in slots) {
+            button.setOnClickListener {
+                val savedUrl = AppPrefs.getListUrl(this, slot)
+                if (savedUrl.isNullOrBlank()) {
+                    promptForListUrl(slot, label)
+                } else {
+                    loadFromRemoteUrl(savedUrl)
+                }
+            }
+            button.setOnLongClickListener {
+                promptForListUrl(slot, label)
+                true
+            }
+        }
+    }
+
+    private fun promptForListUrl(slot: Int, label: String) {
+        val input = android.widget.EditText(this).apply {
+            hint = getString(R.string.list_slot_dialog_hint)
+            setText(AppPrefs.getListUrl(this@MainActivity, slot).orEmpty())
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine(true)
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad / 2, pad, pad / 2)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(getString(R.string.list_slot_dialog_title, label))
+            .setView(input)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val url = input.text.toString().trim()
+                if (url.isNotBlank()) {
+                    AppPrefs.saveListUrl(this, slot, url)
+                    loadFromRemoteUrl(url)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun loadFromRemoteUrl(url: String) {
+        Toast.makeText(this, R.string.loading_list, Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val data = PlaylistRepository.loadFromUrl(url)
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    setPlaylist(data)
+                    val totalStreams = data.categories.sumOf { it.streams.size }
+                    Toast.makeText(
+                        this,
+                        getString(R.string.load_success, data.categories.size, totalStreams),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    Toast.makeText(this, getString(R.string.list_load_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     override fun onResume() {

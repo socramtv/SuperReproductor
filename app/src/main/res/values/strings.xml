@@ -14,6 +14,13 @@
     <string name="track_audio">Audio</string>
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
+    <string name="list_slot_1">Lista 1</string>
+    <string name="list_slot_2">Lista 2</string>
+    <string name="list_slot_3">Lista 3</string>
+    <string name="list_slot_dialog_title">URL de %1$s</string>
+    <string name="list_slot_dialog_hint">https://raw.githubusercontent.com/…</string>
+    <string name="loading_list">Cargando lista…</string>
+    <string name="list_load_error">No se pudo cargar esa lista (%1$s).</string>
     <string name="added_to_favorites">Añadido a favoritos</string>
     <string name="removed_from_favorites">Quitado de favoritos</string>
 </resources>
