@@ -5,7 +5,7 @@
     <string name="action_load_playlist">Cargar lista (JSON)</string>
     <string name="action_favorites">Favoritos</string>
     <string name="favorites_category_name">⭐ Favoritos</string>
-    <string name="empty_categories">No hay categorías todavía. Toca el icono de carpeta para cargar un archivo JSON.</string>
+    <string name="empty_categories">No hay categorías todavía. Toca el icono de carpeta para cargar un archivo JSON o M3U.</string>
     <string name="empty_streams">No hay canales en esta categoría.</string>
     <string name="load_success">Lista cargada: %1$d categorías, %2$d canales</string>
     <string name="player_error">Error de reproducción: %1$s</string>

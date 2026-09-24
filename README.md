@@ -92,8 +92,25 @@ pueden venir en base64url o en hexadecimal — se normalizan solos.
 - Estos campos son solo para contenido tuyo o licenciado — no es un
   mecanismo para saltarse la protección de contenido de terceros.
 
+## Listas M3U
+
+También se acepta M3U/M3U8 extendido (detecta el formato solo, por si
+empieza con `#EXTM3U`):
+
+```
+#EXTM3U
+#EXTINF:-1 tvg-name="Canal" tvg-logo="https://.../logo.png" group-title="Categoría",Nombre para mostrar
+https://tu-servidor/stream
+```
+
+`group-title` se usa como categoría, `tvg-logo` como icono, y `tvg-name`
+(o el texto tras la coma si falta) como nombre. El tipo de cada canal se
+adivina por la extensión de la URL (`.m3u8` → HLS, `.mpd` → DASH; si no,
+progresivo). Este formato no admite cabeceras, DRM ni token — para eso
+usa el JSON.
+
 Desde la app, usa el icono de carpeta (barra superior) para elegir un
-archivo `.json` con cualquiera de estos formatos desde tu dispositivo. La
+archivo JSON o M3U con cualquiera de estos formatos desde tu dispositivo. La
 app recuerda el último archivo cargado y lo reabre al iniciar; si no hay
 ninguno, carga una lista de ejemplo (`app/src/main/assets/sample_playlist.json`)
 con dos streams públicos de prueba (Big Buck Bunny en DASH y el stream de

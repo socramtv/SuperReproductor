@@ -97,7 +97,7 @@ class MainActivity : AppCompatActivity() {
             if (!announce) throw e // deja que loadInitialPlaylist() lo capture y caiga a la lista de ejemplo
             Toast.makeText(
                 this,
-                "No se pudo leer ese archivo (${e.message}). Revisa que sea JSON válido.",
+                "No se pudo leer ese archivo (${e.message}). Revisa que sea un JSON o M3U válido.",
                 Toast.LENGTH_LONG
             ).show()
             return
@@ -191,7 +191,7 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_load_playlist -> {
-                openDocumentLauncher.launch(arrayOf("application/json"))
+                openDocumentLauncher.launch(arrayOf("*/*"))
                 true
             }
             else -> super.onOptionsItemSelected(item)

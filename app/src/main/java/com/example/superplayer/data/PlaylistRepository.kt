@@ -10,12 +10,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Lee y valida el JSON de la playlist, ya sea desde un Uri elegido por el
- * usuario (Storage Access Framework) o desde los assets de la app (lista
- * de ejemplo usada la primera vez que se abre la app).
- *
- * Acepta dos formatos en la raíz y varios alias de campos; ver el
- * comentario en model/Playlist.kt para el detalle completo.
+ * Lee y valida la playlist, ya sea desde un Uri elegido por el usuario
+ * (Storage Access Framework) o desde los assets de la app (lista de
+ * ejemplo usada la primera vez que se abre la app). Admite JSON (ver el
+ * comentario en model/Playlist.kt para el detalle de campos/alias) y
+ * listas M3U/M3U8 extendidas (líneas #EXTM3U / #EXTINF).
  */
 object PlaylistRepository {
 
@@ -33,8 +32,18 @@ object PlaylistRepository {
         return parse(text)
     }
 
-    fun parse(jsonText: String): PlaylistData {
-        val trimmed = jsonText.trim()
+    fun parse(text: String): PlaylistData {
+        val trimmed = text.trim()
+        return if (trimmed.startsWith("#EXTM3U", ignoreCase = true)) {
+            parseM3u(trimmed)
+        } else {
+            parseJson(trimmed)
+        }
+    }
+
+    // ---------- JSON ----------
+
+    private fun parseJson(trimmed: String): PlaylistData {
         val categoriesJson: JSONArray = if (trimmed.startsWith("[")) {
             JSONArray(trimmed)
         } else {
@@ -107,4 +116,54 @@ object PlaylistRepository {
         }
         return map
     }
+
+    // ---------- M3U / M3U8 extendido ----------
+
+    private fun parseM3u(text: String): PlaylistData {
+        var pendingName: String? = null
+        var pendingLogo: String? = null
+        var pendingGroup: String = "Sin categoría"
+        val byCategory = LinkedHashMap<String, MutableList<Stream>>()
+
+        for (rawLine in text.lineSequence()) {
+            val line = rawLine.trim()
+            if (line.isEmpty() || line.startsWith("#EXTM3U", ignoreCase = true)) continue
+
+            if (line.startsWith("#EXTINF", ignoreCase = true)) {
+                val commaIndex = line.indexOf(',')
+                val attrsPart = if (commaIndex >= 0) line.substring(0, commaIndex) else line
+                val titlePart = if (commaIndex >= 0) line.substring(commaIndex + 1).trim() else ""
+
+                pendingLogo = extractAttr(attrsPart, "tvg-logo")
+                pendingGroup = extractAttr(attrsPart, "group-title")?.takeIf { it.isNotBlank() }
+                    ?: "Sin categoría"
+                pendingName = (extractAttr(attrsPart, "tvg-name")?.takeIf { it.isNotBlank() }
+                    ?: titlePart).ifBlank { "Sin nombre" }
+            } else if (!line.startsWith("#")) {
+                // Cualquier línea que no sea una etiqueta "#..." es la URL del canal.
+                val type = when {
+                    line.contains(".m3u8", ignoreCase = true) -> "HLS"
+                    line.contains(".mpd", ignoreCase = true) -> "DASH"
+                    else -> "PROGRESSIVE"
+                }
+                val stream = Stream(
+                    name = pendingName ?: "Sin nombre",
+                    type = type,
+                    url = line,
+                    icon = pendingLogo,
+                    category = pendingGroup
+                )
+                byCategory.getOrPut(pendingGroup) { mutableListOf() }.add(stream)
+                pendingName = null
+                pendingLogo = null
+            }
+            // Otras etiquetas (#EXTGRP, #EXTVLCOPT, #EXT-X-..., comentarios) se ignoran.
+        }
+
+        val categories = byCategory.map { (name, streams) -> Category(name, streams) }
+        return PlaylistData(categories)
+    }
+
+    private fun extractAttr(source: String, key: String): String? =
+        Regex("$key=\"([^\"]*)\"").find(source)?.groupValues?.get(1)
 }
