@@ -175,19 +175,37 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /** Si el valor es hexadecimal lo convierte a base64url (sin padding); si no, se deja igual. */
+    /**
+     * kid/key pueden llegar en tres formatos según de dónde se copien:
+     * hexadecimal, base64 "normal" (con +, / o = de relleno) o ya en
+     * base64url (lo que ClearKey necesita). Los tres se normalizan aquí.
+     */
     private fun normalizeClearKeyValue(value: String): String {
         val clean = value.trim()
-        val looksHex = clean.isNotEmpty() && clean.length % 2 == 0 &&
-            clean.all { it in "0123456789abcdefABCDEF" }
-        if (!looksHex) return clean
-        return try {
-            val bytes = ByteArray(clean.length / 2) { i ->
-                clean.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        if (clean.isEmpty()) return clean
+
+        val looksHex = clean.length % 2 == 0 && clean.all { it in "0123456789abcdefABCDEF" }
+        if (looksHex) {
+            return try {
+                val bytes = ByteArray(clean.length / 2) { i ->
+                    clean.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+                }
+                Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
+            } catch (e: Exception) {
+                clean
             }
-            Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
-        } catch (e: Exception) {
-            clean
         }
+
+        if (clean.contains('+') || clean.contains('/') || clean.contains('=')) {
+            return try {
+                val bytes = Base64.decode(clean, Base64.DEFAULT)
+                Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
+            } catch (e: Exception) {
+                clean
+            }
+        }
+
+        return clean
     }
 
     override fun onStop() {

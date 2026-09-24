@@ -58,7 +58,8 @@ object PlaylistRepository {
                 if (url.isBlank()) continue // un canal sin URL no sirve de nada
 
                 val typeRaw = sObj.optString("type").ifBlank { sObj.optString("extension") }
-                val icon = sObj.optString("icon").ifBlank { sObj.optString("image") }.takeIf { it.isNotBlank() }
+                val icon = sObj.optString("icon").ifBlank { sObj.optString("image") }
+                    .ifBlank { sObj.optString("icono") }.takeIf { it.isNotBlank() }
                 val tokenUrl = sObj.optString("token").takeIf { it.isNotBlank() }
 
                 streams.add(

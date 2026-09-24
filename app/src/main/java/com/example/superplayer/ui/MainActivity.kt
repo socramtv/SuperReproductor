@@ -91,7 +91,17 @@ class MainActivity : AppCompatActivity() {
         } catch (e: SecurityException) {
             // Algunos proveedores no soportan permisos persistentes; seguimos igual.
         }
-        val data = PlaylistRepository.loadFromUri(this, uri)
+        val data = try {
+            PlaylistRepository.loadFromUri(this, uri)
+        } catch (e: Exception) {
+            if (!announce) throw e // deja que loadInitialPlaylist() lo capture y caiga a la lista de ejemplo
+            Toast.makeText(
+                this,
+                "No se pudo leer ese archivo (${e.message}). Revisa que sea JSON válido.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
         AppPrefs.saveLastPlaylistUri(this, uri.toString())
         setPlaylist(data)
         if (announce) {

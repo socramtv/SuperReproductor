@@ -1,20 +1,142 @@
+
 {
   "categories": [
     {
-      "name": "Demo",
+      "name": "LaLiga EA Sport",
       "streams": [
-        {
-          "name": "Big Buck Bunny (DASH)",
-          "type": "DASH",
-          "url": "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd",
-          "icon": ""
+       {
+    "name": "DAZN LaLiga 1 🇪🇸 ",
+    "uri": "https://requestrouter3.cdn.agiletv.net/__cl/cg:lv-r4/__c/DAZN_LALIGA1/__op/dash-wv/__f/manifest.mpd",
+    "kid": "Vdb7mHIe21uoEDqc8hBx1A",
+    "key": "SiFY2TLjFf/hP3LkSq1Ffg",
+    "drm_scheme": "clearkey",
+    "extension": "mpd"
+  },
+  {
+    "name": "DAZN LaLiga 2 🇪🇸 ",
+    "uri": "https://requestrouter3.cdn.agiletv.net/__cl/cg:lv-r4/__c/DAZN_LALIGA2/__op/dash-wv/__f/manifest.mpd",
+    "kid": "z3Q92bEw+21UJQ1fkLV5ZQ",
+    "key": "OeDB+ZOKcRSiY7t15xUEKw",
+    "drm_scheme": "clearkey",
+    "extension": "mpd"
+  },
+  
+  
+   {
+    "name": "Setanta Sport 1 🇷🇺 🏴󠁧󠁢󠁥󠁮󠁧󠁿 ",
+    "uri": "https://v4-kun-nk16-cdn-01.live.cdn.cgates.lt/live/dash/561002/index.mpd",
+    "kid": "irIzJEKFTmKwAY7sPuWEhA",
+    "key": "N/3ui27vXJYAHoxvxHv8CA",
+    "drm_scheme": "clearkey",
+    "extension": ""
+},
+
+  {
+        "name": "Match! Futbol 2 🏴󠁧󠁢󠁥󠁮󠁧󠁿 ",
+        "uri": "https://video.beeline.tv/live/d/channel320.isml/manifest-stb.mpd",
+        "kid": "znz5so0ajYdKzOvETX4fzQ",
+        "key": "zaGNTSCr1cx3gxWr4nf+uQ",
+        "drm_scheme": "clearkey",
+        "extension": ""
+    },
+  
+ 
+
+
+{
+          "name": "Bein Sports 2 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+          "uri": "https://otte.live.fly.ww.aiv-cdn.net/iad-nitro/live/clients/dash/enc/8m8cd46i1t/out/v1/83985c68e4174e90a58a1f2c024be4c9/cenc.mpd",
+          "kid": "C0K-JmTX6BHQTz5QTgkkxQ",
+          "key": "riQJASO4xyrFQE3BUoR8uA",
+          "drm_scheme": "clearkey",
+          "extension": "mpd"
+        },
+    
+  
+    {
+      "name": "ESPN x TSN3 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+      "uri": "https://otte.cache.aiv-cdn.net/iad-nitro/live/clients/dash/enc/lsibpqruq1/out/v1/748887d614a84913ba8bcdf3c82823e6/cenc.mpd",
+      "kid": "0yUCUnZTR6DCYDxstIafjA",
+      "key": "DBkxlGDafp7YFttGzoObNw",
+      "drm_scheme": "clearkey",
+      "extension": "mpd"
+    }, 
+    
+
+ 
+    {
+      "name": "ON Football HD 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇻🇳 ",
+      "uri": "https://livebytsctbu.vtvprime.vn/mean/BONGDA_HD/manifest.mpd",
+      "kid": "89c7OpuJRi6_eREATqOzuQ",
+      "key": "LlR6gf-QqgJkjLnj955zOQ",
+      "drm_scheme": "clearkey",
+      "extension": "mpd"
+    }
+   ,
+  
+  {
+          "name": "Premier Sports 1 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+          "uri": "https://otte.live.fly.ww.aiv-cdn.net/iad-nitro/live/clients/dash/enc/m6sqanvm2m/out/v1/f6beb46c6e9a4132ad739f3ca27df6aa/cenc.mpd",
+          "kid": "FET0I1Up8YPwpaSGvv6c2w",
+          "key": "5eP-xnobs0cqIInIoKJVfw",
+          "drm_scheme": "clearkey",
+          "extension": "mpd"
         },
         {
-          "name": "Apple Bip Bop (HLS)",
-          "type": "HLS",
-          "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
-          "icon": ""
-        }
+          "name": "Premier Sports 2 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+          "uri": "https://otte.live.fly.ww.aiv-cdn.net/iad-nitro/live/clients/dash/enc/bcj3iscpd6/out/v1/fcd137b391214f7cb99dd4d7be90ca87/cenc.mpd",
+          "kid": "Gl31NgnryYV4mMSQ9HJJGA",
+          "key": "d_YpgNWC7FQSgHlqz4stGQ",
+          "drm_scheme": "clearkey",
+          "extension": "mpd"
+        },
+       
+        {
+    "name": "Liga SmartBank 🇪🇸",
+    "uri": "https://cache2.zapitv.com/live/eds_c2/HYPERMOTION1/dash_live_ez/HYPERMOTION1.mpd",
+    "kid": "qIYX6QRQTuKR9J8OYKUdSQ",
+    "key": "F/ktWf3jttK/T/tI6MpyCg",
+    "drm_scheme": "clearkey",
+    "extension": ""
+  },
+  {
+    "name": "Liga SmartBank 2 🇪🇸",
+    "uri": "https://cache4.zapitv.com/live/eds_c2/HYPERMOTION2/dash_live_ez/HYPERMOTION2.mpd",
+    "kid": "X8jai5TER0aP/jkhV/jHXg",
+    "key": "MzuTT93kwe6H5/HF2sTLjw",
+    "drm_scheme": "clearkey",
+    "extension": ""
+  },
+  {
+    "name": "Liga SmartBank 3 🇪🇸",
+    "uri": "https://cache2.zapitv.com/live/eds_c2/HYPERMOTION3/dash_live_ez/HYPERMOTION3.mpd",
+    "kid": "UERApeg/QZyBbYx2fH9wOw",
+    "key": "Wa/0DjSuifTjr0dY8koNjA",
+    "drm_scheme": "clearkey",
+    "extension": ""
+  },
+ 
+    {
+      "name": "PRIMERA FEDERACIÓN 🇪🇸",
+      "uri": "https://live.euskaltel.com/__cl/cg:lv-r5/__c/PRIMERA_FEDERACION/__op/dash-wv/__f/manifest.mpd",
+      "kid": "u41BsY5CqAX8I90rgaKw2A",
+      "key": "YC_mC3aft5iC7QPkqegIOw",
+      "drm_scheme": "clearkey",
+      "extension": "mpd"
+    },
+   
+       {
+        "name": "DAZN FAST+ 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+            "uri": "https://ac-003.live.p7s1video.net/63f8995e/t_003/dazn-fast-hd/cenc-default.mpd",
+            "kid": "i87GsxzJ7ctnaKsmVI4iww",
+            "key": "48WwcyiJTDNzSk3mrlWofw",
+            "drm_scheme": "clearkey",
+            "extension": "mpd"
+      }
+ 
+        
+        
+        
       ]
     }
   ]
