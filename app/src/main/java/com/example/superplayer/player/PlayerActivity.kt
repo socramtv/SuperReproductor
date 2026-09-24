@@ -111,6 +111,11 @@ class PlayerActivity : AppCompatActivity() {
         val exoPlayer = ExoPlayer.Builder(this).build()
         player = exoPlayer
         binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
+        binding.playerView.setControllerVisibilityListener(
+            androidx.media3.ui.PlayerView.ControllerVisibilityListener { visibility ->
+                binding.trackSelectionButton.visibility = visibility
+            }
+        )
         binding.playerView.player = exoPlayer
         binding.playerView.keepScreenOn = true
 
@@ -134,14 +139,19 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    /** Menú "Vídeo" / "Audio" que abre el selector de calidad/pista de Media3 para el tipo elegido. */
+    /** Menú "Vídeo" / "Audio" / "Subtítulos" que abre el selector de pistas de Media3 para el tipo elegido. */
     private fun showTrackSelectionMenu(anchor: View) {
         val exoPlayer = player ?: return
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, MENU_ID_VIDEO, 0, getString(R.string.track_video))
         popup.menu.add(0, MENU_ID_AUDIO, 1, getString(R.string.track_audio))
+        popup.menu.add(0, MENU_ID_SUBTITLES, 2, getString(R.string.track_subtitles))
         popup.setOnMenuItemClickListener { item ->
-            val trackType = if (item.itemId == MENU_ID_VIDEO) C.TRACK_TYPE_VIDEO else C.TRACK_TYPE_AUDIO
+            val trackType = when (item.itemId) {
+                MENU_ID_VIDEO -> C.TRACK_TYPE_VIDEO
+                MENU_ID_AUDIO -> C.TRACK_TYPE_AUDIO
+                else -> C.TRACK_TYPE_TEXT
+            }
             TrackSelectionDialogBuilder(this, item.title ?: "", exoPlayer, trackType)
                 .build()
                 .show()
@@ -244,5 +254,6 @@ class PlayerActivity : AppCompatActivity() {
         var pendingStream: Stream? = null
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
+        private const val MENU_ID_SUBTITLES = 3
     }
 }

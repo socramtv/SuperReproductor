@@ -12,6 +12,7 @@
     <string name="action_track_selection">Calidad de vídeo / audio</string>
     <string name="track_video">Vídeo</string>
     <string name="track_audio">Audio</string>
+    <string name="track_subtitles">Subtítulos</string>
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
