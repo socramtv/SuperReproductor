@@ -22,6 +22,8 @@ actualizarlas, puedes aceptar tranquilamente.
 
 ## Esquema del JSON
 
+Se acepta el formato propio:
+
 ```json
 {
   "categories": [
@@ -47,18 +49,54 @@ actualizarlas, puedes aceptar tranquilamente.
 }
 ```
 
-- `type`: `"DASH"` (o `"MPD"`), `"HLS"` (o `"M3U8"`), o cualquier otro
+...y también una raíz en forma de array, con `samples` como alias de
+`streams` y otro grupo de nombres de campo (estilo "exolist"):
+
+```json
+[
+  {
+    "name": "Mis canales",
+    "samples": [
+      {
+        "name": "Canal demo",
+        "uri": "https://tu-servidor/manifest.mpd",
+        "extension": "mpd",
+        "image": "https://tu-servidor/logo.png",
+        "kid": "hex o base64url...",
+        "key": "hex o base64url...",
+        "drm_scheme": "clearkey",
+        "headers": { "User-Agent": "..." },
+        "token": "https://tu-servidor/generar-token"
+      }
+    ]
+  }
+]
+```
+
+Alias aceptados por campo: `url`/`uri`, `icon`/`image`, `type`/`extension`.
+Para DRM ClearKey se acepta cualquiera de estas tres formas: `drm: {keyId,
+key}`, `kid`+`key` sueltos, o `license_key` con el JSON de ClearKey ya
+armado (`{"keys":[{"kty":"oct",...}],"type":"temporary"}`). `kid`/`key`
+pueden venir en base64url o en hexadecimal — se normalizan solos.
+
+- `type`/`extension`: `"DASH"`/`"mpd"`, `"HLS"`/`"m3u8"`, o cualquier otro
   valor → se trata como progresivo (URL directa a un archivo de vídeo).
-- `icon`, `headers` y `drm` son opcionales.
-- `drm.keyId` / `drm.key` son solo para ClearKey **con clave ya conocida**
-  (JWK en base64url) de contenido tuyo o licenciado — no es un mecanismo
-  para saltarse la protección de contenido de terceros.
+- `icon`, `headers`, `drm`/`kid`+`key`/`license_key` y `token` son
+  opcionales.
+- `token`: si la URL del canal contiene el texto `{token}`, antes de
+  reproducir se hace una petición a esa URL (con las mismas `headers` del
+  canal) y se sustituye por el texto que devuelva.
+- Un `drm_scheme` que no sea `"clearkey"` (p. ej. `"widevine"`) se ignora:
+  esos esquemas necesitan servidor de licencias propio y no están
+  implementados; el canal se intenta reproducir sin descifrar.
+- Estos campos son solo para contenido tuyo o licenciado — no es un
+  mecanismo para saltarse la protección de contenido de terceros.
 
 Desde la app, usa el icono de carpeta (barra superior) para elegir un
-archivo `.json` con este formato desde tu dispositivo. La app recuerda el
-último archivo cargado y lo reabre al iniciar; si no hay ninguno, carga
-una lista de ejemplo (`app/src/main/assets/sample_playlist.json`) con dos
-streams públicos de prueba (Big Buck Bunny en DASH y el stream de
+archivo `.json` con cualquiera de estos formatos desde tu dispositivo. La
+app recuerda el último archivo cargado y lo reabre al iniciar; si no hay
+ninguno, carga una lista de ejemplo (`app/src/main/assets/sample_playlist.json`)
+con dos streams públicos de prueba (Big Buck Bunny en DASH y el stream de
 ejemplo de Apple en HLS).
 
 ## Estructura

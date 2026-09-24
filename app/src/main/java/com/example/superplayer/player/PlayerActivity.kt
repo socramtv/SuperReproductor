@@ -1,6 +1,7 @@
 package com.example.superplayer.player
 
 import android.os.Bundle
+import android.util.Base64
 import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AppCompatActivity
@@ -23,13 +24,18 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.example.superplayer.R
 import com.example.superplayer.databinding.ActivityPlayerBinding
+import com.example.superplayer.model.DrmInfo
 import com.example.superplayer.model.Stream
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Pantalla de reproducción. Construye la fuente correcta según stream.type
  * (DASH / HLS / progresivo), aplicando cabeceras HTTP propias y, si el JSON
  * las trae, claves ClearKey para streams cifrados a los que el usuario
- * tiene derecho de acceso.
+ * tiene derecho de acceso. Si el canal trae tokenUrl, primero se pide un
+ * token (en un hilo aparte) y se sustituye "{token}" en la URL antes de
+ * reproducir.
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
@@ -49,10 +55,52 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         title = stream.name
-        preparePlayer(stream)
+        resolveAndPlay(stream)
     }
 
-    private fun preparePlayer(stream: Stream) {
+    private fun resolveAndPlay(stream: Stream) {
+        val tokenUrl = stream.tokenUrl
+        if (tokenUrl.isNullOrBlank()) {
+            startPlayback(stream)
+            return
+        }
+        Thread {
+            val token = try {
+                fetchToken(tokenUrl, stream.headers)
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (token.isNullOrBlank()) {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.player_error, "no se pudo obtener el token de $tokenUrl"),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    startPlayback(stream)
+                } else {
+                    startPlayback(stream.copy(url = stream.url.replace("{token}", token)))
+                }
+            }
+        }.start()
+    }
+
+    private fun fetchToken(tokenUrl: String, headers: Map<String, String>): String {
+        val connection = URL(tokenUrl).openConnection() as HttpURLConnection
+        return try {
+            headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 10_000
+            connection.inputStream.bufferedReader().readText().trim()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun startPlayback(stream: Stream) {
+        if (isFinishing || isDestroyed) return
+
         val dataSourceFactory: DataSource.Factory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(stream.headers)
             .setAllowCrossProtocolRedirects(true)
@@ -102,7 +150,7 @@ class PlayerActivity : AppCompatActivity() {
 
         stream.drm?.let { drm ->
             factory.setDrmSessionManagerProvider {
-                buildClearKeyDrmSessionManager(drm.keyId, drm.key)
+                buildClearKeyDrmSessionManager(drm)
             }
         }
 
@@ -110,16 +158,36 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /**
-     * ClearKey "local": la clave ya viene en el JSON (stream.drm), así que
-     * no hace falta golpear un servidor de licencias, se construye la
-     * respuesta ClearKey en el propio dispositivo.
+     * ClearKey "local": si el JSON trae license_key, se usa tal cual (ya es
+     * la respuesta ClearKey completa). Si trae kid/key sueltos, se arma el
+     * JSON y se normalizan a base64url si vienen en hexadecimal.
      */
-    private fun buildClearKeyDrmSessionManager(keyId: String, key: String): DrmSessionManager {
-        val json = """{"keys":[{"kty":"oct","k":"$key","kid":"$keyId"}],"type":"temporary"}"""
+    private fun buildClearKeyDrmSessionManager(drm: DrmInfo): DrmSessionManager {
+        val json = drm.rawLicenseJson?.takeIf { it.isNotBlank() } ?: run {
+            val keyId = normalizeClearKeyValue(drm.keyId.orEmpty())
+            val key = normalizeClearKeyValue(drm.key.orEmpty())
+            """{"keys":[{"kty":"oct","k":"$key","kid":"$keyId"}],"type":"temporary"}"""
+        }
         val callback = LocalMediaDrmCallback(json.toByteArray(Charsets.UTF_8))
         return DefaultDrmSessionManager.Builder()
             .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
             .build(callback)
+    }
+
+    /** Si el valor es hexadecimal lo convierte a base64url (sin padding); si no, se deja igual. */
+    private fun normalizeClearKeyValue(value: String): String {
+        val clean = value.trim()
+        val looksHex = clean.isNotEmpty() && clean.length % 2 == 0 &&
+            clean.all { it in "0123456789abcdefABCDEF" }
+        if (!looksHex) return clean
+        return try {
+            val bytes = ByteArray(clean.length / 2) { i ->
+                clean.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+            }
+            Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
+        } catch (e: Exception) {
+            clean
+        }
     }
 
     override fun onStop() {

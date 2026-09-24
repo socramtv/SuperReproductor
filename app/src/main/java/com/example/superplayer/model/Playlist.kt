@@ -1,31 +1,34 @@
 package com.example.superplayer.model
 
 /**
- * Esquema del JSON que lee esta app. Guarda tu lista con esta forma
- * (puedes tener tantas categorías y canales como quieras):
+ * Esquema del JSON que lee esta app. Se acepta la raíz de dos formas:
  *
- * {
- *   "categories": [
- *     {
- *       "name": "Mis canales",
- *       "streams": [
- *         {
- *           "name": "Canal demo DASH",
- *           "type": "DASH",                 // "DASH" | "HLS" | cualquier otro valor -> progresivo (mp4, etc.)
- *           "url": "https://.../manifest.mpd",
- *           "icon": "https://.../logo.png",  // opcional
- *           "headers": {                     // opcional: cabeceras propias (p. ej. token de tu propio servidor)
- *             "Authorization": "Bearer xxx"
- *           },
- *           "drm": {                         // opcional: solo si TÚ tienes derecho a esa clave ClearKey
- *             "keyId": "base64url...",
- *             "key": "base64url..."
- *           }
- *         }
- *       ]
- *     }
- *   ]
- * }
+ * 1) Objeto con "categories":
+ *    { "categories": [ { "name": "...", "streams": [ ... ] } ] }
+ *
+ * 2) Array de categorías directamente en la raíz:
+ *    [ { "name": "...", "samples": [ ... ] } ]
+ *
+ * ("streams" y "samples" son alias del mismo campo.)
+ *
+ * Cada canal admite estos campos (alias entre paréntesis), todos menos
+ * name/url son opcionales:
+ * - name
+ * - url (o "uri")
+ * - type: "DASH"|"HLS"|otro -> progresivo   (o "extension": "mpd"|"m3u8")
+ * - icon (o "image")
+ * - headers: { ... }   cabeceras HTTP propias (auth, referer, etc.)
+ * - token: URL que devuelve un token en texto plano. Si "url" contiene el
+ *   texto "{token}", se sustituye por lo que devuelva esa URL justo antes
+ *   de reproducir.
+ * - DRM ClearKey, en cualquiera de estas tres formas:
+ *     "drm": { "keyId": "...", "key": "..." }
+ *     "kid": "...", "key": "..."       (sueltos, al mismo nivel que "url")
+ *     "license_key": "{\"keys\":[{\"kty\":\"oct\",...}],\"type\":\"temporary\"}"
+ *   "kid"/"key" aceptan base64url o hexadecimal (se normalizan solos).
+ *   Un "drm_scheme" distinto de "clearkey" (p. ej. "widevine") se ignora:
+ *   esos esquemas necesitan servidor de licencias propio y no están
+ *   implementados aquí.
  */
 
 data class PlaylistData(
@@ -44,13 +47,15 @@ data class Stream(
     val icon: String?,
     val category: String,
     val headers: Map<String, String> = emptyMap(),
-    val drm: DrmInfo? = null
+    val drm: DrmInfo? = null,
+    val tokenUrl: String? = null
 ) {
     /** Identificador estable para favoritos: dos canales con la misma URL son "el mismo". */
     val id: String get() = url
 }
 
 data class DrmInfo(
-    val keyId: String,
-    val key: String
+    val keyId: String? = null,
+    val key: String? = null,
+    val rawLicenseJson: String? = null
 )
