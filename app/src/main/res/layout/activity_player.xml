@@ -11,4 +11,16 @@
         android:layout_height="match_parent"
         app:show_buffering="when_playing" />
 
+    <ImageButton
+        android:id="@+id/trackSelectionButton"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="16dp"
+        android:padding="10dp"
+        android:background="@drawable/bg_round_button"
+        android:src="@drawable/ic_settings"
+        android:tint="@android:color/white"
+        android:contentDescription="@string/action_track_selection" />
+
 </FrameLayout>

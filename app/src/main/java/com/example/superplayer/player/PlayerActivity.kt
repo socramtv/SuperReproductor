@@ -2,6 +2,8 @@ package com.example.superplayer.player
 
 import android.os.Bundle
 import android.util.Base64
+import android.view.View
+import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AppCompatActivity
@@ -22,6 +24,7 @@ import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.ui.TrackSelectionDialogBuilder
 import com.example.superplayer.R
 import com.example.superplayer.databinding.ActivityPlayerBinding
 import com.example.superplayer.model.DrmInfo
@@ -107,6 +110,7 @@ class PlayerActivity : AppCompatActivity() {
 
         val exoPlayer = ExoPlayer.Builder(this).build()
         player = exoPlayer
+        binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
         binding.playerView.player = exoPlayer
         binding.playerView.keepScreenOn = true
 
@@ -128,6 +132,22 @@ class PlayerActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.player_error, e.message ?: ""), Toast.LENGTH_LONG).show()
         }
+    }
+
+    /** Menú "Vídeo" / "Audio" que abre el selector de calidad/pista de Media3 para el tipo elegido. */
+    private fun showTrackSelectionMenu(anchor: View) {
+        val exoPlayer = player ?: return
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, MENU_ID_VIDEO, 0, getString(R.string.track_video))
+        popup.menu.add(0, MENU_ID_AUDIO, 1, getString(R.string.track_audio))
+        popup.setOnMenuItemClickListener { item ->
+            val trackType = if (item.itemId == MENU_ID_VIDEO) C.TRACK_TYPE_VIDEO else C.TRACK_TYPE_AUDIO
+            TrackSelectionDialogBuilder(this, item.title ?: "", exoPlayer, trackType)
+                .build()
+                .show()
+            true
+        }
+        popup.show()
     }
 
     private fun buildMediaSource(stream: Stream, dataSourceFactory: DataSource.Factory): MediaSource {
@@ -222,5 +242,7 @@ class PlayerActivity : AppCompatActivity() {
 
     companion object {
         var pendingStream: Stream? = null
+        private const val MENU_ID_VIDEO = 1
+        private const val MENU_ID_AUDIO = 2
     }
 }

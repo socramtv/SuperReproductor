@@ -9,6 +9,9 @@
     <string name="empty_streams">No hay canales en esta categoría.</string>
     <string name="load_success">Lista cargada: %1$d categorías, %2$d canales</string>
     <string name="player_error">Error de reproducción: %1$s</string>
+    <string name="action_track_selection">Calidad de vídeo / audio</string>
+    <string name="track_video">Vídeo</string>
+    <string name="track_audio">Audio</string>
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="added_to_favorites">Añadido a favoritos</string>
