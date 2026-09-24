@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Súper Reproductor</string>
+    <string name="app_name">Socram TV+</string>
     <string name="action_search">Buscar</string>
     <string name="action_load_playlist">Cargar lista (JSON)</string>
     <string name="action_favorites">Favoritos</string>

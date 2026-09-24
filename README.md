@@ -1,4 +1,4 @@
-# Súper Reproductor
+# Socram TV+
 
 App Android nativa (Kotlin) que lee una playlist en JSON y reproduce cada
 canal con **ExoPlayer / Media3**, con soporte para **DASH (.mpd)**,
