@@ -9,6 +9,7 @@
         <item name="colorSurface">@color/surface_dark</item>
         <item name="colorOnSurface">@color/on_background</item>
         <item name="android:statusBarColor">@color/background_dark</item>
+        <item name="colorControlHighlight">@color/primary</item>
     </style>
 
     <style name="Theme.SuperReproductor.Player" parent="Theme.SuperReproductor">
