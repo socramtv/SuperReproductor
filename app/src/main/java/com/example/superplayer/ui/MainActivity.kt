@@ -233,6 +233,7 @@ class MainActivity : AppCompatActivity() {
         val searchItem = menu.findItem(R.id.action_search)
         val searchView = searchItem.actionView as SearchView
         searchView.queryHint = getString(R.string.search_hint)
+        styleSearchView(this, searchView)
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?) = true
             override fun onQueryTextChange(newText: String?): Boolean {
