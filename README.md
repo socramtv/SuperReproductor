@@ -126,6 +126,51 @@ ninguno, carga una lista de ejemplo (`app/src/main/assets/sample_playlist.json`)
 con dos streams públicos de prueba (Big Buck Bunny en DASH y el stream de
 ejemplo de Apple en HLS).
 
+## Listas públicas tipo tdtchannels.com
+
+También se reconoce solo —mirando si el JSON trae una clave `"countries"`
+en la raíz, sin que haga falta indicar nada— el formato de listas
+públicas como las de [tdtchannels.com](https://www.tdtchannels.com/):
+
+```json
+{
+  "epg": { "json": "https://www.tdtchannels.com/epg/example.json" },
+  "countries": [
+    {
+      "name": "España",
+      "ambits": [
+        {
+          "name": "Nacional",
+          "channels": [
+            {
+              "name": "Canal demo",
+              "logo": "https://tu-servidor/logo.png",
+              "epg_id": "canal.demo",
+              "options": [
+                { "format": "hls", "url": "https://tu-servidor/index.m3u8" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+De cada canal se usa el primer elemento de `options` (si trae varias
+calidades o CDNs alternativas, se ignoran las demás); `format` decide si
+el canal se trata como HLS, DASH o progresivo, igual que `type`/`extension`
+en el formato propio. `ambits` se usa como categoría (agrupando por país
+solo si la lista trae más de uno). Esto es genérico —se detecta por la
+forma del JSON, no por la URL—, así que debería funcionar igual con
+cualquier otra lista de tdtchannels.com que comparta este mismo esquema
+(por ejemplo sus listas de televisión, no solo la de radio).
+
+Su guía EPG (`epg.json` en la raíz) viene en un formato JSON propio, no
+XMLTV — ver la sección EPG más abajo, donde se explican los dos formatos
+que se admiten.
+
 ## Listas remotas (Lista 1 / 2 / 3)
 
 En la portada hay tres botones para cargar una lista directamente desde
@@ -183,10 +228,16 @@ en segundo plano en cuanto cargas esa lista, sin bloquear nada:
   ICY/ID3 (o no lo manda todavía), se usa el programa que marca la guía
   EPG como respaldo, en el mismo sitio. Se revisa cada minuto mientras
   esa pantalla está abierta, por si cambia de programa.
-- Formato admitido: **XMLTV** (`.xml` o `.xml.gz`; el `.gz` se detecta
-  solo, da igual lo que diga la URL o las cabeceras HTTP), el estándar de
-  facto para guías de programación por Internet — la mayoría de listas
-  IPTV que ya traen `url-tvg` apuntan a uno de estos.
+- Formatos admitidos, detectados solos mirando el contenido ya
+  descargado (da igual lo que diga la URL o las cabeceras HTTP, y el
+  `.gz` también se detecta solo):
+  - **XMLTV** (`.xml` o `.xml.gz`), el estándar de facto para guías de
+    programación por Internet — la mayoría de listas IPTV que ya traen
+    `url-tvg` apuntan a uno de estos.
+  - **JSON de listas públicas tipo tdtchannels.com**: un array raíz de
+    canales, cada uno con su `name` (el mismo id que el `epg_id`/`tvgId`
+    del canal en la lista) y sus `events` (inicio/fin en timestamp Unix
+    más el título de cada programa).
 - Si la descarga o el formato fallan, o el canal no tiene `tvg-id`, o no
   hay coincidencia en la guía, la app sigue funcionando exactamente igual,
   simplemente sin ese dato de más.
@@ -199,8 +250,8 @@ en segundo plano en cuanto cargas esa lista, sin bloquear nada:
 ```
 app/src/main/java/com/example/superplayer/
   model/    Stream, Category, PlaylistData, DrmInfo
-  data/     PlaylistRepository (parseo JSON/M3U), EpgRepository (guía XMLTV),
-            FavoritesStore, AppPrefs
+  data/     PlaylistRepository (parseo JSON/M3U/tdtchannels), EpgRepository
+            (guía XMLTV o JSON), FavoritesStore, AppPrefs
   ui/       MainActivity (categorías + buscador), StreamListActivity
   player/   PlayerActivity (MediaController), PlaybackService (MediaSessionService
             + ExoPlayer real), StreamMediaSourceFactory (DASH/HLS/progresivo +
@@ -210,10 +261,11 @@ app/src/main/java/com/example/superplayer/
 Funciones incluidas: categorías, buscador (filtra canales por nombre,
 tanto en la portada como dentro de una categoría), favoritos persistentes
 (categoría "⭐ Favoritos" arriba de todo cuando hay alguno), carga de
-JSON/M3U desde el propio dispositivo o desde una URL, radio con "ahora
-suena" + reproducción en segundo plano / pantalla de bloqueo, y guía EPG
-opcional (programa actual en la lista de canales y como respaldo en la
-pantalla de radio).
+JSON (propio, "exolist" o listas públicas tipo tdtchannels.com)/M3U desde
+el propio dispositivo o desde una URL, radio con "ahora suena" +
+reproducción en segundo plano / pantalla de bloqueo, y guía EPG opcional
+en XMLTV o JSON (programa actual en la lista de canales y como respaldo
+en la pantalla de radio).
 
 ## Si la app se cierra sola
 

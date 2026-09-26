@@ -59,6 +59,14 @@ object PlaylistRepository {
     private fun parseJson(trimmed: String): PlaylistData {
         val isArrayRoot = trimmed.startsWith("[")
         val rootObject: JSONObject? = if (isArrayRoot) null else JSONObject(trimmed)
+
+        // Listas públicas tipo tdtchannels.com (raíz objeto con "countries"):
+        // esquema totalmente distinto, con su propia función dedicada.
+        val countriesJson = rootObject?.optJSONArray("countries")
+        if (rootObject != null && countriesJson != null) {
+            return parseTdtChannelsJson(rootObject, countriesJson)
+        }
+
         val categoriesJson: JSONArray = if (isArrayRoot) {
             JSONArray(trimmed)
         } else {
@@ -116,6 +124,77 @@ object PlaylistRepository {
             categories.add(Category(categoryName, streams))
         }
         return PlaylistData(categories, epgUrl)
+    }
+
+    // ---------- Listas públicas tipo tdtchannels.com ----------
+
+    /**
+     * Formato de listas públicas como https://www.tdtchannels.com/lists/*.json:
+     * raíz objeto con "countries" -> "ambits" (categorías) -> "channels", y
+     * cada canal con "logo", "epg_id" y "options" (variantes de stream; nos
+     * quedamos con la primera). El EPG, si lo trae, viene en "epg": {"json":
+     * "URL"} y apunta a un JSON propio de tdtchannels (no un XMLTV) —
+     * EpgRepository detecta solo cuál de los dos formatos es.
+     */
+    private fun parseTdtChannelsJson(root: JSONObject, countriesJson: JSONArray): PlaylistData {
+        val epgUrl = root.optJSONObject("epg")?.optStringOrNull("json")
+
+        val singleCountry = countriesJson.length() <= 1
+        val categories = ArrayList<Category>()
+
+        for (i in 0 until countriesJson.length()) {
+            val countryObj = countriesJson.optJSONObject(i) ?: continue
+            val countryName = countryObj.optString("name").ifBlank { "Sin país" }
+            val ambitsJson = countryObj.optJSONArray("ambits") ?: JSONArray()
+
+            for (j in 0 until ambitsJson.length()) {
+                val ambitObj = ambitsJson.optJSONObject(j) ?: continue
+                val ambitName = ambitObj.optString("name").ifBlank { "Sin categoría" }
+                val categoryName = if (singleCountry) ambitName else "$countryName - $ambitName"
+                val channelsJson = ambitObj.optJSONArray("channels") ?: JSONArray()
+
+                val streams = ArrayList<Stream>(channelsJson.length())
+                for (k in 0 until channelsJson.length()) {
+                    val chObj = channelsJson.optJSONObject(k) ?: continue
+                    val firstOption = chObj.optJSONArray("options")?.optJSONObject(0)
+                    val stream = firstOption?.let { opt ->
+                        val url = opt.optStringOrNull("url") ?: return@let null
+                        val format = opt.optStringOrNull("format").orEmpty()
+                        val type = when {
+                            format.contains("hls", ignoreCase = true) ||
+                                format.contains("m3u8", ignoreCase = true) -> "HLS"
+                            format.contains("dash", ignoreCase = true) ||
+                                format.contains("mpd", ignoreCase = true) -> "DASH"
+                            else -> "PROGRESSIVE"
+                        }
+                        Stream(
+                            name = chObj.optString("name").ifBlank { "Sin nombre" },
+                            type = type,
+                            url = url,
+                            icon = chObj.optStringOrNull("logo"),
+                            category = categoryName,
+                            tvgId = chObj.optStringOrNull("epg_id")
+                        )
+                    }
+                    if (stream != null) streams.add(stream)
+                }
+                if (streams.isNotEmpty()) {
+                    categories.add(Category(categoryName, streams))
+                }
+            }
+        }
+        return PlaylistData(categories, epgUrl)
+    }
+
+    /**
+     * Como optString(key), pero distingue "no viene" o "viene null explícito"
+     * (-> null de Kotlin) de "viene un texto vacío" (-> ""); optString a
+     * secas convierte un JSON null en el texto literal "null", lo que
+     * rompería los `.takeIf { it.isNotBlank() }` de más arriba.
+     */
+    private fun JSONObject.optStringOrNull(key: String): String? {
+        if (isNull(key)) return null
+        return optString(key).takeIf { it.isNotBlank() }
     }
 
     private fun buildDrmInfo(sObj: JSONObject): DrmInfo? {
