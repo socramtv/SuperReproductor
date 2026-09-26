@@ -231,8 +231,17 @@ Si la lista trae guía EPG (`epgUrl`/`url-tvg` a nivel de lista y
 en segundo plano en cuanto cargas esa lista, sin bloquear nada:
 
 - **En la lista de canales**: cada canal con `tvg-id` que tenga
-  coincidencia en la guía muestra una segunda línea pequeña, "Ahora: 
-  \<programa\>", debajo de su nombre.
+  coincidencia en la guía muestra, debajo de su nombre, hasta tres líneas
+  pequeñas con su horario: "Ahora (17:30–18:30): Previo toros desde
+  Sevilla", "Después (18:30–20:30): Corrida de toros" y "Esta noche
+  (22:00–23:30): Cine de noche". Cada línea se oculta por separado si no
+  hay dato para ese hueco (por ejemplo, si la guía no llega tan lejos en
+  el tiempo); "Esta noche" además se oculta si coincide con "Ahora" o
+  "Después" (ya se está viendo o es lo siguiente, así que repetirlo no
+  aporta nada). "Esta noche" apunta al programa que cubre las 22:00 del
+  día de emisión actual (que va de las 06:00 a las 06:00 del día
+  siguiente, como en cualquier guía de TV: a la 1 de la madrugada, "esta
+  noche" sigue siendo la noche que ya empezó, no una futura).
 - **En la pantalla de radio**: si el propio stream no manda su título
   ICY/ID3 (o no lo manda todavía), se usa el programa que marca la guía
   EPG como respaldo, en el mismo sitio. Se revisa cada minuto mientras

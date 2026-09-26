@@ -29,6 +29,9 @@
          todavía no hay ni título dinámico (ICY/ID3) ni nombre de canal. -->
     <string name="now_playing_fallback">Reproduciendo…</string>
 
-    <!-- EPG: programa en emisión ahora mismo, en la lista de canales. -->
-    <string name="epg_now_playing">Ahora: %1$s</string>
+    <!-- EPG en la lista de canales: "ahora", "después" y "esta noche",
+         cada uno con su horario (%1$s) y título (%2$s). -->
+    <string name="epg_now_playing">Ahora (%1$s): %2$s</string>
+    <string name="epg_next_playing">Después (%1$s): %2$s</string>
+    <string name="epg_tonight_playing">Esta noche (%1$s): %2$s</string>
 </resources>

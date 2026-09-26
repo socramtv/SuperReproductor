@@ -5,6 +5,8 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.zip.GZIPInputStream
@@ -73,6 +75,71 @@ object EpgRepository {
             if (nowMillis >= p.startMillis && nowMillis < p.stopMillis) return p.title
         }
         return null
+    }
+
+    /** Un tramo de programación ya resuelto para pintar en pantalla (título + horario). */
+    data class EpgEntry(val title: String, val startMillis: Long, val stopMillis: Long)
+
+    /** "Ahora", "Después" y "Esta noche" de un canal, para la lista de canales (ver [schedule]). */
+    data class EpgSchedule(val now: EpgEntry?, val next: EpgEntry?, val tonight: EpgEntry?)
+
+    /**
+     * "Ahora" (en emisión en este instante), "Después" (el siguiente que
+     * empieza tras "ahora" en la guía) y "Esta noche" (el que cubre las
+     * 22:00 del día de emisión actual, o si no hay ninguno exactamente a esa
+     * hora, el primero que empiece entre las 22:00 y las 04:00 siguientes)
+     * para ese tvg-id. Cualquiera de los tres puede salir a null si no hay
+     * dato; "esta noche" además se omite (null) si resulta ser el mismo
+     * programa que "ahora" o que "después", para no repetir la misma línea
+     * dos veces.
+     *
+     * "Día de emisión" (para "esta noche"): igual que en las guías de TV de
+     * toda la vida, se cuenta de las 06:00 a las 06:00 del día siguiente, así
+     * que entre las 00:00 y las 05:59 "esta noche" sigue siendo la noche de
+     * ayer, no una todavía por empezar hoy.
+     */
+    fun schedule(tvgId: String?, nowMillis: Long = System.currentTimeMillis()): EpgSchedule {
+        if (tvgId.isNullOrBlank()) return EpgSchedule(null, null, null)
+        val list = byChannel[tvgId] ?: return EpgSchedule(null, null, null)
+
+        var now: Programme? = null
+        var next: Programme? = null
+        for (p in list) {
+            if (nowMillis >= p.startMillis && nowMillis < p.stopMillis) {
+                now = p
+            } else if (p.startMillis > nowMillis && next == null) {
+                next = p
+            }
+        }
+
+        val anchor = tonightAnchorMillis(nowMillis)
+        var tonight = list.firstOrNull { anchor >= it.startMillis && anchor < it.stopMillis }
+            ?: list.firstOrNull { it.startMillis in anchor..(anchor + 6 * 3_600_000L) }
+        if (tonight == now || tonight == next) tonight = null
+
+        return EpgSchedule(now?.toEntry(), next?.toEntry(), tonight?.toEntry())
+    }
+
+    /** "17:30–18:00" en la hora local del dispositivo. */
+    fun formatRange(entry: EpgEntry): String {
+        val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+        return "${fmt.format(Date(entry.startMillis))}–${fmt.format(Date(entry.stopMillis))}"
+    }
+
+    private fun Programme.toEntry() = EpgEntry(title, startMillis, stopMillis)
+
+    /** Instante "22:00 de hoy", entendiendo "hoy" como día de emisión (ver [schedule]). */
+    private fun tonightAnchorMillis(nowMillis: Long): Long {
+        val cal = Calendar.getInstance()
+        cal.timeInMillis = nowMillis
+        if (cal.get(Calendar.HOUR_OF_DAY) < 6) {
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+        }
+        cal.set(Calendar.HOUR_OF_DAY, 22)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
     }
 
     private fun fetchAndParse(urlString: String): Map<String, List<Programme>> {
