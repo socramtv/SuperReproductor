@@ -70,6 +70,64 @@
 
     </LinearLayout>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="2dp">
+
+        <android.widget.Button
+            android:id="@+id/listButton4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingVertical="10dp"
+            android:text="@string/list_slot_4"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            android:textColor="@color/on_background"
+            android:background="@drawable/bg_list_slot_button" />
+
+        <android.widget.Button
+            android:id="@+id/listButton5"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingVertical="10dp"
+            android:text="@string/list_slot_5"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            android:textColor="@color/on_background"
+            android:background="@drawable/bg_list_slot_button" />
+
+        <!-- Mismo formato que las dos anteriores, pero fija (no es un hueco de
+             URL remota): hace lo mismo que el icono de carpeta de la barra
+             superior, elegir un archivo JSON/M3U del propio dispositivo. -->
+        <android.widget.Button
+            android:id="@+id/loadFileButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingVertical="10dp"
+            android:text="@string/action_load_file_button"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            android:textColor="@color/on_background"
+            android:background="@drawable/bg_list_slot_button" />
+
+    </LinearLayout>
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

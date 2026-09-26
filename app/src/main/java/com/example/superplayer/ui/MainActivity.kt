@@ -64,7 +64,9 @@ class MainActivity : AppCompatActivity() {
         val slots = listOf(
             Triple(1, binding.listButton1, getString(R.string.list_slot_1)),
             Triple(2, binding.listButton2, getString(R.string.list_slot_2)),
-            Triple(3, binding.listButton3, getString(R.string.list_slot_3))
+            Triple(3, binding.listButton3, getString(R.string.list_slot_3)),
+            Triple(4, binding.listButton4, getString(R.string.list_slot_4)),
+            Triple(5, binding.listButton5, getString(R.string.list_slot_5))
         )
         for ((slot, button, label) in slots) {
             button.setOnClickListener {
@@ -79,6 +81,14 @@ class MainActivity : AppCompatActivity() {
                 promptForListUrl(slot, label)
                 true
             }
+        }
+
+        // A diferencia de los de arriba, este no guarda ninguna URL: hace
+        // exactamente lo mismo que el icono de carpeta de la barra superior
+        // (elegir un archivo JSON/M3U del propio dispositivo), solo que
+        // también accesible aquí sin tener que abrir el menú.
+        binding.loadFileButton.setOnClickListener {
+            openDocumentLauncher.launch(arrayOf("*/*"))
         }
     }
 

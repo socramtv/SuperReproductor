@@ -18,8 +18,11 @@
     <string name="list_slot_1">TV 📺</string>
     <string name="list_slot_2">Lista 2</string>
     <string name="list_slot_3">Cine 🍿</string>
+    <string name="list_slot_4">TDT 📡</string>
+    <string name="list_slot_5">Radio 📻</string>
     <string name="list_slot_dialog_title">URL de %1$s</string>
     <string name="list_slot_dialog_hint">https://raw.githubusercontent.com/…</string>
+    <string name="action_load_file_button">Archivo 📁</string>
     <string name="loading_list">Cargando lista…</string>
     <string name="list_load_error">No se pudo cargar esa lista (%1$s).</string>
     <string name="added_to_favorites">Añadido a favoritos</string>

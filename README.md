@@ -180,15 +180,23 @@ Su guía EPG (`epg.json` en la raíz) viene en un formato JSON propio, no
 XMLTV — ver la sección EPG más abajo, donde se explican los dos formatos
 que se admiten.
 
-## Listas remotas (Lista 1 / 2 / 3)
+## Listas remotas (TV / Lista 2 / Cine / TDT / Radio)
 
-En la portada hay tres botones para cargar una lista directamente desde
-una URL (por ejemplo, un enlace "raw" de un archivo en GitHub), en vez de
-tener que elegir un archivo local cada vez. La primera vez que tocas uno
-te pide la URL; a partir de ahí, tocarlo vuelve a descargar y leer esa
-misma URL (para recoger cambios que hayas hecho en el archivo remoto).
-Mantén pulsado el botón para cambiar la URL guardada en ese hueco. Acepta
-tanto JSON como M3U, igual que la carga desde archivo.
+En la portada hay cinco botones (en dos filas) para cargar una lista
+directamente desde una URL (por ejemplo, un enlace "raw" de un archivo en
+GitHub), en vez de tener que elegir un archivo local cada vez. La primera
+vez que tocas uno te pide la URL; a partir de ahí, tocarlo vuelve a
+descargar y leer esa misma URL (para recoger cambios que hayas hecho en
+el archivo remoto). Mantén pulsado el botón para cambiar la URL guardada
+en ese hueco. Acepta tanto JSON como M3U, igual que la carga desde
+archivo. Los cinco huecos son idénticos y genéricos (el nombre de cada
+uno — TV, Lista 2, Cine, TDT, Radio — es solo una etiqueta orientativa):
+ninguno trae una URL de fábrica, cada uno guarda la que tú le pongas.
+
+Junto a esos cinco, el botón "Archivo 📁" de la segunda fila hace lo mismo
+que el icono de carpeta de la barra superior: elegir un archivo JSON/M3U
+del propio dispositivo (no guarda ninguna URL, es un acceso directo a esa
+misma acción).
 
 ## Radio, "ahora suena" y reproducción en segundo plano
 
