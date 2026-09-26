@@ -129,7 +129,8 @@ object PlaylistRepository {
     // ---------- Listas públicas tipo tdtchannels.com ----------
 
     /**
-     * Formato de listas públicas como https://www.tdtchannels.com/lists/*.json:
+     * Formato de listas públicas como las que sirve tdtchannels.com en su
+     * carpeta "lists" (radio.json, y probablemente otras del mismo estilo):
      * raíz objeto con "countries" -> "ambits" (categorías) -> "channels", y
      * cada canal con "logo", "epg_id" y "options" (variantes de stream; nos
      * quedamos con la primera). El EPG, si lo trae, viene en "epg": {"json":
