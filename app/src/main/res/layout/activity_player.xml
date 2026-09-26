@@ -11,6 +11,57 @@
         android:layout_height="match_parent"
         app:show_buffering="when_playing" />
 
+    <!--
+        Overlay de "radio": PlayerActivity la muestra solo cuando el stream
+        actual no tiene pista de vídeo (se detecta sola a partir de las
+        pistas reales, no hace falta declarar nada en el JSON/M3U). Muestra
+        el logo del canal y lo que se está escuchando ahora mismo (el
+        título dinámico ICY/ID3 si el stream lo trae, si no el nombre fijo
+        del canal).
+    -->
+    <LinearLayout
+        android:id="@+id/nowPlayingOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@android:color/black"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/nowPlayingLogo"
+            android:layout_width="160dp"
+            android:layout_height="160dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_radio" />
+
+        <TextView
+            android:id="@+id/nowPlayingTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:textColor="@color/on_background"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/nowPlayingSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/on_surface_muted"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
     <ImageButton
         android:id="@+id/trackSelectionButton"
         android:layout_width="46dp"

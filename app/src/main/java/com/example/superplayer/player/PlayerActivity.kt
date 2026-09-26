@@ -1,50 +1,86 @@
 package com.example.superplayer.player
 
+import android.Manifest
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.util.Base64
 import android.view.View
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.dash.DashMediaSource
-import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
-import androidx.media3.exoplayer.drm.DrmSessionManager
-import androidx.media3.exoplayer.drm.FrameworkMediaDrm
-import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.MediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.media3.ui.TrackSelectionDialogBuilder
+import coil.load
 import com.example.superplayer.R
 import com.example.superplayer.databinding.ActivityPlayerBinding
-import com.example.superplayer.model.DrmInfo
 import com.example.superplayer.model.Stream
+import com.google.common.util.concurrent.ListenableFuture
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Pantalla de reproducción. Construye la fuente correcta según stream.type
- * (DASH / HLS / progresivo), aplicando cabeceras HTTP propias y, si el JSON
- * las trae, claves ClearKey para streams cifrados a los que el usuario
- * tiene derecho de acceso. Si el canal trae tokenUrl, primero se pide un
- * token (en un hilo aparte) y se sustituye "{token}" en la URL antes de
- * reproducir.
+ * Pantalla de reproducción. Ya no crea el ExoPlayer aquí: se conecta como
+ * MediaController a la sesión que publica PlaybackService (así la
+ * reproducción puede seguir sonando en segundo plano / pantalla de
+ * bloqueo). Sigue resolviendo aquí lo que ya resolvía antes de construir
+ * el reproductor: si el canal trae tokenUrl, primero se pide un token (en
+ * un hilo aparte, mandando las cabeceras propias del canal) y se sustituye
+ * "{token}" en la URL; el tipo (DASH/HLS/progresivo), las cabeceras HTTP y
+ * el DRM ClearKey viajan dentro del MediaItem (ver StreamMediaExtras) para
+ * que PlaybackService pueda construir el MediaSource real.
+ *
+ * Si el canal no tiene pista de vídeo (radio), se detecta solo a partir de
+ * las pistas reales del stream y se muestra el logo + "ahora suena" en vez
+ * del hueco negro del vídeo; ese es también el único caso en que dejamos
+ * la reproducción seguir cuando la pantalla se bloquea o se cambia de app.
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityPlayerBinding
-    private var player: ExoPlayer? = null
+
+    private var currentStream: Stream? = null
+    private var pendingMediaItem: MediaItem? = null
+    private var playbackStarted = false
+    private var isCurrentStreamRadio = false
+
+    private var controller: MediaController? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* da igual el resultado */ }
+
+    private val playerListener = object : Player.Listener {
+        override fun onPlayerError(error: PlaybackException) {
+            Toast.makeText(
+                this@PlayerActivity,
+                getString(R.string.player_error, error.message ?: error.errorCodeName),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            val hasVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.length > 0 }
+            isCurrentStreamRadio = !hasVideo
+            binding.nowPlayingOverlay.visibility = if (isCurrentStreamRadio) View.VISIBLE else View.GONE
+        }
+
+        override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+            updateNowPlayingText(mediaMetadata)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,13 +94,103 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         title = stream.name
+        currentStream = stream
+
+        binding.nowPlayingTitle.text = stream.name
+        binding.nowPlayingLogo.load(stream.icon) {
+            placeholder(R.drawable.ic_radio)
+            error(R.drawable.ic_radio)
+        }
+
+        binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
+        binding.playerView.setControllerVisibilityListener { visibility ->
+            binding.trackSelectionButton.visibility = visibility
+        }
+        binding.playerView.keepScreenOn = true
+
+        ensureNotificationPermission()
         resolveAndPlay(stream)
     }
+
+    override fun onStart() {
+        super.onStart()
+        val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        val future = MediaController.Builder(this, sessionToken).buildAsync()
+        controllerFuture = future
+        future.addListener(
+            {
+                if (future.isDone && !future.isCancelled) {
+                    try {
+                        onControllerConnected(future.get())
+                    } catch (e: Exception) {
+                        Toast.makeText(this, getString(R.string.player_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
+            ContextCompat.getMainExecutor(this)
+        )
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val ctrl = controller
+        if (ctrl != null) {
+            if (isFinishing) {
+                // Salimos de verdad hacia la lista de canales: paramos del todo.
+                ctrl.stop()
+                ctrl.clearMediaItems()
+                playbackStarted = false
+            } else if (!isCurrentStreamRadio) {
+                // Vídeo/TV en segundo plano (bloqueo, Home...): igual que
+                // antes, se pausa (no tiene sentido gastar datos/batería
+                // decodificando vídeo que no se ve).
+                ctrl.pause()
+            }
+            // Radio + no isFinishing (p. ej. se bloqueó la pantalla): se deja
+            // sonando; PlaybackService sigue vivo y controla la sesión.
+        }
+        ctrl?.removeListener(playerListener)
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
+        controller = null
+        binding.playerView.player = null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        pendingStream = null
+    }
+
+    // -----------------------------------------------------------------
+    // Conexión con PlaybackService a través de MediaController
+    // -----------------------------------------------------------------
+
+    private fun onControllerConnected(mediaController: MediaController) {
+        controller = mediaController
+        binding.playerView.player = mediaController
+        mediaController.addListener(playerListener)
+        maybeStartPlayback()
+    }
+
+    private fun maybeStartPlayback() {
+        val item = pendingMediaItem ?: return
+        val ctrl = controller ?: return
+        if (playbackStarted) return
+        playbackStarted = true
+        ctrl.setMediaItem(item)
+        ctrl.playWhenReady = true
+        ctrl.prepare()
+    }
+
+    // -----------------------------------------------------------------
+    // Token + construcción del MediaItem (tipo, cabeceras, DRM viajan en
+    // las extras: ver StreamMediaExtras)
+    // -----------------------------------------------------------------
 
     private fun resolveAndPlay(stream: Stream) {
         val tokenUrl = stream.tokenUrl
         if (tokenUrl.isNullOrBlank()) {
-            startPlayback(stream)
+            onStreamResolved(stream)
             return
         }
         Thread {
@@ -81,9 +207,9 @@ class PlayerActivity : AppCompatActivity() {
                         getString(R.string.player_error, "no se pudo obtener el token de $tokenUrl"),
                         Toast.LENGTH_LONG
                     ).show()
-                    startPlayback(stream)
+                    onStreamResolved(stream)
                 } else {
-                    startPlayback(stream.copy(url = stream.url.replace("{token}", token)))
+                    onStreamResolved(stream.copy(url = stream.url.replace("{token}", token)))
                 }
             }
         }.start()
@@ -101,47 +227,43 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun startPlayback(stream: Stream) {
-        if (isFinishing || isDestroyed) return
+    private fun onStreamResolved(stream: Stream) {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(stream.name)
+            .setExtras(StreamMediaExtras.build(stream))
+            .build()
 
-        val dataSourceFactory: DataSource.Factory = DefaultHttpDataSource.Factory()
-            .setDefaultRequestProperties(stream.headers)
-            .setAllowCrossProtocolRedirects(true)
+        pendingMediaItem = MediaItem.Builder()
+            .setMediaId(stream.id)
+            .setUri(stream.url)
+            .setMediaMetadata(metadata)
+            .build()
 
-        val exoPlayer = ExoPlayer.Builder(this).build()
-        player = exoPlayer
-        binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
-        binding.playerView.setControllerVisibilityListener(
-            androidx.media3.ui.PlayerView.ControllerVisibilityListener { visibility ->
-                binding.trackSelectionButton.visibility = visibility
-            }
-        )
-        binding.playerView.player = exoPlayer
-        binding.playerView.keepScreenOn = true
+        maybeStartPlayback()
+    }
 
-        exoPlayer.addListener(object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) {
-                Toast.makeText(
-                    this@PlayerActivity,
-                    getString(R.string.player_error, error.message ?: error.errorCodeName),
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        })
+    // -----------------------------------------------------------------
+    // Texto de "ahora suena" (nombre del canal, o el título dinámico
+    // ICY/ID3 que Media3 fusiona solo en onMediaMetadataChanged cuando el
+    // propio stream de radio lo trae)
+    // -----------------------------------------------------------------
 
-        try {
-            val mediaSource = buildMediaSource(stream, dataSourceFactory)
-            exoPlayer.setMediaSource(mediaSource)
-            exoPlayer.playWhenReady = true
-            exoPlayer.prepare()
-        } catch (e: Exception) {
-            Toast.makeText(this, getString(R.string.player_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+    private fun updateNowPlayingText(mediaMetadata: MediaMetadata) {
+        val stationName = currentStream?.name ?: getString(R.string.now_playing_fallback)
+        val dynamicTitle = mediaMetadata.title?.toString()?.trim()
+        if (!dynamicTitle.isNullOrBlank() && !dynamicTitle.equals(stationName, ignoreCase = true)) {
+            binding.nowPlayingTitle.text = dynamicTitle
+            binding.nowPlayingSubtitle.text = stationName
+            binding.nowPlayingSubtitle.visibility = View.VISIBLE
+        } else {
+            binding.nowPlayingTitle.text = stationName
+            binding.nowPlayingSubtitle.visibility = View.GONE
         }
     }
 
     /** Menú "Vídeo" / "Audio" / "Subtítulos" que abre el selector de pistas de Media3 para el tipo elegido. */
     private fun showTrackSelectionMenu(anchor: View) {
-        val exoPlayer = player ?: return
+        val ctrl = controller ?: return
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, MENU_ID_VIDEO, 0, getString(R.string.track_video))
         popup.menu.add(0, MENU_ID_AUDIO, 1, getString(R.string.track_audio))
@@ -152,7 +274,7 @@ class PlayerActivity : AppCompatActivity() {
                 MENU_ID_AUDIO -> C.TRACK_TYPE_AUDIO
                 else -> C.TRACK_TYPE_TEXT
             }
-            TrackSelectionDialogBuilder(this, item.title ?: "", exoPlayer, trackType)
+            TrackSelectionDialogBuilder(this, item.title ?: "", ctrl, trackType)
                 .build()
                 .show()
             true
@@ -160,94 +282,22 @@ class PlayerActivity : AppCompatActivity() {
         popup.show()
     }
 
-    private fun buildMediaSource(stream: Stream, dataSourceFactory: DataSource.Factory): MediaSource {
-        val mimeType = when (stream.type.trim().uppercase()) {
-            "DASH", "MPD" -> MimeTypes.APPLICATION_MPD
-            "HLS", "M3U8" -> MimeTypes.APPLICATION_M3U8
-            else -> null
-        }
+    // -----------------------------------------------------------------
+    // Permiso de notificaciones (Android 13+): sin él, el servicio sigue
+    // reproduciendo igual, pero no se ven los controles en la pantalla de
+    // bloqueo / notificación.
+    // -----------------------------------------------------------------
 
-        val mediaItem = MediaItem.Builder()
-            .setUri(stream.url)
-            .apply { mimeType?.let { setMimeType(it) } }
-            .build()
-
-        val factory: MediaSource.Factory = when (mimeType) {
-            MimeTypes.APPLICATION_MPD -> DashMediaSource.Factory(dataSourceFactory)
-            MimeTypes.APPLICATION_M3U8 -> HlsMediaSource.Factory(dataSourceFactory)
-            else -> ProgressiveMediaSource.Factory(dataSourceFactory)
-        }
-
-        stream.drm?.let { drm ->
-            factory.setDrmSessionManagerProvider {
-                buildClearKeyDrmSessionManager(drm)
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
-
-        return factory.createMediaSource(mediaItem)
-    }
-
-    /**
-     * ClearKey "local": si el JSON trae license_key, se usa tal cual (ya es
-     * la respuesta ClearKey completa). Si trae kid/key sueltos, se arma el
-     * JSON y se normalizan a base64url si vienen en hexadecimal.
-     */
-    private fun buildClearKeyDrmSessionManager(drm: DrmInfo): DrmSessionManager {
-        val json = drm.rawLicenseJson?.takeIf { it.isNotBlank() } ?: run {
-            val keyId = normalizeClearKeyValue(drm.keyId.orEmpty())
-            val key = normalizeClearKeyValue(drm.key.orEmpty())
-            """{"keys":[{"kty":"oct","k":"$key","kid":"$keyId"}],"type":"temporary"}"""
-        }
-        val callback = LocalMediaDrmCallback(json.toByteArray(Charsets.UTF_8))
-        return DefaultDrmSessionManager.Builder()
-            .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
-            .build(callback)
-    }
-
-    /** Si el valor es hexadecimal lo convierte a base64url (sin padding); si no, se deja igual. */
-    /**
-     * kid/key pueden llegar en tres formatos según de dónde se copien:
-     * hexadecimal, base64 "normal" (con +, / o = de relleno) o ya en
-     * base64url (lo que ClearKey necesita). Los tres se normalizan aquí.
-     */
-    private fun normalizeClearKeyValue(value: String): String {
-        val clean = value.trim()
-        if (clean.isEmpty()) return clean
-
-        val looksHex = clean.length % 2 == 0 && clean.all { it in "0123456789abcdefABCDEF" }
-        if (looksHex) {
-            return try {
-                val bytes = ByteArray(clean.length / 2) { i ->
-                    clean.substring(i * 2, i * 2 + 2).toInt(16).toByte()
-                }
-                Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
-            } catch (e: Exception) {
-                clean
-            }
-        }
-
-        if (clean.contains('+') || clean.contains('/') || clean.contains('=')) {
-            return try {
-                val bytes = Base64.decode(clean, Base64.DEFAULT)
-                Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
-            } catch (e: Exception) {
-                clean
-            }
-        }
-
-        return clean
-    }
-
-    override fun onStop() {
-        super.onStop()
-        player?.pause()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        player?.release()
-        player = null
-        pendingStream = null
     }
 
     companion object {

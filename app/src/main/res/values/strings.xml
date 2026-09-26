@@ -24,4 +24,8 @@
     <string name="list_load_error">No se pudo cargar esa lista (%1$s).</string>
     <string name="added_to_favorites">Añadido a favoritos</string>
     <string name="removed_from_favorites">Quitado de favoritos</string>
+
+    <!-- Radio / "ahora suena" en PlayerActivity: nombre de respaldo cuando
+         todavía no hay ni título dinámico (ICY/ID3) ni nombre de canal. -->
+    <string name="now_playing_fallback">Reproduciendo…</string>
 </resources>

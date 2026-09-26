@@ -32,6 +32,11 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        // Media3/ExoPlayer marca casi toda su API de bajo nivel (DASH/HLS,
+        // DRM, MediaSource.Factory, MediaSession...) como @UnstableApi. Las
+        // clases que la usan también llevan @OptIn(UnstableApi::class); esto
+        // es solo una red de seguridad adicional a nivel de módulo.
+        freeCompilerArgs += listOf("-opt-in=androidx.media3.common.util.UnstableApi")
     }
 
     buildFeatures {
@@ -46,7 +51,8 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.activity:activity-ktx:1.9.3")
 
-    // Media3 / ExoPlayer: soporte DASH + HLS + UI del reproductor
+    // Media3 / ExoPlayer: soporte DASH + HLS + UI del reproductor + sesión
+    // multimedia (reproducción en segundo plano / pantalla de bloqueo)
     val media3Version = "1.10.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
@@ -54,6 +60,7 @@ dependencies {
     implementation("androidx.media3:media3-datasource:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
 
     // Carga de iconos/miniaturas desde URL
     implementation("io.coil-kt:coil:2.6.0")

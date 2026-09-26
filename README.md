@@ -3,7 +3,9 @@
 App Android nativa (Kotlin) que lee una playlist en JSON y reproduce cada
 canal con **ExoPlayer / Media3**, con soporte para **DASH (.mpd)**,
 **HLS (.m3u8)** y vídeo progresivo (mp4, etc.), cabeceras HTTP propias y
-DRM **ClearKey** opcional.
+DRM **ClearKey** opcional. También reproduce **radio (audio)**, mostrando
+el logo y "lo que se está escuchando", y sigue sonando en segundo plano y
+con la pantalla bloqueada (ver más abajo).
 
 > Pensada para tu propio contenido: streams propios, autohospedados, o
 > cualquier servicio para el que tengas licencia/autorización de uso.
@@ -73,14 +75,15 @@ Se acepta el formato propio:
 ]
 ```
 
-Alias aceptados por campo: `url`/`uri`, `icon`/`image`, `type`/`extension`.
+Alias aceptados por campo: `url`/`uri`, `icon`/`image`/`icono`, `type`/`extension`.
 Para DRM ClearKey se acepta cualquiera de estas tres formas: `drm: {keyId,
 key}`, `kid`+`key` sueltos, o `license_key` con el JSON de ClearKey ya
 armado (`{"keys":[{"kty":"oct",...}],"type":"temporary"}`). `kid`/`key`
 pueden venir en base64url o en hexadecimal — se normalizan solos.
 
 - `type`/`extension`: `"DASH"`/`"mpd"`, `"HLS"`/`"m3u8"`, o cualquier otro
-  valor → se trata como progresivo (URL directa a un archivo de vídeo).
+  valor → se trata como progresivo (URL directa a un archivo de vídeo o
+  audio).
 - `icon`, `headers`, `drm`/`kid`+`key`/`license_key` y `token` son
   opcionales.
 - `token`: si la URL del canal contiene el texto `{token}`, antes de
@@ -126,20 +129,54 @@ misma URL (para recoger cambios que hayas hecho en el archivo remoto).
 Mantén pulsado el botón para cambiar la URL guardada en ese hueco. Acepta
 tanto JSON como M3U, igual que la carga desde archivo.
 
+## Radio, "ahora suena" y reproducción en segundo plano
+
+No hace falta marcar nada especial en el JSON/M3U para que un canal se
+trate como radio: al reproducirlo, la app mira las pistas reales del
+stream y, si no trae vídeo, muestra automáticamente el logo del canal y
+una pantalla de "ahora suena" en vez del hueco negro del vídeo.
+
+- Si el propio stream envía metadatos ICY/ID3 (el "título de la canción
+  actual" que emiten muchas radios por Internet), se muestra ahí y se
+  actualiza solo según van cambiando; si no, se queda con el nombre fijo
+  del canal.
+- Mientras esa pantalla de radio esté activa, bloquear el teléfono **no
+  corta la reproducción**: sigue sonando y aparecen los controles de
+  reproducción (play/pausa) en la pantalla de bloqueo y en una
+  notificación, con el logo y el nombre del canal. Volver a abrir la app
+  y salir del reproductor (botón atrás) sí para la radio.
+- Para un canal de vídeo/TV normal, el comportamiento no cambia: al
+  bloquear el teléfono o cambiar de app se pausa, igual que antes.
+- La primera vez, Android puede pedir permiso de notificaciones (Android
+  13 o superior); sin ese permiso la radio sigue sonando en segundo plano
+  igual, pero no se ven los controles en la pantalla de bloqueo.
+
+Por dentro, esto lo gestiona `PlaybackService` (un `MediaSessionService`
+de Media3): es quien tiene el ExoPlayer real y sigue vivo aunque
+`PlayerActivity` se detenga. `PlayerActivity` solo se conecta a él como
+`MediaController` para mandar "reproduce este canal" / "pausa" / "cambia
+de pista", y todo lo que antes resolvía para construir el reproductor
+(tipo DASH/HLS/progresivo, cabeceras propias, DRM ClearKey) viaja dentro
+del `MediaItem` para que el servicio pueda construir el `MediaSource`
+igual que antes.
+
 ## Estructura
 
 ```
 app/src/main/java/com/example/superplayer/
   model/    Stream, Category, PlaylistData, DrmInfo
-  data/     PlaylistRepository (parseo JSON), FavoritesStore, AppPrefs
+  data/     PlaylistRepository (parseo JSON/M3U), FavoritesStore, AppPrefs
   ui/       MainActivity (categorías + buscador), StreamListActivity
-  player/   PlayerActivity (ExoPlayer/Media3)
+  player/   PlayerActivity (MediaController), PlaybackService (MediaSessionService
+            + ExoPlayer real), StreamMediaSourceFactory (DASH/HLS/progresivo +
+            DRM por canal), StreamMediaExtras, ClearKeyUtil
 ```
 
 Funciones incluidas: categorías, buscador (filtra canales por nombre,
 tanto en la portada como dentro de una categoría), favoritos persistentes
-(categoría "⭐ Favoritos" arriba de todo cuando hay alguno) y carga de
-JSON desde el propio dispositivo.
+(categoría "⭐ Favoritos" arriba de todo cuando hay alguno), carga de
+JSON/M3U desde el propio dispositivo o desde una URL, y radio con "ahora
+suena" + reproducción en segundo plano / pantalla de bloqueo.
 
 ## Si la app se cierra sola
 
@@ -161,13 +198,18 @@ de un PC.
   canales) conviene moverlo a una corrutina en background.
 - No hay pantalla de ajustes para editar cabeceras/DRM a mano: todo sale
   del JSON.
+- Elegir un canal nuevo desde la lista siempre sustituye lo que estuviera
+  sonando (incluida una radio en segundo plano): solo hay un reproductor
+  real (dentro de `PlaybackService`) para toda la app.
 
 ## Compilar sin PC (GitHub Actions)
 
 El proyecto incluye `.github/workflows/build.yml`. Al subirlo a un repo de
 GitHub, ese workflow compila un APK de depuración en la nube (JDK 17 +
 Android SDK + Gradle) y lo deja descargable como "artifact" del run,
-sin que tu teléfono tenga que instalar nada pesado.
+sin que tu teléfono tenga que instalar nada pesado. El workflow instala
+Gradle 8.13 directamente (`gradle assembleDebug`) en vez de depender de un
+`gradlew` incluido en el repo, así que no hace falta tocar nada de eso.
 
 Pasos desde el móvil:
 
@@ -207,3 +249,12 @@ de release aparte.
 Antes de publicar la app, cambia `com.example.superplayer` (en
 `app/build.gradle.kts` → `namespace`/`applicationId`, y en las carpetas
 `java/com/example/superplayer`) por tu propio dominio invertido.
+
+## Icono de la app
+
+El icono adaptativo (`mipmap-anydpi-v26/ic_launcher.xml`) usa tu propio
+PNG en `app/src/main/res/drawable/ic_launcher_app.png`. Si ese archivo no
+existe en tu copia del proyecto, colócalo ahí (cualquier PNG cuadrado,
+idealmente 512×512 o más) antes de compilar — si ya lo subiste a tu
+repositorio de GitHub en una entrega anterior, no hace falta volver a
+hacerlo: este zip no lo incluye ni lo borra.

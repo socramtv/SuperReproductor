@@ -16,7 +16,7 @@ package com.example.superplayer.model
  * - name
  * - url (o "uri")
  * - type: "DASH"|"HLS"|otro -> progresivo   (o "extension": "mpd"|"m3u8")
- * - icon (o "image")
+ * - icon (o "image"/"icono")
  * - headers: { ... }   cabeceras HTTP propias (auth, referer, etc.)
  * - token: URL que devuelve un token en texto plano. Si "url" contiene el
  *   texto "{token}", se sustituye por lo que devuelva esa URL justo antes
@@ -29,6 +29,12 @@ package com.example.superplayer.model
  *   Un "drm_scheme" distinto de "clearkey" (p. ej. "widevine") se ignora:
  *   esos esquemas necesitan servidor de licencias propio y no están
  *   implementados aquí.
+ *
+ * Radio / audio en segundo plano: no hace falta declarar nada especial en
+ * el JSON. PlayerActivity detecta solo, a partir de las pistas reales del
+ * stream, si un canal no tiene vídeo (radio) y en ese caso mantiene la
+ * reproducción activa en segundo plano y en la pantalla de bloqueo a
+ * través de PlaybackService.
  */
 
 data class PlaylistData(

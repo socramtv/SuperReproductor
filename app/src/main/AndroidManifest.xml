@@ -3,6 +3,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".SuperPlayerApp"
@@ -46,6 +50,21 @@
         <activity
             android:name=".CrashActivity"
             android:exported="false" />
+
+        <!--
+            Mantiene la reproducción de radio (audio) activa en segundo
+            plano y en la pantalla de bloqueo, con controles de sistema
+            (notificación / lock screen). PlayerActivity solo controla esto
+            a través de un MediaController; el ExoPlayer real vive aquí.
+        -->
+        <service
+            android:name=".player.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
     </application>
 
