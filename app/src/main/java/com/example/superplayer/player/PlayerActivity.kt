@@ -21,6 +21,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import coil.load
 import com.example.superplayer.R
@@ -103,9 +104,17 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
-        binding.playerView.setControllerVisibilityListener { visibility ->
-            binding.trackSelectionButton.visibility = visibility
-        }
+        binding.playerView.setControllerVisibilityListener(
+            // Tipo explícito: PlayerView tiene dos overloads de este método
+            // (el actual ControllerVisibilityListener y el antiguo, obsoleto,
+            // PlayerControlView.VisibilityListener), y ambos son interfaces de
+            // un solo método con la misma forma (Int) -> Unit, así que una
+            // lambda suelta es ambigua para el compilador ("overload
+            // resolution ambiguity"); hay que decir cuál de las dos es.
+            PlayerView.ControllerVisibilityListener { visibility ->
+                binding.trackSelectionButton.visibility = visibility
+            }
+        )
         binding.playerView.keepScreenOn = true
 
         ensureNotificationPermission()
