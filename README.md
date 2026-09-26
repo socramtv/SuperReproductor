@@ -139,7 +139,10 @@ una pantalla de "ahora suena" en vez del hueco negro del vídeo.
 - Si el propio stream envía metadatos ICY/ID3 (el "título de la canción
   actual" que emiten muchas radios por Internet), se muestra ahí y se
   actualiza solo según van cambiando; si no, se queda con el nombre fijo
-  del canal.
+  del canal. La app pide ese metadato con la cabecera `Icy-MetaData: 1` en
+  cada petición, pero es la propia emisora quien decide si lo manda o no:
+  algunas no emiten nunca un "ahora suena", y ahí solo se puede mostrar el
+  nombre fijo del canal.
 - Mientras esa pantalla de radio esté activa, bloquear el teléfono **no
   corta la reproducción**: sigue sonando y aparecen los controles de
   reproducción (play/pausa) en la pantalla de bloqueo y en una

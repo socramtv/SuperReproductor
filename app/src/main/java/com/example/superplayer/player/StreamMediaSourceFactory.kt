@@ -55,8 +55,18 @@ class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) :
         val headers = StreamMediaExtras.headers(extras)
         val type = StreamMediaExtras.type(extras).orEmpty()
 
+        // "Icy-MetaData: 1" es la forma en que un cliente le pide a un
+        // servidor Shoutcast/Icecast (la gran mayoría de radios por
+        // Internet) que intercale el título de "ahora suena" dentro del
+        // propio audio; si no se pide expresamente, el servidor no lo manda
+        // y no hay nada que ExoPlayer pueda mostrar en onMediaMetadataChanged
+        // (aunque el canal sí suene bien). Va primero para que unas cabeceras
+        // propias del canal que definan esta misma clave la puedan pisar.
+        val requestProperties = linkedMapOf("Icy-MetaData" to "1")
+        requestProperties.putAll(headers)
+
         val dataSourceFactory: DataSource.Factory = DefaultHttpDataSource.Factory()
-            .setDefaultRequestProperties(headers)
+            .setDefaultRequestProperties(requestProperties)
             .setAllowCrossProtocolRedirects(true)
 
         val mimeType = when (type.trim().uppercase()) {
