@@ -146,6 +146,7 @@ públicas como las de [tdtchannels.com](https://www.tdtchannels.com/):
               "name": "Canal demo",
               "logo": "https://tu-servidor/logo.png",
               "epg_id": "canal.demo",
+              "referer": "https://tu-servidor/",
               "options": [
                 { "format": "hls", "url": "https://tu-servidor/index.m3u8" }
               ]
@@ -158,14 +159,22 @@ públicas como las de [tdtchannels.com](https://www.tdtchannels.com/):
 }
 ```
 
-De cada canal se usa el primer elemento de `options` (si trae varias
-calidades o CDNs alternativas, se ignoran las demás); `format` decide si
-el canal se trata como HLS, DASH o progresivo, igual que `type`/`extension`
-en el formato propio. `ambits` se usa como categoría (agrupando por país
-solo si la lista trae más de uno). Esto es genérico —se detecta por la
-forma del JSON, no por la URL—, así que debería funcionar igual con
-cualquier otra lista de tdtchannels.com que comparta este mismo esquema
-(por ejemplo sus listas de televisión, no solo la de radio).
+De cada canal se recorren las `options` en orden y se usa la primera que
+la app pueda reproducir directamente (HLS/DASH/progresivo); si un canal
+solo trae opciones de YouTube (`"format": "youtube"`), se usa esa —no hay
+otra— pero se abre con la app de YouTube (o el navegador si no está
+instalada) en vez de intentar reproducirla dentro de Socram TV+, porque un
+enlace de YouTube no es un stream directo que ExoPlayer entienda. `format`
+decide si el canal se trata como HLS, DASH, progresivo o YouTube, igual
+que `type`/`extension` decide en el formato propio. `ambits` se usa como
+categoría (agrupando por país solo si la lista trae más de uno). Si el
+canal trae `referer`, se manda como cabecera HTTP `Referer` en cada
+petición al stream —algunos servidores la exigen tal cual y rechazan la
+conexión sin ella—. Esto es genérico —se detecta por la forma del JSON,
+no por la URL—, así que debería funcionar igual con cualquier otra lista
+de tdtchannels.com que comparta este mismo esquema (por ejemplo sus listas
+de televisión, no solo la de radio, que es donde además aparecen más a
+menudo `referer` y canales de YouTube).
 
 Su guía EPG (`epg.json` en la raíz) viene en un formato JSON propio, no
 XMLTV — ver la sección EPG más abajo, donde se explican los dos formatos

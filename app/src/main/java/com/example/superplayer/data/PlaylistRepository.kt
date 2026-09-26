@@ -157,26 +157,7 @@ object PlaylistRepository {
                 val streams = ArrayList<Stream>(channelsJson.length())
                 for (k in 0 until channelsJson.length()) {
                     val chObj = channelsJson.optJSONObject(k) ?: continue
-                    val firstOption = chObj.optJSONArray("options")?.optJSONObject(0)
-                    val stream = firstOption?.let { opt ->
-                        val url = opt.optStringOrNull("url") ?: return@let null
-                        val format = opt.optStringOrNull("format").orEmpty()
-                        val type = when {
-                            format.contains("hls", ignoreCase = true) ||
-                                format.contains("m3u8", ignoreCase = true) -> "HLS"
-                            format.contains("dash", ignoreCase = true) ||
-                                format.contains("mpd", ignoreCase = true) -> "DASH"
-                            else -> "PROGRESSIVE"
-                        }
-                        Stream(
-                            name = chObj.optString("name").ifBlank { "Sin nombre" },
-                            type = type,
-                            url = url,
-                            icon = chObj.optStringOrNull("logo"),
-                            category = categoryName,
-                            tvgId = chObj.optStringOrNull("epg_id")
-                        )
-                    }
+                    val stream = buildTdtChannelsStream(chObj, categoryName)
                     if (stream != null) streams.add(stream)
                 }
                 if (streams.isNotEmpty()) {
@@ -185,6 +166,65 @@ object PlaylistRepository {
             }
         }
         return PlaylistData(categories, epgUrl)
+    }
+
+    /**
+     * Un canal trae varias "options" (calidades/CDNs alternativos). Nos
+     * quedamos con la primera que se pueda reproducir dentro de la app
+     * (HLS/DASH/progresivo); si TODAS son de YouTube (format "youtube"),
+     * usamos esa igualmente pero marcada como tipo "YOUTUBE", que
+     * PlayerActivity abre en la app de YouTube en vez de intentar
+     * reproducirla con ExoPlayer (un enlace de YouTube no es un stream
+     * directo que ExoPlayer pueda entender).
+     *
+     * Si el canal trae "referer", se manda como cabecera HTTP Referer: algunos
+     * servidores exigen ese dato exacto y si no, rechazan el stream.
+     */
+    private fun buildTdtChannelsStream(chObj: JSONObject, categoryName: String): Stream? {
+        val optionsJson = chObj.optJSONArray("options") ?: return null
+
+        var chosenUrl: String? = null
+        var chosenType: String? = null
+        for (i in 0 until optionsJson.length()) {
+            val opt = optionsJson.optJSONObject(i) ?: continue
+            val url = opt.optStringOrNull("url") ?: continue
+            val type = tdtChannelsStreamType(opt.optStringOrNull("format").orEmpty())
+            if (type != "YOUTUBE") {
+                chosenUrl = url
+                chosenType = type
+                break
+            }
+            if (chosenUrl == null) {
+                // La guardamos como respaldo por si ninguna opción posterior es reproducible.
+                chosenUrl = url
+                chosenType = type
+            }
+        }
+        val url = chosenUrl ?: return null
+        val type = chosenType ?: return null
+
+        val headers = chObj.optStringOrNull("referer")
+            ?.let { mapOf("Referer" to it) }
+            ?: emptyMap()
+
+        return Stream(
+            name = chObj.optString("name").ifBlank { "Sin nombre" },
+            type = type,
+            url = url,
+            icon = chObj.optStringOrNull("logo"),
+            category = categoryName,
+            headers = headers,
+            tvgId = chObj.optStringOrNull("epg_id")
+        )
+    }
+
+    private fun tdtChannelsStreamType(format: String): String = when {
+        format.contains("youtube", ignoreCase = true) -> "YOUTUBE"
+        format.contains("hls", ignoreCase = true) ||
+            format.contains("m3u8", ignoreCase = true) -> "HLS"
+        format.contains("dash", ignoreCase = true) ||
+            format.contains("mpd", ignoreCase = true) -> "DASH"
+        else -> "PROGRESSIVE"
     }
 
     /**

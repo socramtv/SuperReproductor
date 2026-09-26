@@ -1,8 +1,11 @@
 package com.example.superplayer.player
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -112,6 +115,13 @@ class PlayerActivity : AppCompatActivity() {
             finish()
             return
         }
+        if (stream.type.equals("YOUTUBE", ignoreCase = true)) {
+            // Un enlace de YouTube no es un stream que ExoPlayer pueda
+            // reproducir directamente; lo abrimos en la app de YouTube (o en
+            // el navegador si no está instalada) y cerramos esta pantalla.
+            openExternally(stream)
+            return
+        }
         title = stream.name
         currentStream = stream
 
@@ -139,8 +149,23 @@ class PlayerActivity : AppCompatActivity() {
         resolveAndPlay(stream)
     }
 
+    /** Abre `stream.url` fuera de la app (YouTube, o el navegador si no está instalada) y cierra esta pantalla. */
+    private fun openExternally(stream: Stream) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(stream.url)))
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(
+                this,
+                getString(R.string.player_error, "no hay ninguna app que pueda abrir ${stream.url}"),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        finish()
+    }
+
     override fun onStart() {
         super.onStart()
+        if (currentStream == null) return // canal no válido, o ya redirigido a una app externa (ver onCreate)
         epgHandler.removeCallbacks(epgRefreshRunnable)
         epgHandler.postDelayed(epgRefreshRunnable, EPG_REFRESH_INTERVAL_MS)
         val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
