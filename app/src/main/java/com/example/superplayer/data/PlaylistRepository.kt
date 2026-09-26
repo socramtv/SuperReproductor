@@ -57,10 +57,22 @@ object PlaylistRepository {
     // ---------- JSON ----------
 
     private fun parseJson(trimmed: String): PlaylistData {
-        val categoriesJson: JSONArray = if (trimmed.startsWith("[")) {
+        val isArrayRoot = trimmed.startsWith("[")
+        val rootObject: JSONObject? = if (isArrayRoot) null else JSONObject(trimmed)
+        val categoriesJson: JSONArray = if (isArrayRoot) {
             JSONArray(trimmed)
         } else {
-            JSONObject(trimmed).optJSONArray("categories") ?: JSONArray()
+            rootObject?.optJSONArray("categories") ?: JSONArray()
+        }
+
+        // EPG (opcional): solo disponible cuando la raíz es un objeto (el
+        // formato en array no tiene un sitio a nivel de raíz para ponerlo).
+        val epgUrl = rootObject?.let { root ->
+            root.optString("epgUrl")
+                .ifBlank { root.optString("epg_url") }
+                .ifBlank { root.optString("url-tvg") }
+                .ifBlank { root.optString("xmltv") }
+                .takeIf { it.isNotBlank() }
         }
 
         val categories = ArrayList<Category>(categoriesJson.length())
@@ -83,6 +95,9 @@ object PlaylistRepository {
                 val icon = sObj.optString("icon").ifBlank { sObj.optString("image") }
                     .ifBlank { sObj.optString("icono") }.takeIf { it.isNotBlank() }
                 val tokenUrl = sObj.optString("token").takeIf { it.isNotBlank() }
+                val tvgId = sObj.optString("tvgId").ifBlank { sObj.optString("tvg_id") }
+                    .ifBlank { sObj.optString("tvg-id") }.ifBlank { sObj.optString("epgId") }
+                    .takeIf { it.isNotBlank() }
 
                 streams.add(
                     Stream(
@@ -93,13 +108,14 @@ object PlaylistRepository {
                         category = categoryName,
                         headers = sObj.optJSONObject("headers")?.toStringMap() ?: emptyMap(),
                         drm = buildDrmInfo(sObj),
-                        tokenUrl = tokenUrl
+                        tokenUrl = tokenUrl,
+                        tvgId = tvgId
                     )
                 )
             }
             categories.add(Category(categoryName, streams))
         }
-        return PlaylistData(categories)
+        return PlaylistData(categories, epgUrl)
     }
 
     private fun buildDrmInfo(sObj: JSONObject): DrmInfo? {
@@ -136,11 +152,21 @@ object PlaylistRepository {
         var pendingName: String? = null
         var pendingLogo: String? = null
         var pendingGroup: String = "Sin categoría"
+        var pendingTvgId: String? = null
+        var epgUrl: String? = null
         val byCategory = LinkedHashMap<String, MutableList<Stream>>()
 
         for (rawLine in text.lineSequence()) {
             val line = rawLine.trim()
-            if (line.isEmpty() || line.startsWith("#EXTM3U", ignoreCase = true)) continue
+            if (line.isEmpty()) continue
+
+            if (line.startsWith("#EXTM3U", ignoreCase = true)) {
+                // "url-tvg"/"x-tvg-url": la guía EPG (XMLTV) de toda la lista.
+                // Si trae varias separadas por comas, nos quedamos con la primera.
+                epgUrl = (extractAttr(line, "url-tvg") ?: extractAttr(line, "x-tvg-url"))
+                    ?.substringBefore(',')?.trim()?.takeIf { it.isNotBlank() }
+                continue
+            }
 
             if (line.startsWith("#EXTINF", ignoreCase = true)) {
                 val commaIndex = line.indexOf(',')
@@ -148,6 +174,7 @@ object PlaylistRepository {
                 val titlePart = if (commaIndex >= 0) line.substring(commaIndex + 1).trim() else ""
 
                 pendingLogo = extractAttr(attrsPart, "tvg-logo")
+                pendingTvgId = extractAttr(attrsPart, "tvg-id")?.takeIf { it.isNotBlank() }
                 pendingGroup = extractAttr(attrsPart, "group-title")?.takeIf { it.isNotBlank() }
                     ?: "Sin categoría"
                 pendingName = (extractAttr(attrsPart, "tvg-name")?.takeIf { it.isNotBlank() }
@@ -164,17 +191,19 @@ object PlaylistRepository {
                     type = type,
                     url = line,
                     icon = pendingLogo,
-                    category = pendingGroup
+                    category = pendingGroup,
+                    tvgId = pendingTvgId
                 )
                 byCategory.getOrPut(pendingGroup) { mutableListOf() }.add(stream)
                 pendingName = null
                 pendingLogo = null
+                pendingTvgId = null
             }
             // Otras etiquetas (#EXTGRP, #EXTVLCOPT, #EXT-X-..., comentarios) se ignoran.
         }
 
         val categories = byCategory.map { (name, streams) -> Category(name, streams) }
-        return PlaylistData(categories)
+        return PlaylistData(categories, epgUrl)
     }
 
     private fun extractAttr(source: String, key: String): String? =

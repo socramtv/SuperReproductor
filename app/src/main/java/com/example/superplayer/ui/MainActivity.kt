@@ -13,6 +13,7 @@ import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.superplayer.R
 import com.example.superplayer.data.AppPrefs
+import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.data.PlaylistRepository
 import com.example.superplayer.databinding.ActivityMainBinding
@@ -192,6 +193,9 @@ class MainActivity : AppCompatActivity() {
         binding.recyclerView.adapter = categoryAdapter
         categoryAdapter.submit(buildCategoryListWithFavorites())
         binding.emptyView.visibility = if (data.categories.isEmpty()) View.VISIBLE else View.GONE
+        // Sin bloquear nada: si esta lista trae guía EPG (o ya la teníamos
+        // cargada de antes), se descarga/parsea sola en segundo plano.
+        EpgRepository.load(data.epgUrl)
     }
 
     private fun buildCategoryListWithFavorites(): List<Category> {

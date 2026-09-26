@@ -1,10 +1,12 @@
 package com.example.superplayer.ui
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.example.superplayer.R
+import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ItemStreamBinding
 import com.example.superplayer.model.Stream
 
@@ -43,6 +45,16 @@ class StreamAdapter(
             binding.favoriteIcon.setImageResource(
                 if (isFavorite(stream)) R.drawable.ic_favorite else R.drawable.ic_favorite_border
             )
+
+            val nowPlaying = EpgRepository.currentTitle(stream.tvgId)
+            if (!nowPlaying.isNullOrBlank()) {
+                binding.streamNowPlaying.text =
+                    binding.streamNowPlaying.context.getString(R.string.epg_now_playing, nowPlaying)
+                binding.streamNowPlaying.visibility = View.VISIBLE
+            } else {
+                binding.streamNowPlaying.visibility = View.GONE
+            }
+
             binding.root.setOnClickListener { onClick(stream) }
             binding.favoriteIcon.setOnClickListener { onToggleFavorite(stream) }
         }

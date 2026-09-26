@@ -5,6 +5,8 @@ import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.PopupMenu
 import android.widget.Toast
@@ -25,6 +27,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import coil.load
 import com.example.superplayer.R
+import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ActivityPlayerBinding
 import com.example.superplayer.model.Stream
 import com.google.common.util.concurrent.ListenableFuture
@@ -60,6 +63,18 @@ class PlayerActivity : AppCompatActivity() {
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
 
+    // Título dinámico ICY/ID3 (si el propio stream lo trae); se guarda aparte
+    // del de EPG porque, cuando hay uno, siempre gana sobre el de la guía.
+    private var lastDynamicTitle: String? = null
+
+    private val epgHandler = Handler(Looper.getMainLooper())
+    private val epgRefreshRunnable = object : Runnable {
+        override fun run() {
+            refreshNowPlayingDisplay()
+            epgHandler.postDelayed(this, EPG_REFRESH_INTERVAL_MS)
+        }
+    }
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* da igual el resultado */ }
 
@@ -79,7 +94,10 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
-            updateNowPlayingText(mediaMetadata)
+            val stationName = currentStream?.name
+            val dynamic = mediaMetadata.title?.toString()?.trim()
+            lastDynamicTitle = dynamic.takeIf { !it.isNullOrBlank() && !it.equals(stationName, ignoreCase = true) }
+            refreshNowPlayingDisplay()
         }
     }
 
@@ -123,6 +141,8 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        epgHandler.removeCallbacks(epgRefreshRunnable)
+        epgHandler.postDelayed(epgRefreshRunnable, EPG_REFRESH_INTERVAL_MS)
         val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture = future
@@ -142,6 +162,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        epgHandler.removeCallbacks(epgRefreshRunnable)
         val ctrl = controller
         if (ctrl != null) {
             if (isFinishing) {
@@ -252,16 +273,25 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     // -----------------------------------------------------------------
-    // Texto de "ahora suena" (nombre del canal, o el título dinámico
-    // ICY/ID3 que Media3 fusiona solo en onMediaMetadataChanged cuando el
-    // propio stream de radio lo trae)
+    // Texto de "ahora suena": por prioridad, (1) el título dinámico ICY/ID3
+    // que el propio stream de radio trae (Media3 lo fusiona solo en
+    // onMediaMetadataChanged), (2) si no hay, el programa que marca la
+    // guía EPG ahora mismo para el tvg-id de este canal (si la lista trae
+    // EPG y hay coincidencia), y si no hay ninguno de los dos, (3) el
+    // nombre fijo del canal. epgRefreshRunnable llama a esto cada minuto
+    // mientras la pantalla está abierta, porque el programa de la guía
+    // puede cambiar sin que llegue ningún onMediaMetadataChanged nuevo.
     // -----------------------------------------------------------------
 
-    private fun updateNowPlayingText(mediaMetadata: MediaMetadata) {
+    private fun refreshNowPlayingDisplay() {
         val stationName = currentStream?.name ?: getString(R.string.now_playing_fallback)
-        val dynamicTitle = mediaMetadata.title?.toString()?.trim()
-        if (!dynamicTitle.isNullOrBlank() && !dynamicTitle.equals(stationName, ignoreCase = true)) {
-            binding.nowPlayingTitle.text = dynamicTitle
+        val dynamic = lastDynamicTitle
+        val epgTitle = EpgRepository.currentTitle(currentStream?.tvgId)
+            ?.takeIf { !it.equals(stationName, ignoreCase = true) }
+
+        val nowTitle = dynamic ?: epgTitle
+        if (!nowTitle.isNullOrBlank()) {
+            binding.nowPlayingTitle.text = nowTitle
             binding.nowPlayingSubtitle.text = stationName
             binding.nowPlayingSubtitle.visibility = View.VISIBLE
         } else {
@@ -314,5 +344,6 @@ class PlayerActivity : AppCompatActivity() {
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
         private const val MENU_ID_SUBTITLES = 3
+        private const val EPG_REFRESH_INTERVAL_MS = 60_000L
     }
 }

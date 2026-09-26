@@ -4,8 +4,9 @@ App Android nativa (Kotlin) que lee una playlist en JSON y reproduce cada
 canal con **ExoPlayer / Media3**, con soporte para **DASH (.mpd)**,
 **HLS (.m3u8)** y vídeo progresivo (mp4, etc.), cabeceras HTTP propias y
 DRM **ClearKey** opcional. También reproduce **radio (audio)**, mostrando
-el logo y "lo que se está escuchando", y sigue sonando en segundo plano y
-con la pantalla bloqueada (ver más abajo).
+el logo y "lo que se está escuchando", sigue sonando en segundo plano y
+con la pantalla bloqueada, y admite **guía EPG** (qué programa toca ahora)
+si la lista la trae (ver más abajo).
 
 > Pensada para tu propio contenido: streams propios, autohospedados, o
 > cualquier servicio para el que tengas licencia/autorización de uso.
@@ -28,6 +29,7 @@ Se acepta el formato propio:
 
 ```json
 {
+  "epgUrl": "https://tu-servidor/guia.xml.gz",
   "categories": [
     {
       "name": "Mis canales",
@@ -38,7 +40,8 @@ Se acepta el formato propio:
           "url": "https://tu-servidor/manifest.mpd",
           "icon": "https://tu-servidor/logo.png",
           "headers": { "Authorization": "Bearer xxx" },
-          "drm": { "keyId": "base64url...", "key": "base64url..." }
+          "drm": { "keyId": "base64url...", "key": "base64url..." },
+          "tvgId": "canal.demo"
         },
         {
           "name": "Canal demo HLS",
@@ -75,7 +78,10 @@ Se acepta el formato propio:
 ]
 ```
 
-Alias aceptados por campo: `url`/`uri`, `icon`/`image`/`icono`, `type`/`extension`.
+Alias aceptados por campo: `url`/`uri`, `icon`/`image`/`icono`, `type`/`extension`,
+`tvgId`/`tvg_id`/`tvg-id`/`epgId` (identificador EPG del canal), y
+`epgUrl`/`epg_url`/`url-tvg`/`xmltv` a nivel de raíz (guía EPG de toda la
+lista; solo con la raíz en forma de objeto, no en la raíz en array).
 Para DRM ClearKey se acepta cualquiera de estas tres formas: `drm: {keyId,
 key}`, `kid`+`key` sueltos, o `license_key` con el JSON de ClearKey ya
 armado (`{"keys":[{"kty":"oct",...}],"type":"temporary"}`). `kid`/`key`
@@ -101,16 +107,17 @@ También se acepta M3U/M3U8 extendido (detecta el formato solo, por si
 empieza con `#EXTM3U`):
 
 ```
-#EXTM3U
-#EXTINF:-1 tvg-name="Canal" tvg-logo="https://.../logo.png" group-title="Categoría",Nombre para mostrar
+#EXTM3U url-tvg="https://tu-servidor/guia.xml.gz"
+#EXTINF:-1 tvg-id="canal.demo" tvg-name="Canal" tvg-logo="https://.../logo.png" group-title="Categoría",Nombre para mostrar
 https://tu-servidor/stream
 ```
 
 `group-title` se usa como categoría, `tvg-logo` como icono, y `tvg-name`
 (o el texto tras la coma si falta) como nombre. El tipo de cada canal se
 adivina por la extensión de la URL (`.m3u8` → HLS, `.mpd` → DASH; si no,
-progresivo). Este formato no admite cabeceras, DRM ni token — para eso
-usa el JSON.
+progresivo). `url-tvg` (o `x-tvg-url`) en la cabecera `#EXTM3U` y `tvg-id`
+en cada canal son para la guía EPG (ver más abajo). Este formato no
+admite cabeceras, DRM ni token — para eso usa el JSON.
 
 Desde la app, usa el icono de carpeta (barra superior) para elegir un
 archivo JSON o M3U con cualquiera de estos formatos desde tu dispositivo. La
@@ -163,12 +170,37 @@ de pista", y todo lo que antes resolvía para construir el reproductor
 del `MediaItem` para que el servicio pueda construir el `MediaSource`
 igual que antes.
 
+## EPG (guía de programación)
+
+Si la lista trae guía EPG (`epgUrl`/`url-tvg` a nivel de lista y
+`tvgId`/`tvg-id` por canal, ver arriba), la app la descarga y la lee sola
+en segundo plano en cuanto cargas esa lista, sin bloquear nada:
+
+- **En la lista de canales**: cada canal con `tvg-id` que tenga
+  coincidencia en la guía muestra una segunda línea pequeña, "Ahora: 
+  \<programa\>", debajo de su nombre.
+- **En la pantalla de radio**: si el propio stream no manda su título
+  ICY/ID3 (o no lo manda todavía), se usa el programa que marca la guía
+  EPG como respaldo, en el mismo sitio. Se revisa cada minuto mientras
+  esa pantalla está abierta, por si cambia de programa.
+- Formato admitido: **XMLTV** (`.xml` o `.xml.gz`; el `.gz` se detecta
+  solo, da igual lo que diga la URL o las cabeceras HTTP), el estándar de
+  facto para guías de programación por Internet — la mayoría de listas
+  IPTV que ya traen `url-tvg` apuntan a uno de estos.
+- Si la descarga o el formato fallan, o el canal no tiene `tvg-id`, o no
+  hay coincidencia en la guía, la app sigue funcionando exactamente igual,
+  simplemente sin ese dato de más.
+- Por dentro, `EpgRepository` descarga y parsea la guía una sola vez por
+  URL (no vuelve a hacerlo si recargas la misma lista) y la deja en
+  memoria mientras dure el proceso de la app.
+
 ## Estructura
 
 ```
 app/src/main/java/com/example/superplayer/
   model/    Stream, Category, PlaylistData, DrmInfo
-  data/     PlaylistRepository (parseo JSON/M3U), FavoritesStore, AppPrefs
+  data/     PlaylistRepository (parseo JSON/M3U), EpgRepository (guía XMLTV),
+            FavoritesStore, AppPrefs
   ui/       MainActivity (categorías + buscador), StreamListActivity
   player/   PlayerActivity (MediaController), PlaybackService (MediaSessionService
             + ExoPlayer real), StreamMediaSourceFactory (DASH/HLS/progresivo +
@@ -178,8 +210,10 @@ app/src/main/java/com/example/superplayer/
 Funciones incluidas: categorías, buscador (filtra canales por nombre,
 tanto en la portada como dentro de una categoría), favoritos persistentes
 (categoría "⭐ Favoritos" arriba de todo cuando hay alguno), carga de
-JSON/M3U desde el propio dispositivo o desde una URL, y radio con "ahora
-suena" + reproducción en segundo plano / pantalla de bloqueo.
+JSON/M3U desde el propio dispositivo o desde una URL, radio con "ahora
+suena" + reproducción en segundo plano / pantalla de bloqueo, y guía EPG
+opcional (programa actual en la lista de canales y como respaldo en la
+pantalla de radio).
 
 ## Si la app se cierra sola
 
@@ -204,6 +238,10 @@ de un PC.
 - Elegir un canal nuevo desde la lista siempre sustituye lo que estuviera
   sonando (incluida una radio en segundo plano): solo hay un reproductor
   real (dentro de `PlaybackService`) para toda la app.
+- La guía EPG no tiene pantalla propia (no hay una parrilla con horarios):
+  solo se usa para mostrar el programa actual en la lista de canales y en
+  la pantalla de radio. Tampoco está disponible con la raíz del JSON en
+  forma de array (formato "exolist"), solo con la raíz como objeto.
 
 ## Compilar sin PC (GitHub Actions)
 

@@ -19,14 +19,34 @@
         android:padding="6dp"
         android:contentDescription="@null" />
 
-    <TextView
-        android:id="@+id/streamName"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:layout_marginStart="16dp"
-        android:textColor="@color/on_background"
-        android:textSize="15sp" />
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/streamName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/on_background"
+            android:textSize="15sp" />
+
+        <!-- EPG: programa en emisión ahora mismo (solo si la lista trae guía
+             y el canal tiene tvg-id con coincidencia); oculto si no hay dato. -->
+        <TextView
+            android:id="@+id/streamNowPlaying"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/on_surface_muted"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone" />
+
+    </LinearLayout>
 
     <ImageView
         android:id="@+id/favoriteIcon"

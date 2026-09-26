@@ -35,10 +35,22 @@ package com.example.superplayer.model
  * stream, si un canal no tiene vídeo (radio) y en ese caso mantiene la
  * reproducción activa en segundo plano y en la pantalla de bloqueo a
  * través de PlaybackService.
+ *
+ * EPG (guía de programación), opcional:
+ * - A nivel de lista: "epgUrl" (o "epg_url"/"url-tvg"/"xmltv") en la raíz
+ *   del JSON, o el atributo url-tvg/x-tvg-url de la cabecera #EXTM3U en
+ *   M3U. Debe apuntar a un XMLTV (.xml o .xml.gz).
+ * - A nivel de canal: "tvgId" (o "tvg_id"/"tvg-id"/"epgId") en JSON, o el
+ *   atributo tvg-id de cada #EXTINF en M3U. Tiene que coincidir con el
+ *   "channel" de ese XMLTV.
+ * Con ambos datos, la app muestra el programa que toca ahora (en la lista
+ * de canales, y en la pantalla de radio como respaldo si el propio stream
+ * no manda su propio título ICY/ID3).
  */
 
 data class PlaylistData(
-    val categories: List<Category>
+    val categories: List<Category>,
+    val epgUrl: String? = null
 )
 
 data class Category(
@@ -54,7 +66,8 @@ data class Stream(
     val category: String,
     val headers: Map<String, String> = emptyMap(),
     val drm: DrmInfo? = null,
-    val tokenUrl: String? = null
+    val tokenUrl: String? = null,
+    val tvgId: String? = null
 ) {
     /** Identificador estable para favoritos: dos canales con la misma URL son "el mismo". */
     val id: String get() = url

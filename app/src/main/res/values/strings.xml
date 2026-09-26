@@ -28,4 +28,7 @@
     <!-- Radio / "ahora suena" en PlayerActivity: nombre de respaldo cuando
          todavía no hay ni título dinámico (ICY/ID3) ni nombre de canal. -->
     <string name="now_playing_fallback">Reproduciendo…</string>
+
+    <!-- EPG: programa en emisión ahora mismo, en la lista de canales. -->
+    <string name="epg_now_playing">Ahora: %1$s</string>
 </resources>
