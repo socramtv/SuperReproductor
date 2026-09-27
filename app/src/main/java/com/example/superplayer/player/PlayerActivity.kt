@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.PopupMenu
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -141,6 +142,10 @@ class PlayerActivity : AppCompatActivity() {
             // resolution ambiguity"); hay que decir cuál de las dos es.
             PlayerView.ControllerVisibilityListener { visibility ->
                 binding.trackSelectionButton.visibility = visibility
+                // Para radio, el overlay de arriba ya se encarga (ver
+                // onTracksChanged): este cartel es solo para vídeo, y
+                // aparece/desaparece junto con los controles normales.
+                binding.videoNowPlayingBar.visibility = if (isCurrentStreamRadio) View.GONE else visibility
             }
         )
         binding.playerView.keepScreenOn = true
@@ -315,13 +320,20 @@ class PlayerActivity : AppCompatActivity() {
             ?.takeIf { !it.equals(stationName, ignoreCase = true) }
 
         val nowTitle = dynamic ?: epgTitle
+        // Mismo texto en las dos vistas: el overlay permanente de radio, y
+        // el cartel de vídeo que aparece/desaparece con los controles.
+        applyNowPlayingText(binding.nowPlayingTitle, binding.nowPlayingSubtitle, stationName, nowTitle)
+        applyNowPlayingText(binding.videoNowPlayingTitle, binding.videoNowPlayingSubtitle, stationName, nowTitle)
+    }
+
+    private fun applyNowPlayingText(titleView: TextView, subtitleView: TextView, stationName: String, nowTitle: String?) {
         if (!nowTitle.isNullOrBlank()) {
-            binding.nowPlayingTitle.text = nowTitle
-            binding.nowPlayingSubtitle.text = stationName
-            binding.nowPlayingSubtitle.visibility = View.VISIBLE
+            titleView.text = nowTitle
+            subtitleView.text = stationName
+            subtitleView.visibility = View.VISIBLE
         } else {
-            binding.nowPlayingTitle.text = stationName
-            binding.nowPlayingSubtitle.visibility = View.GONE
+            titleView.text = stationName
+            subtitleView.visibility = View.GONE
         }
     }
 

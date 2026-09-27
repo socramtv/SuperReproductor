@@ -223,6 +223,12 @@ una pantalla de "ahora suena" en vez del hueco negro del vídeo.
   13 o superior); sin ese permiso la radio sigue sonando en segundo plano
   igual, pero no se ven los controles en la pantalla de bloqueo.
 
+Para un canal de **vídeo/TV**, ese mismo texto (título dinámico o programa
+de la guía, si no el nombre del canal) también está disponible, solo que
+no permanente: un toque en la pantalla saca los controles normales de
+reproducción (play/pausa, barra de progreso...) y, junto a ellos, un
+cartel abajo con ese texto; ambos se ocultan solos a los pocos segundos.
+
 Por dentro, esto lo gestiona `PlaybackService` (un `MediaSessionService`
 de Media3): es quien tiene el ExoPlayer real y sigue vivo aunque
 `PlayerActivity` se detenga. `PlayerActivity` solo se conecta a él como

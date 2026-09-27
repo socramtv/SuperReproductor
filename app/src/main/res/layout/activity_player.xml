@@ -74,4 +74,48 @@
         android:tint="@android:color/white"
         android:contentDescription="@string/action_track_selection" />
 
+    <!--
+        "Qué se está viendo" para canales de VÍDEO (la radio ya tiene su
+        propio overlay permanente arriba, este no se usa en ese caso): un
+        toque en la pantalla saca los controles normales de reproducción
+        (eso ya lo hace PlayerView solo) y, a la vez, este cartel abajo con
+        el canal y -si hay- el programa que marca la guía o el título
+        dinámico ICY/ID3; se oculta solo junto con los controles. Mismo
+        texto que calcula refreshNowPlayingDisplay() para el overlay de
+        radio, solo que aplicado también aquí.
+    -->
+    <LinearLayout
+        android:id="@+id/videoNowPlayingBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="72dp"
+        android:orientation="vertical"
+        android:background="#99000000"
+        android:paddingHorizontal="20dp"
+        android:paddingVertical="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/videoNowPlayingTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/on_background"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/videoNowPlayingSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/on_surface_muted"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+    </LinearLayout>
+
 </FrameLayout>
