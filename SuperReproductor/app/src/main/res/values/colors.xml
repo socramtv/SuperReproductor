@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background_dark">#0F1020</color>
+    <color name="surface_dark">#1A1B2E</color>
+    <color name="primary">#FF6B4A</color>
+    <color name="primary_variant">#E85A3A</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_background">#F5F5F7</color>
+    <color name="on_surface_muted">#9A9AB0</color>
+    <color name="favorite">#FFC857</color>
+</resources>

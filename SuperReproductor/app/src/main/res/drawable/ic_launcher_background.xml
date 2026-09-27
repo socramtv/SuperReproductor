@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Mismo rojo que el fondo ya llevaba "horneado" dentro de
+         ic_launcher_app.png (muestreado de la propia captura), para que no
+         se note un anillo de otro color en el hueco que deja el inset del
+         primer plano (ver ic_launcher_foreground_inset.xml). -->
+    <path
+        android:fillColor="#822324"
+        android:pathData="M0,0h108v108h-108z" />
+</vector>

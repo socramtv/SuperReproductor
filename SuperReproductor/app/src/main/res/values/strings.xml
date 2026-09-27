@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">🇪🇸 🇳🇬 Socram TV+ 🇳🇬 🇪🇸</string>
+    <string name="action_search">Buscar</string>
+    <string name="action_load_playlist">Cargar lista (JSON)</string>
+    <string name="action_favorites">Favoritos</string>
+    <string name="favorites_category_name">⭐ Favoritos</string>
+    <string name="empty_categories">No hay categorías todavía. Toca el icono de carpeta para cargar un archivo JSON o M3U.</string>
+    <string name="empty_streams">No hay canales en esta categoría.</string>
+    <string name="load_success">Lista cargada: %1$d categorías, %2$d canales</string>
+    <string name="player_error">Error de reproducción: %1$s</string>
+    <string name="action_track_selection">Calidad de vídeo / audio</string>
+    <string name="track_video">Vídeo</string>
+    <string name="track_audio">Audio</string>
+    <string name="track_subtitles">Subtítulos</string>
+    <string name="stream_count">%1$d canales</string>
+    <string name="search_hint">Buscar canal…</string>
+    <string name="list_slot_1">TV+ 📺</string>
+    <string name="list_slot_2">Acestream</string>
+    <string name="list_slot_3">Cine 🍿</string>
+    <string name="list_slot_4">TDT 📡</string>
+    <string name="list_slot_5">Radio 📻</string>
+    <string name="list_slot_dialog_title">URL de %1$s</string>
+    <string name="list_slot_dialog_hint">https://raw.githubusercontent.com/…</string>
+    <string name="action_load_file_button">Archivo 📁</string>
+    <string name="loading_list">Cargando lista…</string>
+    <string name="list_load_error">No se pudo cargar esa lista (%1$s).</string>
+    <string name="added_to_favorites">Añadido a favoritos</string>
+    <string name="removed_from_favorites">Quitado de favoritos</string>
+
+    <!-- Radio / "ahora suena" en PlayerActivity: nombre de respaldo cuando
+         todavía no hay ni título dinámico (ICY/ID3) ni nombre de canal. -->
+    <string name="now_playing_fallback">Reproduciendo…</string>
+
+    <!-- EPG en la lista de canales: "ahora", "después" y "esta noche",
+         cada uno con su horario (%1$s) y título (%2$s). -->
+    <string name="epg_now_playing">Ahora (%1$s): %2$s</string>
+    <string name="epg_next_playing">Después (%1$s): %2$s</string>
+    <string name="epg_tonight_playing">Esta noche (%1$s): %2$s</string>
+</resources>
