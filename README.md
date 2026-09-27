@@ -238,6 +238,42 @@ de pista", y todo lo que antes resolvía para construir el reproductor
 del `MediaItem` para que el servicio pueda construir el `MediaSource`
 igual que antes.
 
+## Cambiar de canal tocando la pantalla
+
+Mientras se está reproduciendo algo, la pantalla del reproductor se
+divide en tres franjas verticales invisibles:
+
+- **Tercio izquierdo**: pasa al canal **anterior**.
+- **Tercio derecho**: pasa al canal **siguiente**.
+- **Tercio central**: muestra/oculta los controles normales de
+  reproducción, igual que antes.
+
+El "siguiente/anterior" recorre la misma lista de canales desde la que
+abriste ese canal (la categoría, favoritos, o los resultados de una
+búsqueda), en el mismo orden en que aparecen ahí, y da la vuelta al
+llegar a un extremo (del último pasa al primero, y del primero al
+último). Si esa lista solo tiene un canal (o no viene de ninguna lista),
+tocar los lados no hace nada especial: toda la pantalla se comporta como
+el tercio central.
+
+El cambio de canal ocurre en la misma pantalla (no se cierra ni se
+vuelve a abrir el reproductor): se resuelve el nuevo canal exactamente
+igual que el primero al entrar (token si lo necesita, tipo DASH/HLS/
+progresivo, cabeceras, DRM ClearKey), y el título/EPG/"ahora suena" se
+actualizan solos.
+
+Nota: el ancho exacto de las tres franjas (un tercio cada una) es una
+primera aproximación sin poder probarla en un dispositivo real; si al
+usarla el "centro" para mostrar/ocultar controles queda demasiado
+estrecho (o demasiado ancho) se puede ajustar.
+
+Los botones de "anterior/siguiente" y "retroceder/avanzar 10 s" que
+Media3 pone por defecto en medio de los controles están desactivados
+(`show_previous_button`/`show_next_button`/`show_rewind_button`/
+`show_fastforward_button` a `false` en `activity_player.xml`): estaban
+justo encima de estas dos zonas de toque y se quedaban con el toque
+antes de que le llegara al gesto de cambiar de canal.
+
 ## EPG (guía de programación)
 
 Si la lista trae guía EPG (`epgUrl`/`url-tvg` a nivel de lista y

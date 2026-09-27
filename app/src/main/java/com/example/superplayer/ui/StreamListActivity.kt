@@ -59,6 +59,10 @@ class StreamListActivity : AppCompatActivity() {
 
     private fun openPlayer(stream: Stream) {
         PlayerActivity.pendingStream = stream
+        // La lista completa de la categoría (no la filtrada por búsqueda si
+        // hubiera una en curso): así el gesto de "canal siguiente/anterior"
+        // en el reproductor recorre todos los canales de la categoría.
+        PlayerActivity.pendingChannelList = allStreams
         startActivity(Intent(this, PlayerActivity::class.java))
     }
 

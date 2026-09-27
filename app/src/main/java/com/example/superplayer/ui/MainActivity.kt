@@ -30,6 +30,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamAdapter: StreamAdapter
     private var playlist: PlaylistData = PlaylistData(emptyList())
 
+    // Última lista mostrada en streamAdapter (resultados de la búsqueda
+    // actual); openPlayer() se la pasa a PlayerActivity para que el gesto de
+    // "canal siguiente/anterior" recorra esos mismos resultados.
+    private var currentSearchResults: List<Stream> = emptyList()
+
     private val openDocumentLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) loadFromUri(uri)
@@ -228,6 +233,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun openPlayer(stream: Stream) {
         PlayerActivity.pendingStream = stream
+        PlayerActivity.pendingChannelList = currentSearchResults
         startActivity(Intent(this, PlayerActivity::class.java))
     }
 
@@ -272,6 +278,7 @@ class MainActivity : AppCompatActivity() {
         }
         val matches = playlist.categories.flatMap { it.streams }
             .filter { it.name.contains(query, ignoreCase = true) }
+        currentSearchResults = matches
         streamAdapter.submit(matches)
         binding.recyclerView.adapter = streamAdapter
     }

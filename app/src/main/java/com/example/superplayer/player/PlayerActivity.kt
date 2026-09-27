@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.widget.PopupMenu
 import android.widget.TextView
@@ -53,6 +55,13 @@ import java.net.URL
  * las pistas reales del stream y se muestra el logo + "ahora suena" en vez
  * del hueco negro del vídeo; ese es también el único caso en que dejamos
  * la reproducción seguir cuando la pantalla se bloquea o se cambia de app.
+ *
+ * Cambio de canal tocando la pantalla: si este canal viene de una lista
+ * (categoría, favoritos o resultados de búsqueda; ver companion.pendingChannelList),
+ * tocar el tercio izquierdo/derecho de la pantalla pasa al canal
+ * anterior/siguiente de esa misma lista (dando la vuelta al llegar a un
+ * extremo), sin recrear la pantalla; el tercio central sigue mostrando/
+ * ocultando los controles, como antes (ver playerTapGestureDetector).
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
@@ -63,6 +72,16 @@ class PlayerActivity : AppCompatActivity() {
     private var pendingMediaItem: MediaItem? = null
     private var playbackStarted = false
     private var isCurrentStreamRadio = false
+
+    // Lista de canales de la categoría/favoritos/búsqueda desde la que se
+    // abrió este canal (ver companion.pendingChannelList) y la posición de
+    // currentStream dentro de ella; permiten "canal siguiente/anterior" al
+    // tocar los lados de la pantalla (ver playerTapGestureDetector). Si el
+    // canal no viene de ninguna lista, o la lista solo tiene un canal,
+    // quedan vacíos/-1 y esos toques laterales no hacen nada especial (solo
+    // el tercio central sigue mostrando/ocultando los controles).
+    private var channelList: List<Stream> = emptyList()
+    private var currentIndex: Int = -1
 
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -105,6 +124,98 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    // -----------------------------------------------------------------
+    // Toques en la pantalla del reproductor: tercio izquierdo -> canal
+    // anterior, tercio derecho -> canal siguiente, tercio central -> mostrar/
+    // ocultar controles. Se implementa entero aquí, en vez de dejar que
+    // PlayerView siga gestionando también el toque central por su cuenta,
+    // porque PlayerView necesita ver el gesto completo (bajada Y subida)
+    // para reconocer su propio toque; si esta app solo decidiera "esto no es
+    // lateral, que lo procese PlayerView" al llegar la subida, a PlayerView
+    // le llegaría un gesto incompleto (sin la bajada) y no lo detectaría.
+    // Por eso onDown() devuelve siempre true (nos quedamos el gesto entero)
+    // y el tercio central se resuelve aquí mismo, con los mismos métodos
+    // (isControllerFullyVisible/showController/hideController) que usa
+    // PlayerView internamente para lo mismo.
+    // -----------------------------------------------------------------
+
+    private val playerTapGestureDetector by lazy {
+        GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent) = true
+
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                val width = binding.playerView.width
+                val height = binding.playerView.height
+
+                // Franja de abajo: ahí es donde Media3 pone la barra de
+                // progreso (llega hasta 100dp desde el borde inferior) y,
+                // encima, la fila de ajustes/subtítulos/pantalla completa
+                // (60dp) -las dos a lo ancho de TODA la pantalla-, así que
+                // esa franja se deja siempre para esos controles nativos,
+                // aunque en ese momento no haya ninguno pintado ahí. 120dp
+                // deja un margen de sobra sobre esos 100dp reales.
+                val bottomControlsPx = BOTTOM_CONTROLS_DP * resources.displayMetrics.density
+                val inBottomControlsBand = height > 0 && e.y > height - bottomControlsPx
+
+                if (!inBottomControlsBand) {
+                    val canSwitchChannel = currentIndex >= 0 && channelList.size > 1 && width > 0
+                    if (canSwitchChannel) {
+                        when {
+                            e.x < width * SIDE_ZONE_FRACTION -> {
+                                switchChannel(-1)
+                                return true
+                            }
+                            e.x > width * (1 - SIDE_ZONE_FRACTION) -> {
+                                switchChannel(1)
+                                return true
+                            }
+                        }
+                    }
+                }
+                toggleController()
+                return true
+            }
+        })
+    }
+
+    private fun toggleController() {
+        if (binding.playerView.isControllerFullyVisible) {
+            binding.playerView.hideController()
+        } else {
+            binding.playerView.showController()
+        }
+    }
+
+    /**
+     * Cambia al canal en `currentIndex + direction` dentro de channelList
+     * (da la vuelta al llegar a un extremo: siguiente desde el último vuelve
+     * al primero, y viceversa) y lo reproduce ahí mismo, sin recrear la
+     * pantalla. Reutiliza resolveAndPlay/onStreamResolved -los mismos que
+     * usa onCreate() para el canal inicial-, así que el token, el tipo, las
+     * cabeceras y el DRM del nuevo canal se resuelven exactamente igual.
+     */
+    private fun switchChannel(direction: Int) {
+        val size = channelList.size
+        if (size <= 1 || currentIndex < 0) return
+        val newIndex = ((currentIndex + direction) % size + size) % size
+        val newStream = channelList[newIndex]
+        currentIndex = newIndex
+
+        playbackStarted = false
+        pendingMediaItem = null
+        lastDynamicTitle = null
+        currentStream = newStream
+
+        title = newStream.name
+        binding.nowPlayingTitle.text = newStream.name
+        binding.nowPlayingLogo.load(newStream.icon) {
+            placeholder(R.drawable.ic_radio)
+            error(R.drawable.ic_radio)
+        }
+        refreshNowPlayingDisplay()
+        resolveAndPlay(newStream)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityPlayerBinding.inflate(layoutInflater)
@@ -125,6 +236,8 @@ class PlayerActivity : AppCompatActivity() {
         }
         title = stream.name
         currentStream = stream
+        channelList = pendingChannelList
+        currentIndex = channelList.indexOfFirst { it.id == stream.id }
 
         binding.nowPlayingTitle.text = stream.name
         binding.nowPlayingLogo.load(stream.icon) {
@@ -149,6 +262,7 @@ class PlayerActivity : AppCompatActivity() {
             }
         )
         binding.playerView.keepScreenOn = true
+        binding.playerView.setOnTouchListener { _, event -> playerTapGestureDetector.onTouchEvent(event) }
 
         ensureNotificationPermission()
         resolveAndPlay(stream)
@@ -219,6 +333,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         pendingStream = null
+        pendingChannelList = emptyList()
     }
 
     // -----------------------------------------------------------------
@@ -378,9 +493,28 @@ class PlayerActivity : AppCompatActivity() {
 
     companion object {
         var pendingStream: Stream? = null
+
+        // Lista de canales de la categoría/favoritos/búsqueda desde la que
+        // se abre pendingStream; la rellenan MainActivity y StreamListActivity
+        // justo antes de lanzar esta pantalla (mismo patrón que pendingStream:
+        // propiedad estática en vez de extra del Intent, para no toparse con
+        // el límite de tamaño de Binder en playlists grandes).
+        var pendingChannelList: List<Stream> = emptyList()
+
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
         private const val MENU_ID_SUBTITLES = 3
         private const val EPG_REFRESH_INTERVAL_MS = 60_000L
+
+        // Ancho de las zonas laterales de toque (izquierda/derecha), como
+        // fracción del ancho de PlayerView: con 1/3, el tercio izquierdo pasa
+        // al canal anterior, el tercio derecho al siguiente, y el tercio
+        // central de en medio muestra/oculta los controles.
+        private const val SIDE_ZONE_FRACTION = 1f / 3f
+
+        // Alto (en dp) de la franja inferior reservada para los controles
+        // nativos de Media3 (barra de progreso + fila de ajustes), a todo
+        // lo ancho de la pantalla: ver el comentario en onSingleTapUp.
+        private const val BOTTOM_CONTROLS_DP = 120f
     }
 }
