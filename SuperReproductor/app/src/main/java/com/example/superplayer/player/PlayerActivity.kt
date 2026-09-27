@@ -145,16 +145,30 @@ class PlayerActivity : AppCompatActivity() {
 
             override fun onSingleTapUp(e: MotionEvent): Boolean {
                 val width = binding.playerView.width
-                val canSwitchChannel = currentIndex >= 0 && channelList.size > 1 && width > 0
-                if (canSwitchChannel) {
-                    when {
-                        e.x < width * SIDE_ZONE_FRACTION -> {
-                            switchChannel(-1)
-                            return true
-                        }
-                        e.x > width * (1 - SIDE_ZONE_FRACTION) -> {
-                            switchChannel(1)
-                            return true
+                val height = binding.playerView.height
+
+                // Franja de abajo: ahí es donde Media3 pone la barra de
+                // progreso (llega hasta 100dp desde el borde inferior) y,
+                // encima, la fila de ajustes/subtítulos/pantalla completa
+                // (60dp) -las dos a lo ancho de TODA la pantalla-, así que
+                // esa franja se deja siempre para esos controles nativos,
+                // aunque en ese momento no haya ninguno pintado ahí. 120dp
+                // deja un margen de sobra sobre esos 100dp reales.
+                val bottomControlsPx = BOTTOM_CONTROLS_DP * resources.displayMetrics.density
+                val inBottomControlsBand = height > 0 && e.y > height - bottomControlsPx
+
+                if (!inBottomControlsBand) {
+                    val canSwitchChannel = currentIndex >= 0 && channelList.size > 1 && width > 0
+                    if (canSwitchChannel) {
+                        when {
+                            e.x < width * SIDE_ZONE_FRACTION -> {
+                                switchChannel(-1)
+                                return true
+                            }
+                            e.x > width * (1 - SIDE_ZONE_FRACTION) -> {
+                                switchChannel(1)
+                                return true
+                            }
                         }
                     }
                 }
@@ -497,5 +511,10 @@ class PlayerActivity : AppCompatActivity() {
         // al canal anterior, el tercio derecho al siguiente, y el tercio
         // central de en medio muestra/oculta los controles.
         private const val SIDE_ZONE_FRACTION = 1f / 3f
+
+        // Alto (en dp) de la franja inferior reservada para los controles
+        // nativos de Media3 (barra de progreso + fila de ajustes), a todo
+        // lo ancho de la pantalla: ver el comentario en onSingleTapUp.
+        private const val BOTTOM_CONTROLS_DP = 120f
     }
 }
