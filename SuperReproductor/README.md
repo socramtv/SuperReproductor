@@ -267,6 +267,13 @@ primera aproximación sin poder probarla en un dispositivo real; si al
 usarla el "centro" para mostrar/ocultar controles queda demasiado
 estrecho (o demasiado ancho) se puede ajustar.
 
+Los botones de "anterior/siguiente" y "retroceder/avanzar 10 s" que
+Media3 pone por defecto en medio de los controles están desactivados
+(`show_previous_button`/`show_next_button`/`show_rewind_button`/
+`show_fastforward_button` a `false` en `activity_player.xml`): estaban
+justo encima de estas dos zonas de toque y se quedaban con el toque
+antes de que le llegara al gesto de cambiar de canal.
+
 ## EPG (guía de programación)
 
 Si la lista trae guía EPG (`epgUrl`/`url-tvg` a nivel de lista y

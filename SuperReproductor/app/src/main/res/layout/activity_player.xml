@@ -5,11 +5,27 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
+    <!--
+        show_previous/next/rewind/fastforward_button="false": por defecto
+        Media3 muestra ahí, centrados en medio de la pantalla, los botones
+        de "anterior/siguiente" (de pista, sin sentido aquí: nunca hay más
+        de un MediaItem cargado a la vez) y "retroceder/avanzar 10s". Esos
+        dos últimos quedaban justo encima de las zonas de toque izquierda/
+        derecha para cambiar de canal (ver playerTapGestureDetector en
+        PlayerActivity) y se comían el toque antes de que le llegara a esa
+        zona: por eso tocar el lateral avanzaba/retrocedía el vídeo unos
+        segundos en vez de cambiar de canal. Al quitarlos, en el centro solo
+        queda el botón de play/pausa, bien dentro del tercio central.
+    -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:show_buffering="when_playing" />
+        app:show_buffering="when_playing"
+        app:show_previous_button="false"
+        app:show_next_button="false"
+        app:show_rewind_button="false"
+        app:show_fastforward_button="false" />
 
     <!--
         Overlay de "radio": PlayerActivity la muestra solo cuando el stream
