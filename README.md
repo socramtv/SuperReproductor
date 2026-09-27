@@ -180,6 +180,56 @@ Su guía EPG (`epg.json` en la raíz) viene en un formato JSON propio, no
 XMLTV — ver la sección EPG más abajo, donde se explican los dos formatos
 que se admiten.
 
+## Listas con formato "groups" / "stations"
+
+Otro formato público que también se reconoce solo —mirando si el JSON
+trae una clave `"groups"` en la raíz— es este, con canales agrupados en
+`"stations"` dentro de cada grupo:
+
+```json
+{
+  "name": "Nombre de la lista",
+  "author": "Autor",
+  "groups": [
+    {
+      "name": "Categoría",
+      "stations": [
+        {
+          "name": "Canal demo",
+          "image": "https://tu-servidor/logo.png",
+          "url": "https://tu-servidor/index.m3u8",
+          "referer": "https://tu-servidor/",
+          "userAgent": "Mozilla/5.0 ..."
+        }
+      ]
+    }
+  ]
+}
+```
+
+Cada `group` se trata como categoría y cada `station` como canal. Al no
+traer un campo `type`/`extension`/`format` explícito, el tipo (HLS, DASH
+o progresivo) se adivina a partir de la URL, igual que en las listas
+M3U. Si la estación trae `referer` y/o `userAgent`, se mandan como
+cabeceras HTTP `Referer` y `User-Agent` en cada petición al stream,
+igual que con `referer` en el formato tdtchannels de más arriba.
+
+Un aviso importante: esto solo reproduce streams directos (una URL de
+vídeo/audio real que ExoPlayer pueda abrir tal cual). Algunas listas de
+este estilo circulan con canales cuyo `"url"` no es un stream sino una
+página web (a menudo un `.php`) que a su vez esconde el vídeo real
+dentro —con distintos trucos según la página— para que solo la vea
+quien la abra con un navegador normal. La app no trae ni traerá nada
+pensado para detectar y saltarse ese tipo de protección y sacar el
+vídeo escondido de una página cualquiera: es la técnica genérica que
+usan estas listas para colarse en retransmisiones que no tienen
+permiso para redistribuirse, y no es algo que quiera construir aunque
+la petición en concreto no lo mencione así. Un canal de este tipo
+aparecerá en la lista pero no arrancará al tocarlo. Si la página en
+cuestión se limitara a redirigir por HTTP a la URL real del stream (sin
+esconder nada), eso sí funcionaría ya hoy sin cambios, porque la app
+sigue redirecciones normales.
+
 ## Listas remotas (TV / Lista 2 / Cine / TDT / Radio)
 
 En la portada hay cinco botones (en dos filas) para cargar una lista

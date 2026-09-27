@@ -67,6 +67,14 @@ object PlaylistRepository {
             return parseTdtChannelsJson(rootObject, countriesJson)
         }
 
+        // Listas con raíz "groups" -> "stations" (otro formato público
+        // distinto, con sus propios nombres de campo): esquema propio,
+        // función dedicada (ver parseGroupsStationsJson).
+        val groupsJson = rootObject?.optJSONArray("groups")
+        if (rootObject != null && groupsJson != null) {
+            return parseGroupsStationsJson(groupsJson)
+        }
+
         val categoriesJson: JSONArray = if (isArrayRoot) {
             JSONArray(trimmed)
         } else {
@@ -227,6 +235,67 @@ object PlaylistRepository {
         else -> "PROGRESSIVE"
     }
 
+    // ---------- Listas con raíz "groups" -> "stations" ----------
+
+    /**
+     * Otro formato público de lista, con sus propios nombres de campo: raíz
+     * objeto con "groups" (cada uno una categoría, con "name" y "stations"),
+     * y cada "station" con "name", "image" y "url". Si trae "referer" y/o
+     * "userAgent" (sueltos, no anidados en un "headers": {...} como en el
+     * formato de más arriba), se mandan como cabeceras HTTP Referer/
+     * User-Agent -algunos servidores las exigen para no rechazar el
+     * stream-, igual que ya se hace con el "referer" de las listas
+     * tdtchannels. El "type" no viene declarado en este formato, así que se
+     * adivina de la extensión de la URL, igual que en M3U.
+     *
+     * Ojo: algunas listas de este estilo incluyen canales cuyo "url" no es
+     * el stream en sí, sino una página web que primero hay que abrir para
+     * encontrar dentro el vídeo real. Esta app solo reproduce streams
+     * directos (DASH/HLS/progresivo): esos canales se cargan igual en la
+     * lista, pero no arrancarán al tocarlos.
+     */
+    private fun parseGroupsStationsJson(groupsJson: JSONArray): PlaylistData {
+        val categories = ArrayList<Category>(groupsJson.length())
+
+        for (i in 0 until groupsJson.length()) {
+            val groupObj = groupsJson.optJSONObject(i) ?: continue
+            val categoryName = groupObj.optString("name").ifBlank { "Sin categoría" }
+            val stationsJson = groupObj.optJSONArray("stations") ?: JSONArray()
+
+            val streams = ArrayList<Stream>(stationsJson.length())
+            for (j in 0 until stationsJson.length()) {
+                val stObj = stationsJson.optJSONObject(j) ?: continue
+                val url = stObj.optStringOrNull("url") ?: continue
+
+                val headers = LinkedHashMap<String, String>()
+                stObj.optStringOrNull("referer")?.let { headers["Referer"] = it }
+                stObj.optStringOrNull("userAgent")?.let { headers["User-Agent"] = it }
+
+                streams.add(
+                    Stream(
+                        name = stObj.optString("name").ifBlank { "Sin nombre" },
+                        type = guessTypeFromUrl(url),
+                        url = url,
+                        icon = stObj.optStringOrNull("image"),
+                        category = categoryName,
+                        headers = headers
+                    )
+                )
+            }
+            if (streams.isNotEmpty()) {
+                categories.add(Category(categoryName, streams))
+            }
+        }
+        return PlaylistData(categories, epgUrl = null)
+    }
+
+    /** Sin campo "type"/"extension" explícito, se adivina de la URL (igual que en M3U). */
+    private fun guessTypeFromUrl(url: String): String = when {
+        url.contains(".m3u8", ignoreCase = true) -> "HLS"
+        url.contains(".mpd", ignoreCase = true) -> "DASH"
+        else -> "PROGRESSIVE"
+    }
+
     /**
      * Como optString(key), pero distingue "no viene" o "viene null explícito"
      * (-> null de Kotlin) de "viene un texto vacío" (-> ""); optString a
@@ -301,14 +370,9 @@ object PlaylistRepository {
                     ?: titlePart).ifBlank { "Sin nombre" }
             } else if (!line.startsWith("#")) {
                 // Cualquier línea que no sea una etiqueta "#..." es la URL del canal.
-                val type = when {
-                    line.contains(".m3u8", ignoreCase = true) -> "HLS"
-                    line.contains(".mpd", ignoreCase = true) -> "DASH"
-                    else -> "PROGRESSIVE"
-                }
                 val stream = Stream(
                     name = pendingName ?: "Sin nombre",
-                    type = type,
+                    type = guessTypeFromUrl(line),
                     url = line,
                     icon = pendingLogo,
                     category = pendingGroup,
