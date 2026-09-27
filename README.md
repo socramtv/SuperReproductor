@@ -267,6 +267,14 @@ primera aproximación sin poder probarla en un dispositivo real; si al
 usarla el "centro" para mostrar/ocultar controles queda demasiado
 estrecho (o demasiado ancho) se puede ajustar.
 
+**En una TV con mando** (sin pantalla táctil), izquierda/derecha del
+D-pad hacen lo mismo que tocar los lados en el móvil: cambian al canal
+anterior/siguiente de la misma lista. Si el mando tiene botones
+dedicados de canal- /canal+ o de pista anterior/siguiente, también
+valen. Esto es aparte del gesto táctil (es una pulsación de tecla, no
+un toque) y funciona tanto si la lista se ve con mando como si el
+dispositivo tiene también pantalla táctil.
+
 Los botones de "anterior/siguiente" y "retroceder/avanzar 10 s" que
 Media3 pone por defecto en medio de los controles están desactivados
 (`show_previous_button`/`show_next_button`/`show_rewind_button`/

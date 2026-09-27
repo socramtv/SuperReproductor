@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.GestureDetector
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.widget.PopupMenu
@@ -214,6 +215,42 @@ class PlayerActivity : AppCompatActivity() {
         }
         refreshNowPlayingDisplay()
         resolveAndPlay(newStream)
+    }
+
+    // -----------------------------------------------------------------
+    // Mando de TV: izquierda/derecha del D-pad (y, si el mando los trae,
+    // canal- /canal+, o anterior/siguiente de pista) cambian de canal igual
+    // que tocar los lados en el móvil. No es un toque (MotionEvent), es una
+    // pulsación de tecla física (KeyEvent), así que se coge aparte aquí.
+    // dispatchKeyEvent() de la Activity es el primer sitio por el que pasa
+    // cualquier tecla, antes de que le llegue a ningún botón de dentro de
+    // PlayerView; así nos aseguramos de quedarnos la tecla nosotros primero.
+    // Si no hay ninguna lista por la que moverse, no se consume la tecla y
+    // se deja que el sistema haga lo que hiciera por defecto (por ejemplo,
+    // mover el foco entre los botones de los controles).
+    // -----------------------------------------------------------------
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val direction = when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_CHANNEL_DOWN,
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> -1
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_CHANNEL_UP,
+            KeyEvent.KEYCODE_MEDIA_NEXT -> 1
+            else -> 0
+        }
+        val canSwitchChannel = direction != 0 && currentIndex >= 0 && channelList.size > 1
+        if (canSwitchChannel) {
+            // Se consume tanto la bajada como la subida de la tecla (para
+            // que no le llegue nada suelto a ningún botón con el foco),
+            // pero solo se cambia de canal una vez, en la bajada.
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                switchChannel(direction)
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
