@@ -63,4 +63,10 @@
     <string name="epg_grid_next_window">3 h ▶</string>
     <string name="epg_grid_now_button">Ahora</string>
     <string name="epg_grid_window_range">%1$s – %2$s</string>
+
+    <!-- Buscador de la vista de parrilla (ver EpgGridActivity.applySearch):
+         busca a la vez entre el nombre de los canales y el título de su
+         programación, en toda la guía ya descargada. -->
+    <string name="epg_grid_search_hint">Buscar canal o programa…</string>
+    <string name="epg_grid_search_empty">Sin resultados para «%1$s», ni en el nombre del canal ni en su programación ya descargada.</string>
 </resources>

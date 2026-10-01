@@ -75,6 +75,21 @@ object EpgGridMath {
     }
 
     /**
+     * true si [query] aparece (sin mirar mayúsculas/minúsculas) en el
+     * nombre del canal o en el título de cualquier tramo de [entries]. En
+     * blanco, [query] vale para todos (sin filtro). [entries] debe ser TODA
+     * la guía ya descargada de ese canal (ver EpgRepository.allEntries), no
+     * solo la recortada a la franja horaria visible: así un canal con una
+     * coincidencia dentro de tres horas sigue apareciendo en el buscador de
+     * la parrilla aunque la ventana actual todavía no la enseñe.
+     */
+    fun matchesSearch(channelName: String, entries: List<EpgRepository.EpgEntry>, query: String): Boolean {
+        if (query.isBlank()) return true
+        if (channelName.contains(query, ignoreCase = true)) return true
+        return entries.any { it.title.contains(query, ignoreCase = true) }
+    }
+
+    /**
      * Recorta un inicio de franja candidato para que la ventana
      * [start, start+WINDOW_MILLIS) no se salga nunca del rango de datos
      * cargado (dataStart/dataEnd, ver EpgRepository.dataRange): no deja ir

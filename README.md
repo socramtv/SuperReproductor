@@ -516,10 +516,22 @@ dentro de su celda correspondiente.
 - Tocar el nombre de un canal (a la izquierda, siempre fijo aunque
   desplaces la parrilla) abre su reproductor, igual que en cualquier otra
   lista de la app.
+- El icono de lupa 🔍 de la barra superior busca a la vez entre el
+  **nombre de los canales** y el **título de su programación**, en toda la
+  guía ya descargada (no solo en la franja de 3 horas que se ve en ese
+  momento). Al escribir, la parrilla se queda solo con los canales que
+  coincidan; el nombre de cualquiera de ellos se pinta en dorado, tenga o
+  no un programa suyo visible ahora mismo en pantalla. Si la coincidencia
+  SÍ cae dentro de la franja de horas actual, además se resalta esa celda
+  en concreto con un borde dorado, para encontrarla de un vistazo. La
+  búsqueda **no mueve sola** la franja de horas hasta la coincidencia: si
+  un canal sale en dorado pero no ves ninguna celda resaltada, desplaza la
+  franja con los botones de arriba hasta encontrarla.
 - Si la lista no trae guía EPG, o todavía se está descargando, o ningún
-  canal tiene coincidencia, se muestra un aviso en vez de una parrilla
-  vacía — puede hacer falta volver a abrir esta pantalla unos segundos
-  después de cargar la lista, si la guía tardó en descargarse.
+  canal tiene coincidencia (de guía, o de una búsqueda en curso), se
+  muestra un aviso en vez de una parrilla vacía — puede hacer falta volver
+  a abrir esta pantalla unos segundos después de cargar la lista, si la
+  guía tardó en descargarse.
 
 **En Android TV**, el mando mueve el foco entre canales (arriba/abajo) y
 hasta los tres botones de franja horaria con normalidad; las celdas de

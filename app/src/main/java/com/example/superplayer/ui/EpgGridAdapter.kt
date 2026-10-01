@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.example.superplayer.R
+import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ItemEpgGridRowBinding
 import com.example.superplayer.model.Stream
 
@@ -29,15 +30,30 @@ import com.example.superplayer.model.Stream
  * EpgGridActivity) al engancharse/desengancharse de la ventana, no al hacer
  * bind: con el RecyclerView reciclando vistas, bind puede llamarse varias
  * veces para una misma fila sin que cambie si está en pantalla o no.
+ *
+ * [searchQuery] (ver EpgGridActivity.applySearch) resalta, dentro de la
+ * franja visible, la celda cuyo título coincide con la búsqueda en curso
+ * (bg_epg_cell_match, por delante del estilo de "ahora" si coinciden las
+ * dos cosas) y pinta en dorado el nombre de cualquier canal que tenga una
+ * coincidencia en TODA su guía, esté o no dentro de la franja de horas que
+ * se ve ahora mismo (ver EpgRepository.allEntries/EpgGridMath.matchesSearch).
  */
 class EpgGridAdapter(
-    private val channels: List<Stream>,
+    private var channels: List<Stream>,
     private val windowProvider: () -> Pair<Long, Long>,
     private val densityProvider: () -> Float,
     private val onRowScrollAttached: (HorizontalScrollView) -> Unit,
     private val onRowScrollDetached: (HorizontalScrollView) -> Unit,
     private val onChannelClick: (Stream) -> Unit
 ) : RecyclerView.Adapter<EpgGridAdapter.ViewHolder>() {
+
+    var searchQuery: String = ""
+
+    /** Reemplaza la lista de canales mostrada (ver EpgGridActivity.applySearch) y repinta. */
+    fun submit(newChannels: List<Stream>) {
+        channels = newChannels
+        notifyDataSetChanged()
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemEpgGridRowBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -64,7 +80,16 @@ class EpgGridAdapter(
 
         fun bind(stream: Stream) {
             val context = binding.root.context
+            val query = searchQuery
             binding.channelName.text = stream.name
+            val channelHasMatch = query.isNotBlank() &&
+                EpgGridMath.matchesSearch(stream.name, EpgRepository.allEntries(stream.tvgId), query)
+            binding.channelName.setTextColor(
+                ContextCompat.getColor(
+                    context,
+                    if (channelHasMatch) R.color.favorite else R.color.on_background
+                )
+            )
             binding.channelIcon.load(stream.icon) {
                 placeholder(R.drawable.ic_placeholder)
                 error(R.drawable.ic_placeholder)
@@ -80,11 +105,11 @@ class EpgGridAdapter(
             for (cell in cells) {
                 val left = EpgGridMath.xForTime(cell.startMillis, windowStart, density)
                 val right = EpgGridMath.xForTime(cell.stopMillis, windowStart, density)
-                container.addView(buildCellView(context, cell, (right - left).coerceAtLeast(1)))
+                container.addView(buildCellView(context, cell, (right - left).coerceAtLeast(1), query))
             }
         }
 
-        private fun buildCellView(context: Context, cell: EpgGridMath.Cell, widthPx: Int): TextView {
+        private fun buildCellView(context: Context, cell: EpgGridMath.Cell, widthPx: Int, query: String): TextView {
             return TextView(context).apply {
                 layoutParams = LinearLayout.LayoutParams(widthPx, LinearLayout.LayoutParams.MATCH_PARENT)
                 textSize = 11f
@@ -94,16 +119,21 @@ class EpgGridAdapter(
                 val horizontalPadding = (6 * resources.displayMetrics.density).toInt()
                 setPadding(horizontalPadding, 0, horizontalPadding, 0)
                 if (cell.entry != null) {
+                    val isMatch = query.isNotBlank() && cell.entry.title.contains(query, ignoreCase = true)
                     text = cell.entry.title
                     setTextColor(
                         ContextCompat.getColor(
                             context,
-                            if (cell.isNow) R.color.on_background else R.color.on_surface_muted
+                            if (isMatch || cell.isNow) R.color.on_background else R.color.on_surface_muted
                         )
                     )
                     background = ContextCompat.getDrawable(
                         context,
-                        if (cell.isNow) R.drawable.bg_epg_cell_now else R.drawable.bg_epg_cell
+                        when {
+                            isMatch -> R.drawable.bg_epg_cell_match
+                            cell.isNow -> R.drawable.bg_epg_cell_now
+                            else -> R.drawable.bg_epg_cell
+                        }
                     )
                 } else {
                     text = ""

@@ -151,6 +151,20 @@ object EpgRepository {
     }
 
     /**
+     * TODA la guía ya descargada de ese canal, sin recortar a ninguna franja
+     * de horas (a diferencia de [entriesInRange]). Para el buscador de la
+     * vista de parrilla (ver EpgGridMath.matchesSearch): necesita poder
+     * encontrar una coincidencia aunque esté fuera de la franja de 3 horas
+     * visible en ese momento, para que el canal siga apareciendo en la
+     * búsqueda (y el usuario sepa que tiene que mover la franja para verla).
+     */
+    fun allEntries(tvgId: String?): List<EpgEntry> {
+        if (tvgId.isNullOrBlank()) return emptyList()
+        val list = byChannel[tvgId] ?: return emptyList()
+        return list.map { it.toEntry() }
+    }
+
+    /**
      * Primer inicio y último fin de TODA la guía ya cargada (de cualquier
      * canal), o null si todavía no hay ninguna. Sirve para acotar por dónde
      * se puede navegar en la vista de parrilla, para no dejar avanzar/

@@ -3,12 +3,14 @@ package com.example.superplayer.ui
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
+import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -43,12 +45,23 @@ import java.util.Locale
  * uno, su propio HorizontalScrollView; se mantienen sincronizados a mano
  * (ver registerSyncedScroll) para que se desplacen siempre juntos, como si
  * fueran uno solo.
+ *
+ * El icono de lupa (ver onCreateOptionsMenu/applySearch) busca a la vez
+ * entre el nombre de los canales y el título de su programación, en TODA
+ * la guía ya descargada (no solo en la franja de 3 horas visible en ese
+ * momento): un canal con una coincidencia fuera de la ventana actual sigue
+ * apareciendo en la lista filtrada, y su nombre se pinta en dorado como
+ * pista de que hay que mover la franja (botones de arriba) para encontrarla;
+ * si la coincidencia SÍ está dentro de la ventana visible, además se resalta
+ * esa celda en concreto.
  */
 class EpgGridActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityEpgGridBinding
     private lateinit var adapter: EpgGridAdapter
-    private var channels: List<Stream> = emptyList()
+
+    /** Todos los canales con guía (sin filtrar por búsqueda); ver applySearch. */
+    private var allChannels: List<Stream> = emptyList()
     private var dataStart: Long = 0L
     private var dataEnd: Long = 0L
     private var windowStart: Long = 0L
@@ -71,10 +84,10 @@ class EpgGridActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         applySystemBarInsets(top = binding.toolbar, bottom = binding.channelsRecyclerView)
 
-        channels = pendingChannels.filter { EpgRepository.hasData(it.tvgId) }
+        allChannels = pendingChannels.filter { EpgRepository.hasData(it.tvgId) }
         val range = EpgRepository.dataRange()
 
-        if (channels.isEmpty() || range == null) {
+        if (allChannels.isEmpty() || range == null) {
             binding.emptyView.visibility = View.VISIBLE
             return
         }
@@ -87,7 +100,7 @@ class EpgGridActivity : AppCompatActivity() {
         )
 
         adapter = EpgGridAdapter(
-            channels = channels,
+            channels = allChannels,
             windowProvider = { windowStart to (windowStart + EpgGridMath.WINDOW_MILLIS) },
             densityProvider = { resources.displayMetrics.density },
             onRowScrollAttached = { registerSyncedScroll(it) },
@@ -192,11 +205,57 @@ class EpgGridActivity : AppCompatActivity() {
 
     private fun openPlayer(stream: Stream) {
         PlayerActivity.pendingStream = stream
-        // Los mismos canales de la parrilla (los que tienen guía EPG), para
-        // que el gesto de "canal siguiente/anterior" recorra ese mismo
-        // conjunto si se abre un canal desde aquí.
-        PlayerActivity.pendingChannelList = channels
+        // TODOS los canales de la parrilla (los que tienen guía EPG), no
+        // solo los que queden tras un filtro de búsqueda en curso: así el
+        // gesto de "canal siguiente/anterior" en el reproductor recorre el
+        // mismo conjunto de siempre (mismo criterio que StreamListActivity
+        // con su propio buscador).
+        PlayerActivity.pendingChannelList = allChannels
         startActivity(Intent(this, PlayerActivity::class.java))
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_search, menu)
+        val searchItem = menu.findItem(R.id.action_search)
+        val searchView = searchItem.actionView as SearchView
+        searchView.queryHint = getString(R.string.epg_grid_search_hint)
+        styleSearchView(this, searchView)
+        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?) = true
+            override fun onQueryTextChange(newText: String?): Boolean {
+                applySearch(newText.orEmpty())
+                return true
+            }
+        })
+        return true
+    }
+
+    /**
+     * Filtra las filas mostradas por nombre de canal o título de programa,
+     * buscando en TODA la guía ya descargada de cada canal (ver
+     * EpgRepository.allEntries/EpgGridMath.matchesSearch), no solo en la
+     * franja de horas visible ahora mismo. En blanco, vuelve a enseñar
+     * todos los canales. Si la búsqueda llega antes de que haya guía
+     * cargada (pantalla mostrando el aviso de "sin EPG", adapter sin
+     * inicializar todavía), no hace nada: no hay nada que filtrar.
+     */
+    private fun applySearch(query: String) {
+        if (!::adapter.isInitialized) return
+        val filtered = if (query.isBlank()) {
+            allChannels
+        } else {
+            allChannels.filter {
+                EpgGridMath.matchesSearch(it.name, EpgRepository.allEntries(it.tvgId), query)
+            }
+        }
+        adapter.searchQuery = query
+        adapter.submit(filtered)
+        if (filtered.isEmpty()) {
+            binding.emptyView.text = getString(R.string.epg_grid_search_empty, query)
+            binding.emptyView.visibility = View.VISIBLE
+        } else {
+            binding.emptyView.visibility = View.GONE
+        }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
