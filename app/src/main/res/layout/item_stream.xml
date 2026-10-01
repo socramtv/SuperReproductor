@@ -1,5 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    streamRow/favoriteIcon: dos elementos clicables anidados (la fila entera
+    abre el canal; el corazón de dentro marca/desmarca favorito). En
+    móvil/táctil no hace falta nada más: tocar el corazón exactamente
+    (precisión de un dedo en una coordenada concreta) ya activa solo su
+    propio click sin pasar por el de la fila. Con el mando de una TV eso no
+    existe -el D-pad solo puede MOVER EL FOCO entre elementos, no "apuntar"
+    a un punto de la pantalla-, así que sin más, el foco nunca entraba en el
+    corazón y pulsar el mando sobre la fila siempre abría el canal: el botón
+    de favorito quedaba inalcanzable. nextFocusRight/nextFocusLeft fuerzan
+    ese salto explícito (fila -> corazón con D-pad derecha, y vuelta con
+    D-pad izquierda) en vez de confiar en que Android lo adivine solo. Por si
+    el mando concreto del usuario no respetara ese salto, StreamAdapter
+    también añade mantener pulsado el OK/centro sobre la fila entera como
+    alternativa, sin tener que llegar nunca al corazón.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/streamRow"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
@@ -8,7 +25,8 @@
     android:paddingVertical="10dp"
     android:background="@drawable/bg_list_item"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="true"
+    android:nextFocusRight="@id/favoriteIcon">
 
     <ImageView
         android:id="@+id/streamIcon"
@@ -77,6 +95,7 @@
         android:background="?attr/selectableItemBackgroundBorderless"
         android:clickable="true"
         android:focusable="true"
+        android:nextFocusLeft="@id/streamRow"
         android:contentDescription="@string/action_favorites" />
 
 </LinearLayout>

@@ -56,6 +56,16 @@ class StreamAdapter(
             bindEpgLine(binding.streamTonightPlaying, R.string.epg_tonight_playing, schedule.tonight, context)
 
             binding.root.setOnClickListener { onClick(stream) }
+            // Alternativa para el mando de TV al corazón de favorito (ver el
+            // comentario de streamRow/favoriteIcon en item_stream.xml):
+            // mantener pulsado el OK/centro sobre la fila entera, sin tener
+            // que llegar nunca al corazón. No interfiere con el toque normal
+            // en móvil: solo se dispara con una pulsación larga de verdad, la
+            // pulsación corta de siempre sigue abriendo el canal.
+            binding.root.setOnLongClickListener {
+                onToggleFavorite(stream)
+                true
+            }
             binding.favoriteIcon.setOnClickListener { onToggleFavorite(stream) }
         }
     }

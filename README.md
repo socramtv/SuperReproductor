@@ -119,7 +119,7 @@ progresivo). `url-tvg` (o `x-tvg-url`) en la cabecera `#EXTM3U` y `tvg-id`
 en cada canal son para la guía EPG (ver más abajo). Este formato no
 admite cabeceras, DRM ni token — para eso usa el JSON.
 
-Desde la app, usa el icono de carpeta (barra superior) para elegir un
+Desde la app, usa el botón "Archivo 📁" de la portada para elegir un
 archivo JSON o M3U con cualquiera de estos formatos desde tu dispositivo. La
 app recuerda el último archivo cargado y lo reabre al iniciar; si no hay
 ninguno, carga una lista de ejemplo (`app/src/main/assets/sample_playlist.json`)
@@ -243,10 +243,10 @@ archivo. Los cinco huecos son idénticos y genéricos (el nombre de cada
 uno — TV, Lista 2, Cine, TDT, Radio — es solo una etiqueta orientativa):
 ninguno trae una URL de fábrica, cada uno guarda la que tú le pongas.
 
-Junto a esos cinco, el botón "Archivo 📁" de la segunda fila hace lo mismo
-que el icono de carpeta de la barra superior: elegir un archivo JSON/M3U
-del propio dispositivo (no guarda ninguna URL, es un acceso directo a esa
-misma acción).
+Junto a esos cinco, el botón "Archivo 📁" de la segunda fila elige un
+archivo JSON/M3U del propio dispositivo (no guarda ninguna URL): es la
+única forma de cargar un archivo local, ya que no hay ningún icono
+redundante para esto en la barra superior.
 
 ### Copia de seguridad sin conexión
 
@@ -266,6 +266,21 @@ La copia se guarda únicamente cuando la descarga Y la lectura posterior
 salen bien (nunca una respuesta a medias, ni la página de aviso de un wifi
 público haciéndose pasar por la lista), así que la copia guardada siempre
 es válida.
+
+## Favoritos
+
+El corazón de cada canal (en cualquier lista: portada, dentro de una
+categoría, resultados de búsqueda) lo marca o desmarca como favorito;
+mientras haya alguno, aparecen reunidos arriba del todo en una categoría
+"⭐ Favoritos".
+
+**En Android TV**, además de mover el mando hasta el corazón (D-pad
+derecha desde el nombre del canal) y pulsar OK, también puedes **mantener
+pulsado** el botón OK/centro con el foco en cualquier parte de la fila del
+canal: alguno de los dos debería funcionarte bien con el mando, sin
+depender de acertar exactamente en el icono pequeño. En el móvil no cambia
+nada: tocar el corazón sigue siendo lo normal (mantener pulsada la fila
+también funciona ahí, por si lo prefieres).
 
 ## Radio, "ahora suena" y reproducción en segundo plano
 
@@ -480,8 +495,8 @@ en segundo plano en cuanto cargas esa lista, sin bloquear nada:
 ### Vista de parrilla (franjas horarias)
 
 Como complemento a las líneas de texto "Ahora/Después/Esta noche" de la
-lista de canales, el icono de guía 🗓️ de la barra superior (junto al de
-cargar archivo) abre una **parrilla** al estilo de una guía de TV normal:
+lista de canales, el icono de guía 🗓️ de la barra superior (junto al del
+buscador 🔍) abre una **parrilla** al estilo de una guía de TV normal:
 horas en horizontal, canales en filas, con el programa de cada hueco
 dentro de su celda correspondiente.
 

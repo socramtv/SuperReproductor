@@ -89,10 +89,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // A diferencia de los de arriba, este no guarda ninguna URL: hace
-        // exactamente lo mismo que el icono de carpeta de la barra superior
-        // (elegir un archivo JSON/M3U del propio dispositivo), solo que
-        // también accesible aquí sin tener que abrir el menú.
+        // A diferencia de los de arriba, este no guarda ninguna URL: elige un
+        // archivo JSON/M3U del propio dispositivo (antes había también un
+        // icono de carpeta redundante en la barra superior para esto mismo;
+        // se quitó por quedarse ya este botón de aquí abajo).
         binding.loadFileButton.setOnClickListener {
             openDocumentLauncher.launch(arrayOf("*/*"))
         }
@@ -326,10 +326,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            R.id.action_load_playlist -> {
-                openDocumentLauncher.launch(arrayOf("*/*"))
-                true
-            }
             R.id.action_epg_grid -> {
                 openEpgGrid()
                 true
