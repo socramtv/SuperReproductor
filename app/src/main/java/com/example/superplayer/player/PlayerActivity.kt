@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Rational
 import android.view.GestureDetector
 import android.view.KeyEvent
@@ -76,17 +77,20 @@ import java.net.URL
  * teclas pasan a hacer lo de siempre en Media3 (mover el foco, o avanzar/
  * retroceder si el foco está en la barra de progreso; ver dispatchKeyEvent).
  *
- * Arrastrar verticalmente en la mitad derecha de la pantalla sube/baja el
- * volumen (igual que YouTube); en la mitad izquierda, de momento, un
- * arrastre vertical no hace nada (ver handleVolumeDrag/handleSeekDrag,
- * ambos repartidos desde onScroll según a qué se decida que corresponde
- * el gesto la primera vez que se reconoce como arrastre).
+ * Arrastrar verticalmente sube/baja el volumen en la mitad derecha de la
+ * pantalla (igual que YouTube) o el brillo en la mitad izquierda, cada uno
+ * con su propio indicador (el del sistema para volumen, uno propio que se
+ * oculta solo para brillo); ver handleVolumeDrag/handleBrightnessDrag/
+ * handleSeekDrag, repartidos desde onScroll según a qué se decida que
+ * corresponde el gesto la primera vez que se reconoce como arrastre.
  *
  * Imagen en imagen (PiP): para canales de vídeo (la radio no lo necesita,
  * ya sigue sonando en segundo plano sin más), tocar el botón de PiP o
  * salir de la app (Inicio, cambiar de app) mete el vídeo en una ventana
  * flotante en vez de pausarlo (ver maybeEnterPictureInPicture,
- * onUserLeaveHint).
+ * onUserLeaveHint). Desactivado del todo en Android TV (ver isTvDevice):
+ * ahí no se comportaba bien y además interfería con cambiar de canal con
+ * el mando.
  *
  * Reconexión automática: si el canal se corta del todo (no un simple
  * corte de red puntual, que ExoPlayer ya reintenta por su cuenta) salta
@@ -231,8 +235,7 @@ class PlayerActivity : AppCompatActivity() {
     //     los controles ya abiertos).
     //   - predominantemente vertical, empezando en la mitad derecha ->
     //     subir/bajar el volumen (handleVolumeDrag), como YouTube. Empezando
-    //     en la mitad izquierda, de momento no hace nada (hueco libre para
-    //     un futuro gesto de brillo, si hiciera falta).
+    //     en la mitad izquierda -> subir/bajar el brillo (handleBrightnessDrag).
     // GestureDetector ya distingue por su cuenta un toque de un arrastre
     // (onScroll solo se dispara si el dedo se movió más del umbral normal
     // de gesto de Android), así que ninguno de los dos compite con el
@@ -240,14 +243,27 @@ class PlayerActivity : AppCompatActivity() {
     // nunca dos a la vez.
     // -----------------------------------------------------------------
 
-    private enum class DragMode { NONE, SEEK, VOLUME }
+    private enum class DragMode { NONE, SEEK, VOLUME, BRIGHTNESS }
     private var dragMode = DragMode.NONE
     private var seekStartCaptured = false
     private var seekDragStartPositionMs = 0L
     private var volumeStartCaptured = false
     private var volumeDragStartLevel = 0
+    private var brightnessStartCaptured = false
+    private var brightnessDragStartLevel = 0f
 
     private val audioManager: AudioManager by lazy { getSystemService(AudioManager::class.java) }
+
+    // Brillo: a diferencia del volumen (que reutiliza el indicador del
+    // propio sistema vía FLAG_SHOW_UI), no hay ningún indicador del sistema
+    // para un brillo de ventana a medida, así que se muestra uno propio
+    // (brightnessIndicator) y se oculta solo un rato después del último
+    // cambio, con el mismo patrón Handler.postDelayed que ya usan EPG y la
+    // reconexión automática en esta misma clase.
+    private val brightnessHandler = Handler(Looper.getMainLooper())
+    private val hideBrightnessIndicatorRunnable = Runnable {
+        binding.brightnessIndicator.visibility = View.GONE
+    }
 
     private fun handleSeekDrag(totalDx: Float): Boolean {
         val ctrl = controller ?: return true
@@ -288,12 +304,56 @@ class PlayerActivity : AppCompatActivity() {
         return true
     }
 
+    /**
+     * Brillo actual de la ventana: si ya hay un valor propio aplicado antes
+     * (0f a 1f), se usa ese; si todavía no hay ninguno (BRIGHTNESS_OVERRIDE_NONE,
+     * -1f: se está mostrando con el brillo normal del sistema), se lee el
+     * brillo real del sistema para partir de ahí, y no dar un salto brusco
+     * en el primer arrastre.
+     */
+    private fun currentScreenBrightness(): Float {
+        val override = window.attributes.screenBrightness
+        if (override in 0f..1f) return override
+        return try {
+            Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS)
+                .coerceIn(0, 255) / 255f
+        } catch (e: Settings.SettingNotFoundException) {
+            0.5f
+        }
+    }
+
+    private fun showBrightnessIndicator(level: Float) {
+        binding.brightnessIndicator.text = getString(R.string.brightness_percent, Math.round(level * 100))
+        binding.brightnessIndicator.visibility = View.VISIBLE
+        brightnessHandler.removeCallbacks(hideBrightnessIndicatorRunnable)
+        brightnessHandler.postDelayed(hideBrightnessIndicatorRunnable, BRIGHTNESS_INDICATOR_HIDE_DELAY_MS)
+    }
+
+    private fun handleBrightnessDrag(totalDy: Float): Boolean {
+        val height = binding.playerView.height
+        if (height <= 0) return true
+        if (!brightnessStartCaptured) {
+            brightnessStartCaptured = true
+            brightnessDragStartLevel = currentScreenBrightness()
+        }
+        // totalDy negativo = ha deslizado hacia arriba = sube el brillo;
+        // recorrer toda la altura de la pantalla equivale al rango de
+        // brillo completo, igual que con el volumen.
+        val target = (brightnessDragStartLevel - totalDy / height).coerceIn(MIN_SCREEN_BRIGHTNESS, 1f)
+        val params = window.attributes
+        params.screenBrightness = target
+        window.attributes = params
+        showBrightnessIndicator(target)
+        return true
+    }
+
     private val playerTapGestureDetector by lazy {
         GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean {
                 dragMode = DragMode.NONE
                 seekStartCaptured = false
                 volumeStartCaptured = false
+                brightnessStartCaptured = false
                 return true
             }
 
@@ -306,12 +366,13 @@ class PlayerActivity : AppCompatActivity() {
                     dragMode = when {
                         Math.abs(totalDx) > Math.abs(totalDy) -> DragMode.SEEK
                         start.x > binding.playerView.width / 2f -> DragMode.VOLUME
-                        else -> return false // vertical en la mitad izquierda: nada, de momento
+                        else -> DragMode.BRIGHTNESS
                     }
                 }
                 return when (dragMode) {
                     DragMode.SEEK -> handleSeekDrag(totalDx)
                     DragMode.VOLUME -> handleVolumeDrag(totalDy)
+                    DragMode.BRIGHTNESS -> handleBrightnessDrag(totalDy)
                     DragMode.NONE -> false
                 }
             }
@@ -490,7 +551,9 @@ class PlayerActivity : AppCompatActivity() {
                 // vídeo (la radio no necesita PiP, ya sigue sonando en
                 // segundo plano sola), y aparecen/desaparecen junto con los
                 // controles normales.
-                binding.pipButton.visibility = if (isCurrentStreamRadio) View.GONE else visibility
+                // En Android TV, además, el botón de PiP no se muestra
+                // nunca (ver isTvDevice/maybeEnterPictureInPicture).
+                binding.pipButton.visibility = if (isCurrentStreamRadio || isTvDevice) View.GONE else visibility
                 binding.videoNowPlayingBar.visibility = if (isCurrentStreamRadio) View.GONE else visibility
             }
         )
@@ -595,8 +658,21 @@ class PlayerActivity : AppCompatActivity() {
     // de useController), no las vistas propias de esta app.
     // -----------------------------------------------------------------
 
+    // PiP se desactiva del todo en Android TV: en el dispositivo de pruebas
+    // del usuario no se comportaba bien (ventana rota) y además interfería
+    // con cambiar de canal con el D-pad; en TV tampoco aporta gran cosa (no
+    // hay "cambiar de app" en primer plano igual que en móvil). Se detecta
+    // con la misma característica que ya declara el manifiesto para
+    // Android TV (android.software.leanback), así que en TV ni se muestra
+    // el botón (ver el ControllerVisibilityListener en onCreate) ni se
+    // entra solo al salir de la app.
+    private val isTvDevice: Boolean by lazy {
+        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    }
+
     private fun maybeEnterPictureInPicture() {
         if (isCurrentStreamRadio) return // la radio ya sigue sonando en segundo plano sin PiP
+        if (isTvDevice) return
         if (controller == null) return
         if (isInPictureInPictureMode) return
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
@@ -863,5 +939,12 @@ class PlayerActivity : AppCompatActivity() {
         // construir los parámetros de PiP.
         private const val MAX_PIP_ASPECT_RATIO = 2.39f
         private const val MIN_PIP_ASPECT_RATIO = 1f / 2.39f
+
+        // Gesto de brillo: nunca se deja a 0 del todo (una pantalla
+        // totalmente negra sería difícil de recuperar a ciegas), y el
+        // indicador en pantalla se oculta solo un rato después del último
+        // cambio (ver showBrightnessIndicator).
+        private const val MIN_SCREEN_BRIGHTNESS = 0.02f
+        private const val BRIGHTNESS_INDICATOR_HIDE_DELAY_MS = 800L
     }
 }

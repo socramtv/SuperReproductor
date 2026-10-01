@@ -357,29 +357,35 @@ de que le llegara al gesto de cambiar de canal. La barra de progreso en
 sí se deja tal cual (no se toca su visibilidad): Media3 ya la
 deshabilita solo en los canales que son puro directo.
 
-### Subir o bajar el volumen deslizando
+### Subir o bajar el volumen o el brillo deslizando
 
 Deslizar el dedo verticalmente por la **mitad derecha** de la pantalla
-sube o baja el volumen, igual que en YouTube: arriba sube, abajo baja, y
-aparece el propio indicador de volumen del sistema (el mismo que sale al
-usar los botones físicos), sin montar ningún indicador a medida. Por la
-**mitad izquierda**, de momento, un arrastre vertical no hace nada (hueco
-libre para un futuro gesto de brillo, si hiciera falta).
+sube o baja el **volumen**, igual que en YouTube: arriba sube, abajo
+baja, y aparece el propio indicador de volumen del sistema (el mismo que
+sale al usar los botones físicos), sin montar ningún indicador a medida.
+
+Por la **mitad izquierda**, el mismo gesto ajusta el **brillo de la
+pantalla** en vez del volumen: arriba más brillo, abajo menos, con un
+indicador propio en el centro de la pantalla (en forma de porcentaje)
+que se oculta solo un momento después de soltar el dedo. Nunca deja la
+pantalla completamente a oscuras —se queda siempre con un mínimo
+visible—, para no quedarte sin poder verla si arrastras hasta abajo del
+todo. Este ajuste es solo para esta pantalla (como el de la mayoría de
+reproductores de vídeo): no toca el brillo general del teléfono, y al
+salir del reproductor vuelve a su valor normal.
 
 Como con el arrastre horizontal, cada arrastre decide su modo una sola
 vez (en cuanto el movimiento es claramente horizontal o claramente
-vertical) y se queda fijado así hasta soltar el dedo, aunque el gesto
-tuerza por el camino: no cambia de "avanzar/retroceder" a "volumen" ni al
-revés a media operación. Un arrastre que empieza ambiguo (poco
-movimiento todavía, o vertical por la mitad izquierda) y se vuelve
-claramente horizontal más adelante sí se decide en ese momento, con el
-primer movimiento ya claro.
+vertical, y en qué mitad empezó) y se queda fijado así hasta soltar el
+dedo, aunque el gesto tuerza por el camino: no cambia de "avanzar/
+retroceder" a "volumen"/"brillo" ni al revés a media operación.
 
 ## Imagen en imagen (Picture-in-Picture)
 
-Mientras se reproduce un canal de **vídeo** (la radio no lo necesita: ya
-sigue sonando en segundo plano sin más), puedes seguir viéndolo en una
-ventana flotante mientras usas otra app o navegas el menú:
+Mientras se reproduce un canal de **vídeo** en el **móvil** (la radio no
+lo necesita: ya sigue sonando en segundo plano sin más), puedes seguir
+viéndolo en una ventana flotante mientras usas otra app o navegas el
+menú:
 
 - Tocando el botón de PiP (arriba a la derecha, junto al de calidad de
   vídeo/audio).
@@ -389,10 +395,16 @@ ventana flotante mientras usas otra app o navegas el menú:
 
 La ventana flotante usa la relación de ancho/alto real del vídeo en
 curso (recortada al rango que admite Android, de 1:2.39 a 2.39:1, por si
-algún vídeo fuera de lo normal se saliera de ahí). Si el propio
-dispositivo no admite PiP —algunos Android TV no lo hacen—, el botón
-simplemente no hace nada y salir de la app pausa el vídeo como de
-costumbre, sin errores.
+algún vídeo fuera de lo normal se saliera de ahí).
+
+**En Android TV esta función está desactivada del todo** (ni aparece el
+botón ni se activa sola al salir de la app): en las pruebas no se
+comportaba bien —ventana rota— y además interfería con cambiar de canal
+con el D-pad del mando. En TV tampoco aporta demasiado (no existe el
+mismo "cambiar de app en primer plano" que en móvil), así que no
+compensaba intentar arreglarlo fino. Se detecta si el dispositivo es una
+TV con la misma característica de Android que ya declara el manifiesto
+(`android.software.leanback`).
 
 ## Reconexión automática
 
@@ -466,8 +478,9 @@ JSON (propio, "exolist" o listas públicas tipo tdtchannels.com)/M3U desde
 el propio dispositivo o desde una URL, radio con "ahora suena" +
 reproducción en segundo plano / pantalla de bloqueo, guía EPG opcional en
 XMLTV o JSON (programa actual en la lista de canales y como respaldo en
-la pantalla de radio), imagen en imagen y reconexión automática para
-canales de vídeo, y gesto de volumen deslizando verticalmente.
+la pantalla de radio), imagen en imagen (solo en móvil) y reconexión
+automática para canales de vídeo, y gesto de volumen/brillo deslizando
+verticalmente (derecha/izquierda).
 
 ## Si la app se cierra sola
 

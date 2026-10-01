@@ -154,4 +154,25 @@
 
     </LinearLayout>
 
+    <!--
+        Indicador de brillo (ver handleBrightnessDrag/showBrightnessIndicator
+        en PlayerActivity): a diferencia del de volumen, que reutiliza el
+        propio del sistema, este es propio porque no hay ningún indicador de
+        sistema para un brillo de ventana a medida. Aparece al arrastrar por
+        la mitad izquierda de la pantalla y se oculta solo un rato después
+        del último cambio.
+    -->
+    <TextView
+        android:id="@+id/brightnessIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="#99000000"
+        android:paddingHorizontal="20dp"
+        android:paddingVertical="10dp"
+        android:textColor="@color/on_background"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
 </FrameLayout>

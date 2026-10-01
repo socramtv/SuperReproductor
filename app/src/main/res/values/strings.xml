@@ -39,6 +39,10 @@
          en su lugar, como antes. -->
     <string name="player_reconnecting">Canal cortado, reconectando…</string>
 
+    <!-- Indicador de brillo (ver showBrightnessIndicator en PlayerActivity),
+         gesto de arrastrar verticalmente por la mitad izquierda. -->
+    <string name="brightness_percent">Brillo: %1$d %%</string>
+
     <!-- EPG en la lista de canales: "ahora", "después" y "esta noche",
          cada uno con su horario (%1$s) y título (%2$s). -->
     <string name="epg_now_playing">Ahora (%1$s): %2$s</string>
