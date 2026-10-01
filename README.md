@@ -265,8 +265,13 @@ una pantalla de "ahora suena" en vez del hueco negro del vídeo.
 - Mientras esa pantalla de radio esté activa, bloquear el teléfono **no
   corta la reproducción**: sigue sonando y aparecen los controles de
   reproducción (play/pausa) en la pantalla de bloqueo y en una
-  notificación, con el logo y el nombre del canal. Volver a abrir la app
-  y salir del reproductor (botón atrás) sí para la radio.
+  notificación, con el nombre del canal y, si el canal trae `icon`/`logo`,
+  también su imagen (se manda como `artworkUri` del `MediaMetadata`;
+  Media3 la descarga solo, con el mismo mecanismo con el que descarga
+  cualquier otra URL, así que vale tanto `http://` como `https://`). Si el
+  canal no trae imagen, el sistema pone un icono genérico en su lugar.
+  Volver a abrir la app y salir del reproductor (botón atrás) sí para la
+  radio.
 - Para un canal de vídeo/TV normal, el comportamiento no cambia: al
   bloquear el teléfono o cambiar de app se pausa, igual que antes.
 - La primera vez, Android puede pedir permiso de notificaciones (Android

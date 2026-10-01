@@ -509,10 +509,23 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun onStreamResolved(stream: Stream) {
-        val metadata = MediaMetadata.Builder()
+        val metadataBuilder = MediaMetadata.Builder()
             .setTitle(stream.name)
             .setExtras(StreamMediaExtras.build(stream))
-            .build()
+
+        // Logo del canal en la notificación / pantalla de bloqueo: sin esto,
+        // el MediaMetadata no lleva ninguna imagen y el sistema pinta el
+        // icono genérico de "música" en vez del logo. PlaybackService no
+        // configura ningún BitmapLoader propio, así que usa el que trae
+        // Media3 por defecto (un DataSourceBitmapLoader sobre
+        // DefaultDataSource.Factory, confirmado en el fuente real de
+        // Media3): ese ya sabe descargar una URL http/https igual que
+        // cualquier otra petición de red de la app, así que basta con pasar
+        // la URL del logo, sin montar nada aparte aquí ni en PlaybackService.
+        stream.icon?.takeIf { it.isNotBlank() }?.let { icon ->
+            metadataBuilder.setArtworkUri(Uri.parse(icon))
+        }
+        val metadata = metadataBuilder.build()
 
         pendingMediaItem = MediaItem.Builder()
             .setMediaId(stream.id)
