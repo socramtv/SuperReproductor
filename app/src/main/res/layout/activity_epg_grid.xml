@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background_dark">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        android:background="@color/surface_dark"
+        app:title="@string/epg_grid_title"
+        app:titleTextColor="@color/on_background" />
+
+    <!-- Botones para desplazar la franja de horas visible (ver
+         EpgGridActivity): pensados para funcionar igual de bien con el
+         mando de una TV que tocando en el móvil, a diferencia de un gesto
+         de arrastrar que un mando no puede hacer. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp">
+
+        <android.widget.Button
+            android:id="@+id/prevWindowButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp"
+            android:text="@string/epg_grid_prev_window"
+            android:textAllCaps="false"
+            android:textColor="@color/on_background"
+            android:background="@drawable/bg_list_slot_button" />
+
+        <android.widget.Button
+            android:id="@+id/nowWindowButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp"
+            android:text="@string/epg_grid_now_button"
+            android:textAllCaps="false"
+            android:textColor="@color/on_background"
+            android:background="@drawable/bg_list_slot_button" />
+
+        <android.widget.Button
+            android:id="@+id/nextWindowButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp"
+            android:text="@string/epg_grid_next_window"
+            android:textAllCaps="false"
+            android:textColor="@color/on_background"
+            android:background="@drawable/bg_list_slot_button" />
+
+        <TextView
+            android:id="@+id/windowRangeLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:gravity="end|center_vertical"
+            android:textColor="@color/on_surface_muted"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
+    <!-- Cabecera de horas: mismo hueco en blanco a la izquierda
+         (epg_channel_column_width) que la columna de canal de cada fila,
+         para que las horas queden alineadas justo encima de sus programas.
+         Al estar FUERA del RecyclerView de abajo, se queda fija arriba
+         mientras los canales se desplazan en vertical; el desplazamiento
+         horizontal si se sincroniza con el de las filas, en código. -->
+    <HorizontalScrollView
+        android:id="@+id/headerScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:overScrollMode="never">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/epg_header_height"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="@dimen/epg_channel_column_width"
+                android:layout_height="match_parent" />
+
+            <LinearLayout
+                android:id="@+id/hourHeaderContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal" />
+
+        </LinearLayout>
+
+    </HorizontalScrollView>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/surface_dark" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/channelsRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false" />
+
+        <TextView
+            android:id="@+id/emptyView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:padding="32dp"
+            android:gravity="center"
+            android:text="@string/epg_grid_empty"
+            android:textColor="@color/on_surface_muted"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+</LinearLayout>

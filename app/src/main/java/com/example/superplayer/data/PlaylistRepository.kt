@@ -33,16 +33,22 @@ object PlaylistRepository {
     }
 
     /** Descarga y lee una playlist alojada en una URL (p. ej. un raw de GitHub). */
-    fun loadFromUrl(urlString: String): PlaylistData {
+    fun loadFromUrl(urlString: String): PlaylistData = parse(downloadRaw(urlString))
+
+    /**
+     * Solo la parte de descarga (sin analizar), para quien necesite quedarse
+     * también con el texto crudo (p. ej. MainActivity.loadFromRemoteUrl, que
+     * lo guarda en PlaylistCache para poder abrirlo sin red más adelante).
+     */
+    fun downloadRaw(urlString: String): String {
         val connection = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
-        val text = try {
+        return try {
             connection.connectTimeout = 10_000
             connection.readTimeout = 10_000
             connection.inputStream.bufferedReader().readText()
         } finally {
             connection.disconnect()
         }
-        return parse(text)
     }
 
     fun parse(text: String): PlaylistData {

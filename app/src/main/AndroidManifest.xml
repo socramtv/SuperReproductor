@@ -67,6 +67,11 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <activity
+            android:name=".ui.EpgGridActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <!--
             supportsPictureInPicture + resizeableActivity: dejan entrar en
             modo imagen-en-imagen (ver maybeEnterPictureInPicture en

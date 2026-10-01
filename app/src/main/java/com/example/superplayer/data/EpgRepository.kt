@@ -126,6 +126,48 @@ object EpgRepository {
         return "${fmt.format(Date(entry.startMillis))}–${fmt.format(Date(entry.stopMillis))}"
     }
 
+    /** true si hay al menos un tramo de guía cargado para ese tvg-id (para decidir si ese canal pinta algo en la vista de parrilla, ver EpgGridActivity). */
+    fun hasData(tvgId: String?): Boolean = !tvgId.isNullOrBlank() && byChannel.containsKey(tvgId)
+
+    /**
+     * Todos los tramos de ese canal que se solapan con [fromMillis,
+     * toMillis), en orden y recortados exactamente a ese rango (un programa
+     * que ya había empezado antes de [fromMillis], o que sigue después de
+     * [toMillis], aparece con su horario recortado a los bordes de la
+     * ventana). Para la vista de parrilla (ver EpgGridActivity), que pide un
+     * tramo de horas concreto en vez de solo "ahora/después/esta noche".
+     */
+    fun entriesInRange(tvgId: String?, fromMillis: Long, toMillis: Long): List<EpgEntry> {
+        if (tvgId.isNullOrBlank()) return emptyList()
+        val list = byChannel[tvgId] ?: return emptyList()
+        return list.filter { it.stopMillis > fromMillis && it.startMillis < toMillis }
+            .map {
+                EpgEntry(
+                    title = it.title,
+                    startMillis = it.startMillis.coerceAtLeast(fromMillis),
+                    stopMillis = it.stopMillis.coerceAtMost(toMillis)
+                )
+            }
+    }
+
+    /**
+     * Primer inicio y último fin de TODA la guía ya cargada (de cualquier
+     * canal), o null si todavía no hay ninguna. Sirve para acotar por dónde
+     * se puede navegar en la vista de parrilla, para no dejar avanzar/
+     * retroceder a un hueco de tiempo que ya se sabe que no tiene datos.
+     */
+    fun dataRange(): Pair<Long, Long>? {
+        var min = Long.MAX_VALUE
+        var max = Long.MIN_VALUE
+        for (list in byChannel.values) {
+            for (p in list) {
+                if (p.startMillis < min) min = p.startMillis
+                if (p.stopMillis > max) max = p.stopMillis
+            }
+        }
+        return if (min <= max) min to max else null
+    }
+
     private fun Programme.toEntry() = EpgEntry(title, startMillis, stopMillis)
 
     /** Instante "22:00 de hoy", entendiendo "hoy" como día de emisión (ver [schedule]). */

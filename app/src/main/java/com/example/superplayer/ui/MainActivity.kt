@@ -15,6 +15,7 @@ import com.example.superplayer.R
 import com.example.superplayer.data.AppPrefs
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.FavoritesStore
+import com.example.superplayer.data.PlaylistCache
 import com.example.superplayer.data.PlaylistRepository
 import com.example.superplayer.databinding.ActivityMainBinding
 import com.example.superplayer.model.Category
@@ -79,7 +80,7 @@ class MainActivity : AppCompatActivity() {
                 if (savedUrl.isNullOrBlank()) {
                     promptForListUrl(slot, label)
                 } else {
-                    loadFromRemoteUrl(savedUrl)
+                    loadFromRemoteUrl(slot, savedUrl)
                 }
             }
             button.setOnLongClickListener {
@@ -113,35 +114,75 @@ class MainActivity : AppCompatActivity() {
                 val url = input.text.toString().trim()
                 if (url.isNotBlank()) {
                     AppPrefs.saveListUrl(this, slot, url)
-                    loadFromRemoteUrl(url)
+                    loadFromRemoteUrl(slot, url)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun loadFromRemoteUrl(url: String) {
+    /**
+     * Siempre intenta descargar de la URL primero (para recoger cambios del
+     * archivo remoto); solo si eso falla (sin red, servidor caído, etc.) cae
+     * a la última copia guardada de ese mismo hueco (ver PlaylistCache), si
+     * la hay. La copia se guarda únicamente cuando la descarga Y el análisis
+     * posterior salen bien, nunca con una respuesta a medias.
+     */
+    private fun loadFromRemoteUrl(slot: Int, url: String) {
         Toast.makeText(this, R.string.loading_list, Toast.LENGTH_SHORT).show()
         Thread {
+            var data: PlaylistData? = null
+            var downloadError: Exception? = null
+            var usedCache = false
             try {
-                val data = PlaylistRepository.loadFromUrl(url)
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    setPlaylist(data)
-                    val totalStreams = data.categories.sumOf { it.streams.size }
+                val raw = PlaylistRepository.downloadRaw(url)
+                data = PlaylistRepository.parse(raw)
+                PlaylistCache.save(this, slot, raw)
+            } catch (e: Exception) {
+                downloadError = e
+                val cachedRaw = PlaylistCache.load(this, slot)
+                if (cachedRaw != null) {
+                    data = try {
+                        usedCache = true
+                        PlaylistRepository.parse(cachedRaw)
+                    } catch (e2: Exception) {
+                        // No debería pasar (solo se guarda una copia si antes analizó
+                        // bien), pero por si acaso: se trata como si no hubiera copia.
+                        usedCache = false
+                        null
+                    }
+                }
+            }
+            val finalData = data
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (finalData != null) {
+                    setPlaylist(finalData)
+                    if (usedCache) {
+                        val savedAt = formatCacheDate(PlaylistCache.lastSavedAt(this, slot))
+                        Toast.makeText(this, getString(R.string.list_load_offline_cached, savedAt), Toast.LENGTH_LONG).show()
+                    } else {
+                        val totalStreams = finalData.categories.sumOf { it.streams.size }
+                        Toast.makeText(
+                            this,
+                            getString(R.string.load_success, finalData.categories.size, totalStreams),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
                     Toast.makeText(
                         this,
-                        getString(R.string.load_success, data.categories.size, totalStreams),
-                        Toast.LENGTH_SHORT
+                        getString(R.string.list_load_error, downloadError?.message ?: ""),
+                        Toast.LENGTH_LONG
                     ).show()
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    Toast.makeText(this, getString(R.string.list_load_error, e.message ?: ""), Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
+    }
+
+    private fun formatCacheDate(millis: Long?): String {
+        if (millis == null) return ""
+        return java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(millis))
     }
 
     override fun onResume() {
@@ -289,7 +330,25 @@ class MainActivity : AppCompatActivity() {
                 openDocumentLauncher.launch(arrayOf("*/*"))
                 true
             }
+            R.id.action_epg_grid -> {
+                openEpgGrid()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    /**
+     * Abre la vista de parrilla de guía EPG (ver EpgGridActivity) con todos
+     * los canales de la lista actual que tengan tvg-id, sin importar la
+     * categoría: es una vista global de la guía, no de una categoría suelta.
+     * Si ninguno tiene tvg-id (o la guía todavía no ha terminado de
+     * descargarse), esa pantalla se encarga de mostrar el aviso
+     * correspondiente; no hace falta comprobarlo aquí antes.
+     */
+    private fun openEpgGrid() {
+        EpgGridActivity.pendingChannels = playlist.categories.flatMap { it.streams }
+            .filter { !it.tvgId.isNullOrBlank() }
+        startActivity(Intent(this, EpgGridActivity::class.java))
     }
 }

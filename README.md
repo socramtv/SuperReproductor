@@ -248,6 +248,25 @@ que el icono de carpeta de la barra superior: elegir un archivo JSON/M3U
 del propio dispositivo (no guarda ninguna URL, es un acceso directo a esa
 misma acción).
 
+### Copia de seguridad sin conexión
+
+Cada uno de los cinco huecos guarda, además de la URL, una copia del
+**último contenido que se descargó con éxito** de ahí. Al tocar un hueco,
+la app sigue intentando descargar de la URL primero, como siempre (para
+recoger cambios que haya habido en el archivo remoto); solo si en ese
+momento no hay conexión (o el servidor no responde) se abre esa última
+copia guardada en su lugar, en vez de quedarte sin nada — con un aviso
+indicando que es una copia de una fecha/hora concreta, no la versión más
+reciente. En cuanto vuelvas a tocar ese mismo hueco con conexión, se
+actualiza solo. Si un hueco no se ha cargado nunca con éxito (o es la
+primera vez que lo usas), no hay copia que abrir y el aviso de "sin
+conexión" de siempre se queda igual que antes.
+
+La copia se guarda únicamente cuando la descarga Y la lectura posterior
+salen bien (nunca una respuesta a medias, ni la página de aviso de un wifi
+público haciéndose pasar por la lista), así que la copia guardada siempre
+es válida.
+
 ## Radio, "ahora suena" y reproducción en segundo plano
 
 No hace falta marcar nada especial en el JSON/M3U para que un canal se
@@ -458,14 +477,52 @@ en segundo plano en cuanto cargas esa lista, sin bloquear nada:
   URL (no vuelve a hacerlo si recargas la misma lista) y la deja en
   memoria mientras dure el proceso de la app.
 
+### Vista de parrilla (franjas horarias)
+
+Como complemento a las líneas de texto "Ahora/Después/Esta noche" de la
+lista de canales, el icono de guía 🗓️ de la barra superior (junto al de
+cargar archivo) abre una **parrilla** al estilo de una guía de TV normal:
+horas en horizontal, canales en filas, con el programa de cada hueco
+dentro de su celda correspondiente.
+
+- Reúne **todos** los canales de la lista actual que tengan `tvg-id` con
+  datos de guía, sin importar de qué categoría sean (no hace falta entrar
+  en una categoría primero).
+- La franja visible es de **3 horas**; los botones "◀ 3 h" / "Ahora" /
+  "3 h ▶" de arriba la desplazan. Se pensaron así —con botones en vez de
+  solo un gesto de arrastrar— para que funcionen igual de bien con el
+  mando de una TV que tocando en el móvil; dentro de cada franja de 3
+  horas, en el móvil también puedes deslizar el dedo libremente si el
+  contenido no cabe entero en la pantalla.
+- El programa que está en emisión ahora mismo se resalta con el color de
+  acento en cada fila (equivalente a la línea "Ahora" en negrita de la
+  lista normal). Un hueco sin dato de guía para ese rato se deja en blanco
+  en vez de inventar nada.
+- Tocar el nombre de un canal (a la izquierda, siempre fijo aunque
+  desplaces la parrilla) abre su reproductor, igual que en cualquier otra
+  lista de la app.
+- Si la lista no trae guía EPG, o todavía se está descargando, o ningún
+  canal tiene coincidencia, se muestra un aviso en vez de una parrilla
+  vacía — puede hacer falta volver a abrir esta pantalla unos segundos
+  después de cargar la lista, si la guía tardó en descargarse.
+
+**En Android TV**, el mando mueve el foco entre canales (arriba/abajo) y
+hasta los tres botones de franja horaria con normalidad; las celdas de
+programa en sí son solo visuales en esta primera versión (no se pueden
+seleccionar una por una con el mando todavía). No he podido probar esta
+pantalla en una TV real —si el mando se comporta raro aquí, avisa para
+revisarlo.
+
 ## Estructura
 
 ```
 app/src/main/java/com/example/superplayer/
   model/    Stream, Category, PlaylistData, DrmInfo
   data/     PlaylistRepository (parseo JSON/M3U/tdtchannels), EpgRepository
-            (guía XMLTV o JSON), FavoritesStore, AppPrefs
-  ui/       MainActivity (categorías + buscador), StreamListActivity
+            (guía XMLTV o JSON), FavoritesStore, AppPrefs, PlaylistCache
+            (copia sin conexión de las listas remotas)
+  ui/       MainActivity (categorías + buscador), StreamListActivity,
+            EpgGridActivity + EpgGridAdapter + EpgGridMath (parrilla EPG)
   player/   PlayerActivity (MediaController), PlaybackService (MediaSessionService
             + ExoPlayer real), StreamMediaSourceFactory (DASH/HLS/progresivo +
             DRM por canal), StreamMediaExtras, ClearKeyUtil
@@ -475,12 +532,13 @@ Funciones incluidas: categorías, buscador (filtra canales por nombre,
 tanto en la portada como dentro de una categoría), favoritos persistentes
 (categoría "⭐ Favoritos" arriba de todo cuando hay alguno), carga de
 JSON (propio, "exolist" o listas públicas tipo tdtchannels.com)/M3U desde
-el propio dispositivo o desde una URL, radio con "ahora suena" +
-reproducción en segundo plano / pantalla de bloqueo, guía EPG opcional en
-XMLTV o JSON (programa actual en la lista de canales y como respaldo en
-la pantalla de radio), imagen en imagen (solo en móvil) y reconexión
-automática para canales de vídeo, y gesto de volumen/brillo deslizando
-verticalmente (derecha/izquierda).
+el propio dispositivo o desde una URL (con copia de respaldo sin conexión
+para las cinco listas remotas), radio con "ahora suena" + reproducción en
+segundo plano / pantalla de bloqueo, guía EPG opcional en XMLTV o JSON
+(programa actual en la lista de canales, vista de parrilla por horas, y
+como respaldo en la pantalla de radio), imagen en imagen (solo en móvil) y
+reconexión automática para canales de vídeo, y gesto de volumen/brillo
+deslizando verticalmente (derecha/izquierda).
 
 ## Si la app se cierra sola
 
@@ -505,10 +563,17 @@ de un PC.
 - Elegir un canal nuevo desde la lista siempre sustituye lo que estuviera
   sonando (incluida una radio en segundo plano): solo hay un reproductor
   real (dentro de `PlaybackService`) para toda la app.
-- La guía EPG no tiene pantalla propia (no hay una parrilla con horarios):
-  solo se usa para mostrar el programa actual en la lista de canales y en
-  la pantalla de radio. Tampoco está disponible con la raíz del JSON en
-  forma de array (formato "exolist"), solo con la raíz como objeto.
+- La guía EPG (en cualquiera de sus dos formas: texto en la lista de
+  canales, o la parrilla) no está disponible con la raíz del JSON en forma
+  de array (formato "exolist"), solo con la raíz como objeto.
+- En la parrilla EPG, las celdas de programa no se pueden seleccionar una
+  por una con el mando de una TV (solo los canales y los tres botones de
+  franja horaria); tampoco hay forma de navegar más allá del rango de
+  horas que ya trae descargado el XMLTV/JSON de la lista.
+- La copia sin conexión de las listas remotas (`PlaylistCache`) no tiene
+  límite de antigüedad ni se borra sola: siempre es la última que se
+  descargó bien, sin más gestión. Tampoco hay botón para borrarla a mano
+  si alguna vez hiciera falta.
 
 ## Compilar sin PC (GitHub Actions)
 

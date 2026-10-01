@@ -26,6 +26,10 @@
     <string name="action_load_file_button">Archivo 📁</string>
     <string name="loading_list">Cargando lista…</string>
     <string name="list_load_error">No se pudo cargar esa lista (%1$s).</string>
+    <!-- Caché de listas remotas (ver PlaylistCache): cuando falla la descarga
+         (sin red, servidor caído...) pero sí hay una copia guardada de una
+         vez anterior, se abre esa en su lugar y se avisa con la fecha. -->
+    <string name="list_load_offline_cached">Sin conexión ahora mismo: se ha abierto la última copia guardada (%1$s).</string>
     <string name="added_to_favorites">Añadido a favoritos</string>
     <string name="removed_from_favorites">Quitado de favoritos</string>
 
@@ -48,4 +52,15 @@
     <string name="epg_now_playing">Ahora (%1$s): %2$s</string>
     <string name="epg_next_playing">Después (%1$s): %2$s</string>
     <string name="epg_tonight_playing">Esta noche (%1$s): %2$s</string>
+
+    <!-- Vista de parrilla de guía EPG (ver EpgGridActivity): franjas por
+         hora con los canales en filas, complemento a las líneas de texto
+         "Ahora/Después/Esta noche" de arriba. -->
+    <string name="action_epg_grid">Guía</string>
+    <string name="epg_grid_title">Guía EPG</string>
+    <string name="epg_grid_empty">No hay guía EPG disponible todavía para esta lista: hace falta que traiga una guía (epgUrl/url-tvg) y que al menos un canal tenga tvg-id con coincidencia en ella. Si la lista sí trae guía, puede tardar unos segundos en descargarse después de cargarla — prueba a abrir esta pantalla de nuevo en un momento.</string>
+    <string name="epg_grid_prev_window">◀ 3 h</string>
+    <string name="epg_grid_next_window">3 h ▶</string>
+    <string name="epg_grid_now_button">Ahora</string>
+    <string name="epg_grid_window_range">%1$s – %2$s</string>
 </resources>

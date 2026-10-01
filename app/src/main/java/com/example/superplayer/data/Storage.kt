@@ -1,6 +1,7 @@
 package com.example.superplayer.data
 
 import android.content.Context
+import java.io.File
 
 /** Favoritos guardados localmente en SharedPreferences (identificados por URL del stream). */
 class FavoritesStore(context: Context) {
@@ -52,4 +53,45 @@ object AppPrefs {
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+}
+
+/**
+ * Guarda en disco el contenido (JSON o M3U, tal cual se descargó, sin volver
+ * a analizarlo) de la última descarga que tuvo éxito de cada uno de los 5
+ * "huecos" de lista remota (ver MainActivity.loadFromRemoteUrl). Así, si en
+ * algún momento no hay conexión, esa lista puede seguir abriéndose con la
+ * última copia que sí se descargó bien, en vez de no cargar nada. Solo se
+ * guarda una copia cuando la descarga Y el análisis posterior salen bien
+ * (nunca una respuesta a medias o un error disfrazado de servidor), así que
+ * la copia guardada siempre es válida.
+ */
+object PlaylistCache {
+    fun save(context: Context, slot: Int, rawText: String) {
+        try {
+            cacheFile(context, slot).writeText(rawText)
+        } catch (e: Exception) {
+            // Si no se puede escribir (poco espacio, etc.) no pasa nada grave:
+            // simplemente no habrá copia de respaldo la próxima vez sin red.
+        }
+    }
+
+    /** El contenido guardado para ese hueco, o null si todavía no se ha descargado nunca con éxito. */
+    fun load(context: Context, slot: Int): String? {
+        val file = cacheFile(context, slot)
+        if (!file.exists()) return null
+        return try {
+            file.readText().takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Fecha/hora (epoch ms) de la copia guardada para ese hueco, o null si no hay ninguna. */
+    fun lastSavedAt(context: Context, slot: Int): Long? {
+        val file = cacheFile(context, slot)
+        return if (file.exists()) file.lastModified() else null
+    }
+
+    private fun cacheFile(context: Context, slot: Int): File =
+        File(context.applicationContext.filesDir, "remote_list_cache_$slot.txt")
 }

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Una fila de la parrilla: a la izquierda el canal (ancho fijo, no se
+    desplaza con el scroll horizontal), a la derecha sus programas de la
+    franja horaria actual dentro de un HorizontalScrollView propio. Ese
+    HorizontalScrollView se sincroniza en código (ver EpgGridActivity) con
+    el de la cabecera de horas y con el del resto de filas visibles, para
+    que todos se desplacen juntos como si fueran uno solo.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/epg_row_height"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:id="@+id/channelColumn"
+        android:layout_width="@dimen/epg_channel_column_width"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="8dp"
+        android:background="@drawable/bg_list_item"
+        android:clickable="true"
+        android:focusable="true">
+
+        <ImageView
+            android:id="@+id/channelIcon"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:background="@color/surface_dark"
+            android:scaleType="centerInside"
+            android:padding="3dp"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/channelName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:textColor="@color/on_background"
+            android:textSize="11sp"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+    </LinearLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/rowScroll"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:scrollbars="none"
+        android:overScrollMode="never">
+
+        <LinearLayout
+            android:id="@+id/cellsContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal" />
+
+    </HorizontalScrollView>
+
+</LinearLayout>

@@ -15,4 +15,10 @@
         android:icon="@drawable/ic_folder_open"
         app:showAsAction="ifRoom" />
 
+    <item
+        android:id="@+id/action_epg_grid"
+        android:title="@string/action_epg_grid"
+        android:icon="@android:drawable/ic_menu_agenda"
+        app:showAsAction="ifRoom" />
+
 </menu>

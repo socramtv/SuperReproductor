@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Vista de parrilla de guía EPG (ver EpgGridActivity): ancho fijo de la
+        columna de nombre de canal (siempre a la izquierda, no se desplaza
+        con el scroll horizontal) y alto de cada fila/cabecera de horas.
+        Tienen que coincidir exactamente entre activity_epg_grid.xml (la
+        cabecera de horas) e item_epg_grid_row.xml (cada canal): si no, las
+        horas de la cabecera no quedarían alineadas con los programas de
+        debajo.
+    -->
+    <dimen name="epg_channel_column_width">100dp</dimen>
+    <dimen name="epg_row_height">56dp</dimen>
+    <dimen name="epg_header_height">28dp</dimen>
+</resources>
