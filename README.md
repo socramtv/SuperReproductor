@@ -357,6 +357,56 @@ de que le llegara al gesto de cambiar de canal. La barra de progreso en
 sí se deja tal cual (no se toca su visibilidad): Media3 ya la
 deshabilita solo en los canales que son puro directo.
 
+### Subir o bajar el volumen deslizando
+
+Deslizar el dedo verticalmente por la **mitad derecha** de la pantalla
+sube o baja el volumen, igual que en YouTube: arriba sube, abajo baja, y
+aparece el propio indicador de volumen del sistema (el mismo que sale al
+usar los botones físicos), sin montar ningún indicador a medida. Por la
+**mitad izquierda**, de momento, un arrastre vertical no hace nada (hueco
+libre para un futuro gesto de brillo, si hiciera falta).
+
+Como con el arrastre horizontal, cada arrastre decide su modo una sola
+vez (en cuanto el movimiento es claramente horizontal o claramente
+vertical) y se queda fijado así hasta soltar el dedo, aunque el gesto
+tuerza por el camino: no cambia de "avanzar/retroceder" a "volumen" ni al
+revés a media operación. Un arrastre que empieza ambiguo (poco
+movimiento todavía, o vertical por la mitad izquierda) y se vuelve
+claramente horizontal más adelante sí se decide en ese momento, con el
+primer movimiento ya claro.
+
+## Imagen en imagen (Picture-in-Picture)
+
+Mientras se reproduce un canal de **vídeo** (la radio no lo necesita: ya
+sigue sonando en segundo plano sin más), puedes seguir viéndolo en una
+ventana flotante mientras usas otra app o navegas el menú:
+
+- Tocando el botón de PiP (arriba a la derecha, junto al de calidad de
+  vídeo/audio).
+- O automáticamente, sin tocar nada, al salir de la app — con el botón
+  de Inicio, cambiando a otra app, etc. Con el botón **Atrás** no: eso
+  sigue cerrando el reproductor como siempre.
+
+La ventana flotante usa la relación de ancho/alto real del vídeo en
+curso (recortada al rango que admite Android, de 1:2.39 a 2.39:1, por si
+algún vídeo fuera de lo normal se saliera de ahí). Si el propio
+dispositivo no admite PiP —algunos Android TV no lo hacen—, el botón
+simplemente no hace nada y salir de la app pausa el vídeo como de
+costumbre, sin errores.
+
+## Reconexión automática
+
+Si un canal de IPTV se corta del todo —no un simple parpadeo de red
+momentáneo, que ExoPlayer ya reintenta por su cuenta sin que se note—,
+antes había que salir del canal y volver a entrar a mano. Ahora, al
+detectar un corte total, la app lo intenta arreglar sola: espera un poco
+(2, 5 y luego 10 segundos) y vuelve a resolver y reproducir ese mismo
+canal, hasta tres veces. Si para entonces sigue sin funcionar, se
+muestra el aviso de error de siempre. En cuanto el canal vuelve a
+reproducirse de verdad tras una reconexión, el cupo de reintentos se
+restablece del todo para la próxima vez que se corte. Cambiar de canal a
+mano, o salir del reproductor, cancela cualquier reintento pendiente.
+
 ## EPG (guía de programación)
 
 Si la lista trae guía EPG (`epgUrl`/`url-tvg` a nivel de lista y
@@ -414,9 +464,10 @@ tanto en la portada como dentro de una categoría), favoritos persistentes
 (categoría "⭐ Favoritos" arriba de todo cuando hay alguno), carga de
 JSON (propio, "exolist" o listas públicas tipo tdtchannels.com)/M3U desde
 el propio dispositivo o desde una URL, radio con "ahora suena" +
-reproducción en segundo plano / pantalla de bloqueo, y guía EPG opcional
-en XMLTV o JSON (programa actual en la lista de canales y como respaldo
-en la pantalla de radio).
+reproducción en segundo plano / pantalla de bloqueo, guía EPG opcional en
+XMLTV o JSON (programa actual en la lista de canales y como respaldo en
+la pantalla de radio), imagen en imagen y reconexión automática para
+canales de vídeo, y gesto de volumen deslizando verticalmente.
 
 ## Si la app se cierra sola
 

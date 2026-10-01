@@ -10,6 +10,7 @@
     <string name="load_success">Lista cargada: %1$d categorías, %2$d canales</string>
     <string name="player_error">Error de reproducción: %1$s</string>
     <string name="action_track_selection">Calidad de vídeo / audio</string>
+    <string name="action_pip">Ver en ventana flotante</string>
     <string name="track_video">Vídeo</string>
     <string name="track_audio">Audio</string>
     <string name="track_subtitles">Subtítulos</string>
@@ -31,6 +32,12 @@
     <!-- Radio / "ahora suena" en PlayerActivity: nombre de respaldo cuando
          todavía no hay ni título dinámico (ICY/ID3) ni nombre de canal. -->
     <string name="now_playing_fallback">Reproduciendo…</string>
+
+    <!-- Reconexión automática (ver scheduleAutoReconnectOrShowError en
+         PlayerActivity): aviso breve en cada reintento tras un corte total
+         del canal; si se agotan los reintentos, se muestra player_error
+         en su lugar, como antes. -->
+    <string name="player_reconnecting">Canal cortado, reconectando…</string>
 
     <!-- EPG en la lista de canales: "ahora", "después" y "esta noche",
          cada uno con su horario (%1$s) y título (%2$s). -->

@@ -1,15 +1,19 @@
 package com.example.superplayer.player
 
 import android.Manifest
+import android.app.PictureInPictureParams
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Rational
 import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -71,6 +75,25 @@ import java.net.URL
  * mientras los controles están ocultos; en cuanto se abren, esas mismas
  * teclas pasan a hacer lo de siempre en Media3 (mover el foco, o avanzar/
  * retroceder si el foco está en la barra de progreso; ver dispatchKeyEvent).
+ *
+ * Arrastrar verticalmente en la mitad derecha de la pantalla sube/baja el
+ * volumen (igual que YouTube); en la mitad izquierda, de momento, un
+ * arrastre vertical no hace nada (ver handleVolumeDrag/handleSeekDrag,
+ * ambos repartidos desde onScroll según a qué se decida que corresponde
+ * el gesto la primera vez que se reconoce como arrastre).
+ *
+ * Imagen en imagen (PiP): para canales de vídeo (la radio no lo necesita,
+ * ya sigue sonando en segundo plano sin más), tocar el botón de PiP o
+ * salir de la app (Inicio, cambiar de app) mete el vídeo en una ventana
+ * flotante en vez de pausarlo (ver maybeEnterPictureInPicture,
+ * onUserLeaveHint).
+ *
+ * Reconexión automática: si el canal se corta del todo (no un simple
+ * corte de red puntual, que ExoPlayer ya reintenta por su cuenta) salta
+ * onPlayerError; en vez de solo avisar con un Toast como antes, se
+ * reintenta solo unas pocas veces con una espera creciente entre cada
+ * una, y solo si se agotan los reintentos se avisa del error (ver
+ * scheduleAutoReconnectOrShowError).
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
@@ -110,13 +133,63 @@ class PlayerActivity : AppCompatActivity() {
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* da igual el resultado */ }
 
-    private val playerListener = object : Player.Listener {
-        override fun onPlayerError(error: PlaybackException) {
+    // -----------------------------------------------------------------
+    // Reconexión automática: cuenta de reintentos ya hechos para el canal
+    // actual (se reinicia en switchChannel y en cuanto onIsPlayingChanged
+    // confirma que de verdad está sonando/viéndose) y el Runnable
+    // pendiente, si hay uno, para poder cancelarlo (cambio de canal,
+    // onStop/onDestroy) y que no reaparezca un canal viejo de golpe.
+    // -----------------------------------------------------------------
+    private var autoReconnectAttempts = 0
+    private val reconnectHandler = Handler(Looper.getMainLooper())
+    private var pendingReconnectRunnable: Runnable? = null
+
+    private fun cancelPendingReconnect() {
+        pendingReconnectRunnable?.let { reconnectHandler.removeCallbacks(it) }
+        pendingReconnectRunnable = null
+    }
+
+    private fun scheduleAutoReconnectOrShowError(error: PlaybackException) {
+        val stream = currentStream
+        if (stream == null || isFinishing || isDestroyed) return
+        if (autoReconnectAttempts >= RECONNECT_DELAYS_MS.size) {
             Toast.makeText(
-                this@PlayerActivity,
+                this,
                 getString(R.string.player_error, error.message ?: error.errorCodeName),
                 Toast.LENGTH_LONG
             ).show()
+            return
+        }
+        val delayMs = RECONNECT_DELAYS_MS[autoReconnectAttempts]
+        autoReconnectAttempts++
+        Toast.makeText(this, getString(R.string.player_reconnecting), Toast.LENGTH_SHORT).show()
+        val runnable = Runnable {
+            pendingReconnectRunnable = null
+            if (isFinishing || isDestroyed) return@Runnable
+            // Se relee currentStream (no se captura `stream` de arriba) por si
+            // ha cambiado de canal mientras esperaba: aunque switchChannel ya
+            // cancela este runnable, es una comprobación barata de más.
+            val freshStream = currentStream ?: return@Runnable
+            playbackStarted = false
+            pendingMediaItem = null
+            resolveAndPlay(freshStream)
+        }
+        pendingReconnectRunnable = runnable
+        reconnectHandler.postDelayed(runnable, delayMs)
+    }
+
+    private val playerListener = object : Player.Listener {
+        override fun onPlayerError(error: PlaybackException) {
+            scheduleAutoReconnectOrShowError(error)
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            // De verdad está sonando/viéndose: lo que sea que haya fallado
+            // antes se ha recuperado, así que el canal actual vuelve a tener
+            // su cupo completo de reintentos para la próxima vez que se corte.
+            if (isPlaying) {
+                autoReconnectAttempts = 0
+            }
         }
 
         override fun onTracksChanged(tracks: Tracks) {
@@ -147,24 +220,80 @@ class PlayerActivity : AppCompatActivity() {
     // (isControllerFullyVisible/showController/hideController) que usa
     // PlayerView internamente para lo mismo.
     //
-    // onScroll (arrastrar el dedo, no solo tocar) se usa para avanzar/
-    // retroceder el vídeo: no hace falta acertar en la barra de progreso
-    // nativa de Media3 (fina, y solo está pintada ahí con los controles ya
-    // abiertos) porque cualquier arrastre horizontal, en cualquier zona,
-    // vale. GestureDetector ya distingue por su cuenta un toque de un
-    // arrastre (onScroll solo se dispara si el dedo se movió más del umbral
-    // normal de gesto de Android), así que no compite con el cambio de
-    // canal de onSingleTapUp: cada gesto acaba siendo uno u otro, nunca
-    // los dos.
+    // onScroll (arrastrar el dedo, no solo tocar) se reparte entre dos
+    // gestos posibles, decidido una sola vez por gesto (al primer
+    // movimiento ya reconocido como arrastre) y fijado a partir de ahí
+    // -aunque el dedo tuerza a mitad de camino- para que no cambie de uno a
+    // otro mientras se está arrastrando:
+    //   - predominantemente horizontal, en cualquier zona -> avanzar/
+    //     retroceder el vídeo (handleSeekDrag). No hace falta acertar en la
+    //     barra de progreso nativa de Media3 (fina, y solo pintada ahí con
+    //     los controles ya abiertos).
+    //   - predominantemente vertical, empezando en la mitad derecha ->
+    //     subir/bajar el volumen (handleVolumeDrag), como YouTube. Empezando
+    //     en la mitad izquierda, de momento no hace nada (hueco libre para
+    //     un futuro gesto de brillo, si hiciera falta).
+    // GestureDetector ya distingue por su cuenta un toque de un arrastre
+    // (onScroll solo se dispara si el dedo se movió más del umbral normal
+    // de gesto de Android), así que ninguno de los dos compite con el
+    // cambio de canal de onSingleTapUp: cada gesto acaba siendo uno u otro,
+    // nunca dos a la vez.
     // -----------------------------------------------------------------
 
-    private var isDraggingToSeek = false
+    private enum class DragMode { NONE, SEEK, VOLUME }
+    private var dragMode = DragMode.NONE
+    private var seekStartCaptured = false
     private var seekDragStartPositionMs = 0L
+    private var volumeStartCaptured = false
+    private var volumeDragStartLevel = 0
+
+    private val audioManager: AudioManager by lazy { getSystemService(AudioManager::class.java) }
+
+    private fun handleSeekDrag(totalDx: Float): Boolean {
+        val ctrl = controller ?: return true
+        if (!ctrl.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) return true
+        val duration = ctrl.duration
+        if (duration <= 0 || duration == C.TIME_UNSET) return true // directo puro: nada que avanzar/retroceder
+
+        if (!seekStartCaptured) {
+            seekStartCaptured = true
+            seekDragStartPositionMs = ctrl.currentPosition
+        }
+        val width = binding.playerView.width
+        if (width <= 0) return true
+        val targetMs = (seekDragStartPositionMs + (totalDx / width) * duration)
+            .toLong()
+            .coerceIn(0, duration)
+        ctrl.seekTo(targetMs)
+        binding.playerView.showController()
+        return true
+    }
+
+    private fun handleVolumeDrag(totalDy: Float): Boolean {
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (maxVolume <= 0) return true
+        if (!volumeStartCaptured) {
+            volumeStartCaptured = true
+            volumeDragStartLevel = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        }
+        val height = binding.playerView.height
+        if (height <= 0) return true
+        // totalDy negativo = ha deslizado hacia arriba = sube el volumen.
+        val target = Math.round(volumeDragStartLevel - (totalDy / height) * maxVolume)
+            .coerceIn(0, maxVolume)
+        // FLAG_SHOW_UI: reutiliza el propio indicador de volumen del
+        // sistema (el mismo que sale con los botones físicos) en vez de
+        // montar uno a medida aquí.
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, AudioManager.FLAG_SHOW_UI)
+        return true
+    }
 
     private val playerTapGestureDetector by lazy {
         GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean {
-                isDraggingToSeek = false
+                dragMode = DragMode.NONE
+                seekStartCaptured = false
+                volumeStartCaptured = false
                 return true
             }
 
@@ -172,27 +301,19 @@ class PlayerActivity : AppCompatActivity() {
                 val start = e1 ?: return false
                 val totalDx = e2.x - start.x
                 val totalDy = e2.y - start.y
-                // Arrastre más vertical que horizontal: no es un intento de
-                // avanzar/retroceder, se ignora (no hace ni canal ni seek).
-                if (Math.abs(totalDx) <= Math.abs(totalDy)) return false
 
-                val ctrl = controller ?: return true
-                if (!ctrl.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) return true
-                val duration = ctrl.duration
-                if (duration <= 0 || duration == C.TIME_UNSET) return true // directo puro: nada que avanzar/retroceder
-
-                if (!isDraggingToSeek) {
-                    isDraggingToSeek = true
-                    seekDragStartPositionMs = ctrl.currentPosition
+                if (dragMode == DragMode.NONE) {
+                    dragMode = when {
+                        Math.abs(totalDx) > Math.abs(totalDy) -> DragMode.SEEK
+                        start.x > binding.playerView.width / 2f -> DragMode.VOLUME
+                        else -> return false // vertical en la mitad izquierda: nada, de momento
+                    }
                 }
-                val width = binding.playerView.width
-                if (width <= 0) return true
-                val targetMs = (seekDragStartPositionMs + (totalDx / width) * duration)
-                    .toLong()
-                    .coerceIn(0, duration)
-                ctrl.seekTo(targetMs)
-                binding.playerView.showController()
-                return true
+                return when (dragMode) {
+                    DragMode.SEEK -> handleSeekDrag(totalDx)
+                    DragMode.VOLUME -> handleVolumeDrag(totalDy)
+                    DragMode.NONE -> false
+                }
             }
 
             override fun onSingleTapUp(e: MotionEvent): Boolean {
@@ -253,6 +374,8 @@ class PlayerActivity : AppCompatActivity() {
         val newStream = channelList[newIndex]
         currentIndex = newIndex
 
+        cancelPendingReconnect()
+        autoReconnectAttempts = 0
         playbackStarted = false
         pendingMediaItem = null
         lastDynamicTitle = null
@@ -352,6 +475,7 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
+        binding.pipButton.setOnClickListener { maybeEnterPictureInPicture() }
         binding.playerView.setControllerVisibilityListener(
             // Tipo explícito: PlayerView tiene dos overloads de este método
             // (el actual ControllerVisibilityListener y el antiguo, obsoleto,
@@ -362,8 +486,11 @@ class PlayerActivity : AppCompatActivity() {
             PlayerView.ControllerVisibilityListener { visibility ->
                 binding.trackSelectionButton.visibility = visibility
                 // Para radio, el overlay de arriba ya se encarga (ver
-                // onTracksChanged): este cartel es solo para vídeo, y
-                // aparece/desaparece junto con los controles normales.
+                // onTracksChanged): este botón y este cartel son solo para
+                // vídeo (la radio no necesita PiP, ya sigue sonando en
+                // segundo plano sola), y aparecen/desaparecen junto con los
+                // controles normales.
+                binding.pipButton.visibility = if (isCurrentStreamRadio) View.GONE else visibility
                 binding.videoNowPlayingBar.visibility = if (isCurrentStreamRadio) View.GONE else visibility
             }
         )
@@ -410,9 +537,26 @@ class PlayerActivity : AppCompatActivity() {
         )
     }
 
+    // -----------------------------------------------------------------
+    // Imagen en imagen (PiP): onUserLeaveHint salta justo antes de salir de
+    // esta pantalla por Inicio o al cambiar de app (NO con el botón Atrás,
+    // que sigue cerrando el reproductor como siempre); es el punto de
+    // entrada que recomienda la propia documentación de Android para PiP
+    // automático. El resto de la lógica (comprobaciones, construcción de
+    // PictureInPictureParams, ocultar/mostrar los controles propios de esta
+    // pantalla) vive junto a onPictureInPictureModeChanged, más abajo.
+    // -----------------------------------------------------------------
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        maybeEnterPictureInPicture()
+    }
+
     override fun onStop() {
         super.onStop()
         epgHandler.removeCallbacks(epgRefreshRunnable)
+        cancelPendingReconnect()
+        autoReconnectAttempts = 0
         val ctrl = controller
         if (ctrl != null) {
             if (isFinishing) {
@@ -440,6 +584,75 @@ class PlayerActivity : AppCompatActivity() {
         super.onDestroy()
         pendingStream = null
         pendingChannelList = emptyList()
+    }
+
+    // -----------------------------------------------------------------
+    // Imagen en imagen (PiP): comprobaciones y construcción de los
+    // parámetros antes de entrar (maybeEnterPictureInPicture, llamada tanto
+    // desde pipButton como desde onUserLeaveHint, arriba), y ocultar/mostrar
+    // a mano los controles propios de esta pantalla al entrar/salir, ya que
+    // el sistema solo oculta los controles nativos de PlayerView (a través
+    // de useController), no las vistas propias de esta app.
+    // -----------------------------------------------------------------
+
+    private fun maybeEnterPictureInPicture() {
+        if (isCurrentStreamRadio) return // la radio ya sigue sonando en segundo plano sin PiP
+        if (controller == null) return
+        if (isInPictureInPictureMode) return
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        val params = PictureInPictureParams.Builder()
+            .setAspectRatio(currentVideoAspectRatio())
+            .build()
+        try {
+            enterPictureInPictureMode(params)
+        } catch (e: IllegalStateException) {
+            // El sistema puede negarse (p. ej. políticas del dispositivo o
+            // del fabricante); no hay nada que hacer salvo seguir en
+            // pantalla completa normal.
+        }
+    }
+
+    /**
+     * Relación de ancho/alto del vídeo actual para la ventana de PiP,
+     * recortada al rango que admite Android (ver MAX_PIP_ASPECT_RATIO /
+     * MIN_PIP_ASPECT_RATIO: fuera de ese rango, setAspectRatio lanza
+     * IllegalArgumentException). Si todavía no se conoce el tamaño real del
+     * vídeo (p. ej. justo al entrar, antes del primer fotograma), se usa
+     * 16:9 como valor por defecto razonable.
+     */
+    private fun currentVideoAspectRatio(): Rational {
+        val videoSize = controller?.videoSize
+        val width = videoSize?.width ?: 0
+        val height = videoSize?.height ?: 0
+        if (width <= 0 || height <= 0) return Rational(16, 9)
+        val ratio = width.toFloat() / height.toFloat()
+        return when {
+            ratio > MAX_PIP_ASPECT_RATIO -> Rational(239, 100)
+            ratio < MIN_PIP_ASPECT_RATIO -> Rational(100, 239)
+            else -> Rational(width, height)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (isInPictureInPictureMode) {
+            // Los controles nativos de PlayerView y los botones propios de
+            // esta pantalla no caben ni hacen falta en la ventana flotante
+            // (el sistema ya pone encima sus propios botones de cerrar/
+            // expandir). useController=false, además de ocultarlos, evita
+            // que un toque los vuelva a sacar mientras se está en PiP.
+            binding.playerView.useController = false
+            binding.trackSelectionButton.visibility = View.GONE
+            binding.pipButton.visibility = View.GONE
+            binding.videoNowPlayingBar.visibility = View.GONE
+        } else {
+            // Al volver a pantalla completa se restauran los controles
+            // nativos y se muestran los propios otra vez a través del mismo
+            // ControllerVisibilityListener de siempre (ver onCreate), que ya
+            // sabe qué le toca a cada uno según si el canal es de radio.
+            binding.playerView.useController = true
+            binding.playerView.showController()
+        }
     }
 
     // -----------------------------------------------------------------
@@ -635,5 +848,20 @@ class PlayerActivity : AppCompatActivity() {
         // nativos de Media3 (barra de progreso + fila de ajustes), a todo
         // lo ancho de la pantalla: ver el comentario en onSingleTapUp.
         private const val BOTTOM_CONTROLS_DP = 120f
+
+        // Reconexión automática: espera (en ms) antes de cada reintento tras
+        // un corte total del canal; creciente para no machacar un servidor
+        // que ya está teniendo problemas. El número de reintentos antes de
+        // rendirse y mostrar el error es RECONNECT_DELAYS_MS.size (ver
+        // scheduleAutoReconnectOrShowError).
+        private val RECONNECT_DELAYS_MS = longArrayOf(2_000L, 5_000L, 10_000L)
+
+        // Imagen en imagen: relación de aspecto máxima/mínima que admite
+        // Android (documentado por la propia PictureInPictureParams.Builder.
+        // setAspectRatio); fuera de este rango lanza IllegalArgumentException,
+        // así que currentVideoAspectRatio() recorta a este rango antes de
+        // construir los parámetros de PiP.
+        private const val MAX_PIP_ASPECT_RATIO = 2.39f
+        private const val MIN_PIP_ASPECT_RATIO = 1f / 2.39f
     }
 }

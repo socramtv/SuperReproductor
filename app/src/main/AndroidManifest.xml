@@ -67,11 +67,24 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!--
+            supportsPictureInPicture + resizeableActivity: dejan entrar en
+            modo imagen-en-imagen (ver maybeEnterPictureInPicture en
+            PlayerActivity). configChanges añade screenLayout y
+            smallestScreenSize -recomendado por la propia documentación de
+            Android para actividades con PiP- para que, al entrar/salir o
+            cambiar el tamaño de la ventana flotante, la actividad no se
+            destruya y se vuelva a crear (lo que cortaría el vídeo un
+            instante): sigue siendo la misma instancia, solo cambia de
+            tamaño.
+        -->
         <activity
             android:name=".player.PlayerActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:screenOrientation="userLandscape"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
             android:theme="@style/Theme.SuperReproductor.Player" />
 
         <activity
