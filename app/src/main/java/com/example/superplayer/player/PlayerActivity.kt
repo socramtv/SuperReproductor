@@ -59,10 +59,18 @@ import java.net.URL
  *
  * Cambio de canal tocando la pantalla: si este canal viene de una lista
  * (categoría, favoritos o resultados de búsqueda; ver companion.pendingChannelList),
- * tocar el tercio izquierdo/derecho de la pantalla pasa al canal
- * anterior/siguiente de esa misma lista (dando la vuelta al llegar a un
- * extremo), sin recrear la pantalla; el tercio central sigue mostrando/
+ * tocar (sin arrastrar) el tercio izquierdo/derecho de la pantalla pasa al
+ * canal anterior/siguiente de esa misma lista (dando la vuelta al llegar a
+ * un extremo), sin recrear la pantalla; el tercio central sigue mostrando/
  * ocultando los controles, como antes (ver playerTapGestureDetector).
+ * Deslizar el dedo en vez de solo tocar (en cualquier zona) adelanta o
+ * retrasa el vídeo si el canal actual lo permite (un directo puro no
+ * tiene nada que avanzar/retroceder); toque y arrastre no se pisan porque
+ * son gestos distintos (ver onScroll en playerTapGestureDetector). En el
+ * mando de TV pasa algo parecido: izquierda/derecha cambia de canal solo
+ * mientras los controles están ocultos; en cuanto se abren, esas mismas
+ * teclas pasan a hacer lo de siempre en Media3 (mover el foco, o avanzar/
+ * retroceder si el foco está en la barra de progreso; ver dispatchKeyEvent).
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
@@ -138,11 +146,54 @@ class PlayerActivity : AppCompatActivity() {
     // y el tercio central se resuelve aquí mismo, con los mismos métodos
     // (isControllerFullyVisible/showController/hideController) que usa
     // PlayerView internamente para lo mismo.
+    //
+    // onScroll (arrastrar el dedo, no solo tocar) se usa para avanzar/
+    // retroceder el vídeo: no hace falta acertar en la barra de progreso
+    // nativa de Media3 (fina, y solo está pintada ahí con los controles ya
+    // abiertos) porque cualquier arrastre horizontal, en cualquier zona,
+    // vale. GestureDetector ya distingue por su cuenta un toque de un
+    // arrastre (onScroll solo se dispara si el dedo se movió más del umbral
+    // normal de gesto de Android), así que no compite con el cambio de
+    // canal de onSingleTapUp: cada gesto acaba siendo uno u otro, nunca
+    // los dos.
     // -----------------------------------------------------------------
+
+    private var isDraggingToSeek = false
+    private var seekDragStartPositionMs = 0L
 
     private val playerTapGestureDetector by lazy {
         GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent) = true
+            override fun onDown(e: MotionEvent): Boolean {
+                isDraggingToSeek = false
+                return true
+            }
+
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+                val start = e1 ?: return false
+                val totalDx = e2.x - start.x
+                val totalDy = e2.y - start.y
+                // Arrastre más vertical que horizontal: no es un intento de
+                // avanzar/retroceder, se ignora (no hace ni canal ni seek).
+                if (Math.abs(totalDx) <= Math.abs(totalDy)) return false
+
+                val ctrl = controller ?: return true
+                if (!ctrl.isCommandAvailable(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) return true
+                val duration = ctrl.duration
+                if (duration <= 0 || duration == C.TIME_UNSET) return true // directo puro: nada que avanzar/retroceder
+
+                if (!isDraggingToSeek) {
+                    isDraggingToSeek = true
+                    seekDragStartPositionMs = ctrl.currentPosition
+                }
+                val width = binding.playerView.width
+                if (width <= 0) return true
+                val targetMs = (seekDragStartPositionMs + (totalDx / width) * duration)
+                    .toLong()
+                    .coerceIn(0, duration)
+                ctrl.seekTo(targetMs)
+                binding.playerView.showController()
+                return true
+            }
 
             override fun onSingleTapUp(e: MotionEvent): Boolean {
                 val width = binding.playerView.width
@@ -228,9 +279,27 @@ class PlayerActivity : AppCompatActivity() {
     // Si no hay ninguna lista por la que moverse, no se consume la tecla y
     // se deja que el sistema haga lo que hiciera por defecto (por ejemplo,
     // mover el foco entre los botones de los controles).
+    //
+    // Excepción: con los controles ya abiertos, izquierda/derecha NO se
+    // cogen aquí, se dejan pasar tal cual (super.dispatchKeyEvent). Así,
+    // si el foco está en la barra de progreso, Media3 la mueve él solo
+    // (DefaultTimeBar.onKeyDown ya sabe responder a izquierda/derecha
+    // avanzando/retrocediendo, y de hecho no hace nada si el canal actual
+    // no admite avance/retroceso -un directo puro-, todo esto de serie, sin
+    // tocar nada aquí); y si el foco está en otro control, las mismas
+    // teclas mueven el foco entre ellos, como es normal. O sea: con los
+    // controles ocultos (el caso normal viendo la tele) izquierda/derecha
+    // cambian de canal; en cuanto se abren los controles, pasan a hacer lo
+    // de siempre en Media3.
     // -----------------------------------------------------------------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isDpadLeftRight = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+            event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        if (isDpadLeftRight && binding.playerView.isControllerFullyVisible) {
+            return super.dispatchKeyEvent(event)
+        }
+
         val direction = when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT,
             KeyEvent.KEYCODE_CHANNEL_DOWN,

@@ -293,8 +293,10 @@ igual que antes.
 Mientras se está reproduciendo algo, la pantalla del reproductor se
 divide en tres franjas verticales invisibles:
 
-- **Tercio izquierdo**: pasa al canal **anterior**.
-- **Tercio derecho**: pasa al canal **siguiente**.
+- **Tercio izquierdo**: **toca** (sin arrastrar) para pasar al canal
+  **anterior**.
+- **Tercio derecho**: **toca** (sin arrastrar) para pasar al canal
+  **siguiente**.
 - **Tercio central**: muestra/oculta los controles normales de
   reproducción, igual que antes.
 
@@ -317,20 +319,38 @@ primera aproximación sin poder probarla en un dispositivo real; si al
 usarla el "centro" para mostrar/ocultar controles queda demasiado
 estrecho (o demasiado ancho) se puede ajustar.
 
-**En una TV con mando** (sin pantalla táctil), izquierda/derecha del
-D-pad hacen lo mismo que tocar los lados en el móvil: cambian al canal
-anterior/siguiente de la misma lista. Si el mando tiene botones
-dedicados de canal- /canal+ o de pista anterior/siguiente, también
-valen. Esto es aparte del gesto táctil (es una pulsación de tecla, no
-un toque) y funciona tanto si la lista se ve con mando como si el
-dispositivo tiene también pantalla táctil.
+### Avanzar/retroceder sin perder el cambio de canal
+
+Cambiar de canal es un **toque**; avanzar o retroceder el vídeo (en los
+canales que lo permitan: un directo puro no tiene nada que avanzar) es
+un **arrastre** — deslizar el dedo hacia la derecha o la izquierda, en
+cualquier zona de la pantalla, sin soltar. Al ser dos formas de tocar
+distintas (una sin apenas movimiento, la otra moviendo el dedo un buen
+trecho), el sistema operativo ya las distingue solo, así que no hace
+falta acertar en ningún sitio concreto ni renunciar al tercio
+izquierdo/derecho para cambiar de canal: un toque rápido ahí cambia de
+canal, y un arrastre ahí (o en el tercio central) avanza/retrocede.
+
+**En una TV con mando** (sin pantalla táctil) es parecido pero con un
+matiz, porque el mando no tiene "arrastrar": mientras los controles
+están **ocultos** (el caso normal, viendo sin más), izquierda/derecha
+del D-pad cambian de canal, igual que el toque en el móvil. En cuanto
+sacas los controles en pantalla (con el botón central/OK del mando, o
+el que los muestre en tu mando), izquierda/derecha dejan de cambiar de
+canal y pasan a comportarse como en cualquier otra app de Media3: mover
+el foco entre los controles, o -si el foco está en la barra de
+progreso- avanzar/retroceder el vídeo. Si el mando tiene botones
+dedicados de canal- /canal+, o de pista anterior/siguiente, esos
+siempre cambian de canal, tengas los controles abiertos o no.
 
 Los botones de "anterior/siguiente" y "retroceder/avanzar 10 s" que
 Media3 pone por defecto en medio de los controles están desactivados
 (`show_previous_button`/`show_next_button`/`show_rewind_button`/
 `show_fastforward_button` a `false` en `activity_player.xml`): estaban
-justo encima de estas dos zonas de toque y se quedaban con el toque
-antes de que le llegara al gesto de cambiar de canal.
+justo encima de estas zonas de toque y se quedaban con el toque antes
+de que le llegara al gesto de cambiar de canal. La barra de progreso en
+sí se deja tal cual (no se toca su visibilidad): Media3 ya la
+deshabilita solo en los canales que son puro directo.
 
 ## EPG (guía de programación)
 
