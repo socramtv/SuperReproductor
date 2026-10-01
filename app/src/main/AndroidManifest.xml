@@ -8,6 +8,21 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+        leanback + touchscreen required="false": la app funciona igual sin
+        esto (por eso al instalar el APK a mano ya "funciona perfecto"),
+        pero son las dos etiquetas con las que Android/Google Play saben que
+        una app está pensada también para TV (sin pantalla táctil) y no solo
+        para móvil. Sin la de touchscreen, por defecto se asume que toda app
+        la necesita. No son la causa de que no aparezca en el menú
+        principal de la TV (eso es la categoría LEANBACK_LAUNCHER, más
+        abajo, en MainActivity) pero es lo correcto declararlas en una app
+        pensada para los dos (y hace falta si algún día se publica en la
+        Play Store para TV).
+    -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
     <application
         android:name=".SuperPlayerApp"
         android:allowBackup="true"
@@ -29,9 +44,21 @@
             android:name=".ui.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden">
+            <!--
+                category.LEANBACK_LAUNCHER: es la que mira Android TV para
+                decidir qué apps poner en la fila de la pantalla de inicio;
+                sin ella, la app se instala y funciona bien (por eso se
+                podía abrir desde Ajustes > Aplicaciones), pero el launcher
+                de la TV ni se entera de que existe, porque solo busca
+                actividades con esta categoría, no con LAUNCHER (esa es la
+                que usan los launchers normales de móvil/tablet). Se dejan
+                las dos en el mismo filtro para que la app siga funcionando
+                igual en móvil/tablet.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
 

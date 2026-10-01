@@ -502,3 +502,21 @@ existe en tu copia del proyecto, colócalo ahí (cualquier PNG cuadrado,
 idealmente 512×512 o más) antes de compilar — si ya lo subiste a tu
 repositorio de GitHub en una entrega anterior, no hace falta volver a
 hacerlo: este zip no lo incluye ni lo borra.
+
+## Que aparezca en el menú principal de Android TV
+
+El launcher de Android TV (la pantalla de inicio con filas de apps) no
+busca la categoría normal de lanzador de móvil/tablet
+(`android.intent.category.LAUNCHER`), sino otra aparte,
+`android.intent.category.LEANBACK_LAUNCHER`. Una app que solo tiene la
+primera se instala y funciona perfectamente —se puede abrir a mano desde
+Ajustes > Aplicaciones, como pasaba antes de este cambio—, pero el
+launcher de la TV ni se entera de que existe, porque solo lista
+actividades con esa segunda categoría. `MainActivity` ya declara las dos
+en el mismo `intent-filter`, así que debería aparecer en el menú
+principal sin tener que entrar por Ajustes. El manifiesto también
+declara `android.software.leanback` y `android.hardware.touchscreen`
+(este último como no obligatorio, porque una TV no tiene pantalla
+táctil); no son la causa de que no apareciera, pero es lo correcto
+declararlos en una app pensada para los dos tipos de dispositivo, y hace
+falta si algún día se publica en la Play Store para TV.
