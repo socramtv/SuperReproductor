@@ -1,11 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background_dark">#0F1020</color>
-    <color name="surface_dark">#1A1B2E</color>
+    <!--
+        Modo CLARO/OSCURO (ver también res/values-night/colors.xml y
+        Storage.kt/AppPrefs.isDarkMode + MainActivity.toggleTheme): este
+        archivo (values/, sin "night") trae los valores de modo CLARO.
+        background_dark/surface_dark/on_background/on_surface_muted llevan
+        esos nombres por motivos históricos -la app empezó siendo solo
+        oscura, con estos mismos cuatro nombres-, pero su VALOR aquí es
+        ahora el de modo claro; el valor oscuro de siempre vive en
+        values-night/colors.xml con los mismos cuatro nombres. Android
+        elige solo cuál de los dos archivos usar según
+        AppCompatDelegate.setDefaultNightMode, sin tocar nada más en el
+        resto de la app: todos los layouts ya apuntan a estos nombres.
+
+        primary/primary_variant/on_primary/favorite son colores de marca y
+        no cambian entre modos, por eso no tienen versión aparte en
+        values-night. player_text/player_text_muted tampoco cambian entre
+        modos, a propósito: son solo para la pantalla de reproducción (ver
+        activity_player.xml), que siempre tiene fondo negro sea cual sea el
+        modo elegido aquí, así que su texto siempre tiene que ser claro.
+    -->
+    <color name="background_dark">#F5F6FA</color>
+    <color name="surface_dark">#FFFFFF</color>
     <color name="primary">#FF6B4A</color>
     <color name="primary_variant">#E85A3A</color>
     <color name="on_primary">#FFFFFF</color>
-    <color name="on_background">#F5F5F7</color>
-    <color name="on_surface_muted">#9A9AB0</color>
+    <color name="on_background">#1A1B2E</color>
+    <color name="on_surface_muted">#6B6B80</color>
     <color name="favorite">#FFC857</color>
+
+    <!-- Solo para la pantalla de reproducción (ver nota de arriba): fijos,
+         no cambian con el modo claro/oscuro. -->
+    <color name="player_text">#F5F5F7</color>
+    <color name="player_text_muted">#9A9AB0</color>
+
+    <!-- Borde sutil de los botones de lista (ver bg_list_slot_button.xml):
+         en claro, un poco de negro sobre el botón blanco; en oscuro (ver
+         values-night) el blanco semitransparente de siempre. -->
+    <color name="list_slot_border">#1F000000</color>
 </resources>

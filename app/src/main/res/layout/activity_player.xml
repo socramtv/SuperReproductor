@@ -61,7 +61,7 @@
             android:gravity="center"
             android:maxLines="2"
             android:ellipsize="end"
-            android:textColor="@color/on_background"
+            android:textColor="@color/player_text"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -73,7 +73,7 @@
             android:gravity="center"
             android:maxLines="1"
             android:ellipsize="end"
-            android:textColor="@color/on_surface_muted"
+            android:textColor="@color/player_text_muted"
             android:textSize="14sp" />
 
     </LinearLayout>
@@ -163,7 +163,7 @@
             android:id="@+id/videoNowPlayingTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/on_background"
+            android:textColor="@color/player_text"
             android:textSize="16sp"
             android:textStyle="bold"
             android:maxLines="1"
@@ -174,7 +174,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:textColor="@color/on_surface_muted"
+            android:textColor="@color/player_text_muted"
             android:textSize="13sp"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -197,7 +197,7 @@
         android:background="#99000000"
         android:paddingHorizontal="20dp"
         android:paddingVertical="10dp"
-        android:textColor="@color/on_background"
+        android:textColor="@color/player_text"
         android:textSize="16sp"
         android:textStyle="bold"
         android:visibility="gone" />

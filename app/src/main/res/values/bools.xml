@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Iconos de la barra de estado del sistema (hora, batería...) oscuros
+         sobre el fondo claro del modo claro (ver themes.xml). En
+         values-night/bools.xml vale "false": en modo oscuro, iconos claros
+         como siempre. -->
+    <bool name="is_light_status_bar">true</bool>
+</resources>

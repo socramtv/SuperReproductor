@@ -15,4 +15,12 @@
         android:icon="@android:drawable/ic_menu_agenda"
         app:showAsAction="ifRoom" />
 
+    <!-- Icono/título reales los pone MainActivity.updateThemeMenuItem según
+         el modo actual (sol/luna); esto es solo el valor inicial. -->
+    <item
+        android:id="@+id/action_theme_toggle"
+        android:title="@string/action_switch_to_light"
+        android:icon="@drawable/ic_sun"
+        app:showAsAction="ifRoom" />
+
 </menu>

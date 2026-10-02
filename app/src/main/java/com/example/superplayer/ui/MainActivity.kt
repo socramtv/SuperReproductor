@@ -9,6 +9,7 @@ import android.view.View
 import androidx.appcompat.widget.SearchView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.superplayer.R
@@ -309,6 +310,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         })
+        updateThemeMenuItem(menu.findItem(R.id.action_theme_toggle))
         return true
     }
 
@@ -330,8 +332,39 @@ class MainActivity : AppCompatActivity() {
                 openEpgGrid()
                 true
             }
+            R.id.action_theme_toggle -> {
+                toggleTheme()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    /**
+     * Icono y texto del botón de claro/oscuro: describen a qué modo se
+     * cambiaría al tocarlo, no el modo actual, así que muestran lo
+     * contrario de cómo está la app ahora mismo.
+     */
+    private fun updateThemeMenuItem(item: MenuItem) {
+        val isDark = AppCompatDelegate.getDefaultNightMode() == AppCompatDelegate.MODE_NIGHT_YES
+        item.setIcon(if (isDark) R.drawable.ic_sun else R.drawable.ic_moon)
+        item.title = getString(if (isDark) R.string.action_switch_to_light else R.string.action_switch_to_dark)
+    }
+
+    /**
+     * Alterna el modo claro/oscuro de toda la app (se recuerda para la
+     * próxima vez, ver Storage.kt/AppPrefs.isDarkMode y
+     * SuperPlayerApp.onCreate). AppCompat recrea esta pantalla sola en
+     * cuanto cambia el modo por defecto, así que no hace falta llamar a
+     * recreate() ni refrescar nada más aquí: al volver a crearse,
+     * onCreateOptionsMenu ya calcula el icono/texto para el nuevo modo.
+     */
+    private fun toggleTheme() {
+        val goingDark = AppCompatDelegate.getDefaultNightMode() != AppCompatDelegate.MODE_NIGHT_YES
+        AppPrefs.setDarkMode(this, goingDark)
+        AppCompatDelegate.setDefaultNightMode(
+            if (goingDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+        )
     }
 
     /**

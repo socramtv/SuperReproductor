@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Modo OSCURO: ver la explicación completa en res/values/colors.xml.
+        Son exactamente los mismos colores que tenía la app desde siempre,
+        sin cambiar nada aquí -la app empezó siendo solo oscura, con estos
+        cuatro valores-; ahora conviven con la versión clara de
+        values/colors.xml, y Android elige solo cuál de las dos usar.
+    -->
+    <color name="background_dark">#0F1020</color>
+    <color name="surface_dark">#1A1B2E</color>
+    <color name="on_background">#F5F5F7</color>
+    <color name="on_surface_muted">#9A9AB0</color>
+    <color name="list_slot_border">#33FFFFFF</color>
+</resources>

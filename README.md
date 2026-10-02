@@ -486,6 +486,25 @@ reproducirse de verdad tras una reconexión, el cupo de reintentos se
 restablece del todo para la próxima vez que se corte. Cambiar de canal a
 mano, o salir del reproductor, cancela cualquier reintento pendiente.
 
+## Modo claro/oscuro
+
+El icono de sol/luna de la barra superior (en la pantalla principal)
+cambia el aspecto de toda la app entre claro y oscuro:
+
+- El icono muestra a qué modo se pasaría si lo tocas, no el modo actual:
+  una luna 🌙 cuando ahora está en claro (toca para pasar a oscuro), un sol
+  ☀️ cuando ahora está en oscuro (toca para pasar a claro).
+- Se recuerda: la próxima vez que abras la app, arranca directamente en el
+  modo que dejaste la última vez. Por defecto —la primera vez, o si
+  actualizas desde una versión anterior— sigue siendo oscuro, como ha sido
+  siempre la app hasta ahora.
+- Afecta a toda la app **excepto la pantalla de reproducción**, que sigue
+  siendo siempre negra con texto claro en los dos modos: para ver un vídeo
+  o escuchar la radio, un fondo oscuro es mejor en cualquier caso, así que
+  no tiene sentido que cambie con el resto.
+- Es independiente del modo claro/oscuro del propio teléfono: aquí se
+  elige a mano, sin seguir ningún ajuste del sistema.
+
 ## EPG (guía de programación)
 
 Si la lista trae guía EPG (`epgUrl`/`url-tvg` a nivel de lista y
@@ -600,8 +619,8 @@ segundo plano / pantalla de bloqueo, guía EPG opcional en XMLTV o JSON
 (programa actual en la lista de canales, vista de parrilla por horas, y
 como respaldo en la pantalla de radio), imagen en imagen y envío a
 Chromecast (ambos solo en móvil), reconexión automática para canales de
-vídeo, y gesto de volumen/brillo deslizando verticalmente (derecha/
-izquierda).
+vídeo, modo claro/oscuro, y gesto de volumen/brillo deslizando
+verticalmente (derecha/izquierda).
 
 ## Si la app se cierra sola
 
@@ -641,6 +660,10 @@ de un PC.
   propias o DRM ClearKey pueden no funcionar (ver la limitación explicada
   en la sección "Chromecast" de arriba): el receptor genérico de Google
   solo recibe la URL del stream, no esa configuración extra.
+- El modo claro se ha revisado leyendo el código de cada pantalla (colores
+  de fondo/texto/bordes), pero no se ha visto renderizado en un móvil real
+  todavía: si algún texto o borde se ve con poco contraste en alguna
+  pantalla, avisa para ajustarlo.
 
 ## Compilar sin PC (GitHub Actions)
 

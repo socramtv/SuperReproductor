@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Se muestra cuando la app está en modo OSCURO: tocarlo pasa a claro. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,12m-4,0a4,4 0 1,0 8,0a4,4 0 1,0 -8,0" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M17,12 L19.3,12 M15.54,15.54 L17.3,17.3 M12,17 L12,19.3 M8.46,15.54 L6.7,17.3 M7,12 L4.7,12 M8.46,8.46 L6.7,6.7 M12,7 L12,4.7 M15.54,8.46 L17.3,6.7" />
+</vector>

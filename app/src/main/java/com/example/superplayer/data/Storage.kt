@@ -36,6 +36,7 @@ class FavoritesStore(context: Context) {
 object AppPrefs {
     private const val PREFS_NAME = "app_prefs"
     private const val KEY_LAST_URI = "last_playlist_uri"
+    private const val KEY_DARK_MODE = "dark_mode"
 
     fun saveLastPlaylistUri(context: Context, uriString: String) {
         prefs(context).edit().putString(KEY_LAST_URI, uriString).apply()
@@ -49,6 +50,19 @@ object AppPrefs {
 
     fun saveListUrl(context: Context, slot: Int, url: String) {
         prefs(context).edit().putString("list_url_$slot", url).apply()
+    }
+
+    /**
+     * Modo claro/oscuro elegido a mano (ver MainActivity.toggleTheme): por
+     * defecto oscuro, que es como ha sido siempre la app hasta ahora, para
+     * que a quien ya la tenga instalada no le cambie el aspecto solo al
+     * actualizar.
+     */
+    fun isDarkMode(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DARK_MODE, true)
+
+    fun setDarkMode(context: Context, dark: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DARK_MODE, dark).apply()
     }
 
     private fun prefs(context: Context) =

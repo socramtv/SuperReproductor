@@ -16,6 +16,13 @@
          Cast, y aviso en pantalla mientras se está enviando. -->
     <string name="action_cast">Enviar a dispositivo</string>
     <string name="casting_to_device">Enviando a %1$s</string>
+
+    <!-- Alternar modo claro/oscuro (ver MainActivity.toggleTheme): el
+         icono y el texto cambian según el modo ACTUAL, describiendo a qué
+         modo se pasaría al tocarlo. -->
+    <string name="action_switch_to_light">Modo claro</string>
+    <string name="action_switch_to_dark">Modo oscuro</string>
+
     <string name="track_video">Vídeo</string>
     <string name="track_audio">Audio</string>
     <string name="track_subtitles">Subtítulos</string>
