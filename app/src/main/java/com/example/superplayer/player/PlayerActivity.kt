@@ -29,6 +29,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
@@ -42,6 +43,10 @@ import com.example.superplayer.R
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ActivityPlayerBinding
 import com.example.superplayer.model.Stream
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
 import com.google.common.util.concurrent.ListenableFuture
 import java.net.HttpURLConnection
 import java.net.URL
@@ -98,6 +103,29 @@ import java.net.URL
  * reintenta solo unas pocas veces con una espera creciente entre cada
  * una, y solo si se agotan los reintentos se avisa del error (ver
  * scheduleAutoReconnectOrShowError).
+ *
+ * Chromecast: el botón de "enviar" (castButton, arriba a la derecha, junto
+ * al de PiP) lo monta CastButtonFactory sobre un MediaRouteButton normal;
+ * la propia librería se encarga de buscar dispositivos y de mandar
+ * play/pausa/buscar al que se elija, porque PlaybackService publica un
+ * CastPlayer que envuelve el ExoPlayer local (ver su comentario) y esta
+ * pantalla sigue hablando con la MISMA MediaSession de siempre a través de
+ * su MediaController, sin enterarse de cuál de los dos hay detrás en cada
+ * momento. Lo único que sí hace falta llevar aquí a mano es la parte
+ * visual: mientras se esté enviando (ver registerCastSessionListener/
+ * onCastSessionChanged) no hay vídeo propio que pintar en el teléfono -el
+ * de verdad se ve en el Chromecast-, así que se reutiliza el mismo overlay
+ * negro de "radio" con un aviso de "Enviando a <dispositivo>", y el botón
+ * de PiP se oculta (no tiene sentido flotar una ventana sin vídeo propio).
+ * Oculto del todo en Android TV (igual que PiP: no tiene sentido "enviar"
+ * desde la propia TV) y si el dispositivo no tiene Google Play Services
+ * (ver isCastButtonUsable).
+ *
+ * LIMITACIÓN CONOCIDA (ver README): el Chromecast recibe la URL del canal
+ * directamente desde el receptor multimedia genérico de Google, sin pasar
+ * por StreamMediaSourceFactory; un canal con cabeceras HTTP propias
+ * (headers/Referer) o con DRM ClearKey puede no reproducirse ahí aunque
+ * funcione perfectamente en el reproductor local de esta app.
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : AppCompatActivity() {
@@ -125,6 +153,19 @@ class PlayerActivity : AppCompatActivity() {
     // Título dinámico ICY/ID3 (si el propio stream lo trae); se guarda aparte
     // del de EPG porque, cuando hay uno, siempre gana sobre el de la guía.
     private var lastDynamicTitle: String? = null
+
+    // -----------------------------------------------------------------
+    // Chromecast (ver el comentario de la clase, arriba, y PlaybackService):
+    // isCastButtonUsable se decide una vez en onCreate (false si el
+    // dispositivo no tiene Google Play Services o el framework de Cast no
+    // está bien montado: ver applyControlsVisibility, que oculta el botón
+    // del todo en ese caso). isCastingRemote/castDeviceName los mantiene al
+    // día registerCastSessionListener mientras la pantalla está visible.
+    // -----------------------------------------------------------------
+    private var isCastButtonUsable = false
+    private var isCastingRemote = false
+    private var castDeviceName: String? = null
+    private var castSessionManagerListener: SessionManagerListener<CastSession>? = null
 
     private val epgHandler = Handler(Looper.getMainLooper())
     private val epgRefreshRunnable = object : Runnable {
@@ -199,7 +240,7 @@ class PlayerActivity : AppCompatActivity() {
         override fun onTracksChanged(tracks: Tracks) {
             val hasVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.length > 0 }
             isCurrentStreamRadio = !hasVideo
-            binding.nowPlayingOverlay.visibility = if (isCurrentStreamRadio) View.VISIBLE else View.GONE
+            updateNowPlayingOverlayVisibility()
         }
 
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
@@ -421,6 +462,28 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /**
+     * Visibilidad de los botones/carteles que aparecen y desaparecen junto
+     * con los controles nativos de Media3 (llamada tanto desde el
+     * ControllerVisibilityListener de onCreate como desde
+     * onCastSessionChanged: empezar o acabar de enviar a un Chromecast
+     * puede cambiar qué debe verse sin que los controles hayan cambiado de
+     * visibilidad por su cuenta).
+     */
+    private fun applyControlsVisibility(visibility: Int) {
+        binding.trackSelectionButton.visibility = visibility
+        // En Android TV, o si el framework de Cast no está disponible en
+        // este dispositivo, el botón se queda oculto del todo (ver
+        // isCastButtonUsable).
+        binding.castButton.visibility = if (isTvDevice || !isCastButtonUsable) View.GONE else visibility
+        // PiP no tiene sentido para radio (ya suena en segundo plano sola),
+        // en Android TV (ver isTvDevice), ni mientras se envía a un
+        // Chromecast (no hay vídeo propio del teléfono que flotar: el de
+        // verdad se ve en el Chromecast).
+        binding.pipButton.visibility = if (isCurrentStreamRadio || isTvDevice || isCastingRemote) View.GONE else visibility
+        binding.videoNowPlayingBar.visibility = if (isCurrentStreamRadio || isCastingRemote) View.GONE else visibility
+    }
+
+    /**
      * Cambia al canal en `currentIndex + direction` dentro de channelList
      * (da la vuelta al llegar a un extremo: siguiente desde el último vuelve
      * al primero, y viceversa) y lo reproduce ahí mismo, sin recrear la
@@ -537,6 +600,26 @@ class PlayerActivity : AppCompatActivity() {
 
         binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
         binding.pipButton.setOnClickListener { maybeEnterPictureInPicture() }
+
+        // Chromecast: en Android TV ni se intenta montar el botón (no tiene
+        // sentido "enviar" desde la propia TV; ver el comentario de la
+        // clase). CastButtonFactory puede lanzar si el dispositivo no tiene
+        // Google Play Services o el framework de Cast no está bien montado
+        // -se captura para que, en ese caso, el resto de la pantalla
+        // funcione exactamente igual, solo sin esta opción (ver
+        // applyControlsVisibility, que oculta el botón del todo si
+        // isCastButtonUsable queda en false).
+        isCastButtonUsable = if (isTvDevice) {
+            false
+        } else {
+            try {
+                CastButtonFactory.setUpMediaRouteButton(this, binding.castButton)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
         binding.playerView.setControllerVisibilityListener(
             // Tipo explícito: PlayerView tiene dos overloads de este método
             // (el actual ControllerVisibilityListener y el antiguo, obsoleto,
@@ -544,18 +627,7 @@ class PlayerActivity : AppCompatActivity() {
             // un solo método con la misma forma (Int) -> Unit, así que una
             // lambda suelta es ambigua para el compilador ("overload
             // resolution ambiguity"); hay que decir cuál de las dos es.
-            PlayerView.ControllerVisibilityListener { visibility ->
-                binding.trackSelectionButton.visibility = visibility
-                // Para radio, el overlay de arriba ya se encarga (ver
-                // onTracksChanged): este botón y este cartel son solo para
-                // vídeo (la radio no necesita PiP, ya sigue sonando en
-                // segundo plano sola), y aparecen/desaparecen junto con los
-                // controles normales.
-                // En Android TV, además, el botón de PiP no se muestra
-                // nunca (ver isTvDevice/maybeEnterPictureInPicture).
-                binding.pipButton.visibility = if (isCurrentStreamRadio || isTvDevice) View.GONE else visibility
-                binding.videoNowPlayingBar.visibility = if (isCurrentStreamRadio) View.GONE else visibility
-            }
+            PlayerView.ControllerVisibilityListener { visibility -> applyControlsVisibility(visibility) }
         )
         binding.playerView.keepScreenOn = true
         binding.playerView.setOnTouchListener { _, event -> playerTapGestureDetector.onTouchEvent(event) }
@@ -598,6 +670,7 @@ class PlayerActivity : AppCompatActivity() {
             },
             ContextCompat.getMainExecutor(this)
         )
+        registerCastSessionListener()
     }
 
     // -----------------------------------------------------------------
@@ -617,6 +690,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        unregisterCastSessionListener()
         epgHandler.removeCallbacks(epgRefreshRunnable)
         cancelPendingReconnect()
         autoReconnectAttempts = 0
@@ -627,14 +701,16 @@ class PlayerActivity : AppCompatActivity() {
                 ctrl.stop()
                 ctrl.clearMediaItems()
                 playbackStarted = false
-            } else if (!isCurrentStreamRadio) {
+            } else if (!isCurrentStreamRadio && !isCastingRemote) {
                 // Vídeo/TV en segundo plano (bloqueo, Home...): igual que
                 // antes, se pausa (no tiene sentido gastar datos/batería
                 // decodificando vídeo que no se ve).
                 ctrl.pause()
             }
-            // Radio + no isFinishing (p. ej. se bloqueó la pantalla): se deja
-            // sonando; PlaybackService sigue vivo y controla la sesión.
+            // Radio, o enviando a un Chromecast, + no isFinishing (p. ej. se
+            // bloqueó la pantalla): se deja sonando/enviando; la reproducción
+            // (local o remota) es independiente de que esta pantalla esté en
+            // primer plano, igual que ya pasaba con la radio.
         }
         ctrl?.removeListener(playerListener)
         controllerFuture?.let { MediaController.releaseFuture(it) }
@@ -719,6 +795,7 @@ class PlayerActivity : AppCompatActivity() {
             // que un toque los vuelva a sacar mientras se está en PiP.
             binding.playerView.useController = false
             binding.trackSelectionButton.visibility = View.GONE
+            binding.castButton.visibility = View.GONE
             binding.pipButton.visibility = View.GONE
             binding.videoNowPlayingBar.visibility = View.GONE
         } else {
@@ -729,6 +806,79 @@ class PlayerActivity : AppCompatActivity() {
             binding.playerView.useController = true
             binding.playerView.showController()
         }
+    }
+
+    // -----------------------------------------------------------------
+    // Chromecast: CastButtonFactory (ver onCreate) ya se encarga solo de
+    // buscar dispositivos y de mandar los comandos de reproducción al sitio
+    // correcto (local o remoto, a través del CastPlayer que publica
+    // PlaybackService). Lo único que hace falta llevar aquí a mano es
+    // enterarse de CUÁNDO se empieza/acaba de enviar -para la parte visual
+    // de esta pantalla (ver applyControlsVisibility/
+    // updateNowPlayingOverlayVisibility)-, y eso se consigue con un
+    // SessionManagerListener clásico del SDK de Cast, no con el propio
+    // CastPlayer: así se puede leer el nombre del dispositivo
+    // (CastDevice.friendlyName) para el aviso en pantalla.
+    // -----------------------------------------------------------------
+
+    private fun registerCastSessionListener() {
+        if (!isCastButtonUsable) return
+        try {
+            val sessionManager = CastContext.getSharedInstance(this).sessionManager
+            val listener = object : SessionManagerListener<CastSession> {
+                override fun onSessionStarted(session: CastSession, sessionId: String) = onCastSessionChanged(session)
+                override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = onCastSessionChanged(session)
+                override fun onSessionEnded(session: CastSession, error: Int) = onCastSessionChanged(null)
+                override fun onSessionSuspended(session: CastSession, reason: Int) = onCastSessionChanged(null)
+                override fun onSessionStarting(session: CastSession) {}
+                override fun onSessionStartFailed(session: CastSession, error: Int) {}
+                override fun onSessionEnding(session: CastSession) {}
+                override fun onSessionResuming(session: CastSession, sessionId: String) {}
+                override fun onSessionResumeFailed(session: CastSession, error: Int) {}
+            }
+            sessionManager.addSessionManagerListener(listener, CastSession::class.java)
+            castSessionManagerListener = listener
+            // Por si ya había una sesión activa de antes (p. ej. se vuelve a
+            // esta pantalla con el móvil ya conectado a un Chromecast de una
+            // vez anterior): refleja el estado actual ya mismo, sin esperar
+            // a que cambie.
+            onCastSessionChanged(sessionManager.currentCastSession)
+        } catch (e: Exception) {
+            // Sin esto no hay ni Cast que listar (ver isCastButtonUsable,
+            // que ya habría evitado llegar aquí en la mayoría de los casos).
+        }
+    }
+
+    private fun unregisterCastSessionListener() {
+        val listener = castSessionManagerListener ?: return
+        castSessionManagerListener = null
+        try {
+            CastContext.getSharedInstance(this).sessionManager
+                .removeSessionManagerListener(listener, CastSession::class.java)
+        } catch (e: Exception) {
+            // Nada que limpiar si ni siquiera había Cast disponible.
+        }
+    }
+
+    private fun onCastSessionChanged(session: CastSession?) {
+        isCastingRemote = session?.isConnected == true
+        castDeviceName = session?.castDevice?.friendlyName
+        updateNowPlayingOverlayVisibility()
+        refreshNowPlayingDisplay()
+        applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
+    }
+
+    /**
+     * El overlay negro de "radio" (logo + texto centrado) también sirve
+     * para avisar de que se está enviando a un Chromecast: en los dos casos
+     * no hay vídeo propio que mostrar en esta pantalla (ver el comentario
+     * de la clase). El texto en sí lo decide refreshNowPlayingDisplay.
+     */
+    private fun updateNowPlayingOverlayVisibility() {
+        // El logo ya lo carga onCreate()/switchChannel() cada vez que
+        // cambia el canal; aquí solo hace falta decidir si el overlay se ve
+        // o no (el texto de dentro lo decide refreshNowPlayingDisplay).
+        binding.nowPlayingOverlay.visibility = if (isCurrentStreamRadio || isCastingRemote) View.VISIBLE else View.GONE
     }
 
     // -----------------------------------------------------------------
@@ -819,10 +969,36 @@ class PlayerActivity : AppCompatActivity() {
         pendingMediaItem = MediaItem.Builder()
             .setMediaId(stream.id)
             .setUri(stream.url)
+            .setMimeType(guessMimeTypeForCast(stream))
             .setMediaMetadata(metadata)
             .build()
 
         maybeStartPlayback()
+    }
+
+    /**
+     * Solo le interesa a Chromecast: el reproductor local resuelve el tipo
+     * real por su cuenta a partir de StreamMediaExtras (ver
+     * StreamMediaSourceFactory), pero el receptor multimedia genérico de
+     * Google necesita que el propio MediaItem declare el tipo de contenido
+     * para saber qué hacer con la URL en vez de adivinarlo. Misma lógica que
+     * ya usa StreamMediaSourceFactory a partir de stream.type (DASH/MPD,
+     * HLS/M3U8); si el canal no trae ese dato, se mira la extensión de la
+     * URL como última opción antes de dejarlo sin tipo declarado.
+     */
+    private fun guessMimeTypeForCast(stream: Stream): String? {
+        val explicit = when (stream.type.trim().uppercase()) {
+            "DASH", "MPD" -> MimeTypes.APPLICATION_MPD
+            "HLS", "M3U8" -> MimeTypes.APPLICATION_M3U8
+            else -> null
+        }
+        if (explicit != null) return explicit
+        val path = Uri.parse(stream.url).path.orEmpty().lowercase()
+        return when {
+            path.endsWith(".m3u8") -> MimeTypes.APPLICATION_M3U8
+            path.endsWith(".mpd") -> MimeTypes.APPLICATION_MPD
+            else -> null
+        }
     }
 
     // -----------------------------------------------------------------
@@ -838,6 +1014,19 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun refreshNowPlayingDisplay() {
         val stationName = currentStream?.name ?: getString(R.string.now_playing_fallback)
+
+        // Enviando a un Chromecast: no hay vídeo propio que mostrar en esta
+        // pantalla (el de verdad se ve en el Chromecast), así que este
+        // aviso gana sobre el "ahora suena"/EPG normal, para que quede
+        // claro que se está enviando y a dónde.
+        val castingTo = castDeviceName
+        if (isCastingRemote && castingTo != null) {
+            val castText = getString(R.string.casting_to_device, castingTo)
+            applyNowPlayingText(binding.nowPlayingTitle, binding.nowPlayingSubtitle, stationName, castText)
+            applyNowPlayingText(binding.videoNowPlayingTitle, binding.videoNowPlayingSubtitle, stationName, castText)
+            return
+        }
+
         val dynamic = lastDynamicTitle
         val epgTitle = EpgRepository.currentTitle(currentStream?.tvgId)
             ?.takeIf { !it.equals(stationName, ignoreCase = true) }

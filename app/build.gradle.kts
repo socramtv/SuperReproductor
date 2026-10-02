@@ -62,6 +62,16 @@ dependencies {
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
 
+    // Chromecast: "enviar" el canal actual a un Chromecast (o cualquier
+    // dispositivo compatible con Google Cast) usando el receptor
+    // multimedia genérico de Google, sin receptor propio (ver
+    // CastOptionsProviderImpl). media3-cast trae CastPlayer, que envuelve
+    // el ExoPlayer de PlaybackService para que la misma MediaSession sirva
+    // tanto en local como "enviada" (ver PlaybackService.onCreate).
+    implementation("androidx.media3:media3-cast:$media3Version")
+    implementation("com.google.android.gms:play-services-cast-framework:22.3.1")
+    implementation("androidx.mediarouter:mediarouter:1.2.5")
+
     // Carga de iconos/miniaturas desde URL
     implementation("io.coil-kt:coil:2.6.0")
 }

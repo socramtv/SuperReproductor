@@ -11,13 +11,18 @@
     <string name="player_error">Error de reproducción: %1$s</string>
     <string name="action_track_selection">Calidad de vídeo / audio</string>
     <string name="action_pip">Ver en ventana flotante</string>
+    <!-- Chromecast (ver PlayerActivity): botón para "enviar" el canal
+         actual a un Chromecast u otro dispositivo compatible con Google
+         Cast, y aviso en pantalla mientras se está enviando. -->
+    <string name="action_cast">Enviar a dispositivo</string>
+    <string name="casting_to_device">Enviando a %1$s</string>
     <string name="track_video">Vídeo</string>
     <string name="track_audio">Audio</string>
     <string name="track_subtitles">Subtítulos</string>
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Acestream</string>
+    <string name="list_slot_2">Lista 2</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>

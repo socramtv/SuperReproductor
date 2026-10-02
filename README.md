@@ -440,6 +440,39 @@ compensaba intentar arreglarlo fino. Se detecta si el dispositivo es una
 TV con la misma característica de Android que ya declara el manifiesto
 (`android.software.leanback`).
 
+## Chromecast
+
+Mientras se reproduce un canal (vídeo o radio), el botón de "enviar"
+(arriba a la derecha, junto al de imagen en imagen) deja mandarlo a un
+Chromecast o cualquier otro dispositivo compatible con Google Cast que
+esté en la misma red WiFi que el móvil:
+
+- El botón solo aparece cuando hay algún dispositivo de este tipo visible
+  en la red (lo gestiona él solo, sin comprobar nada a mano); si no hay
+  ninguno, o el propio móvil no tiene Google Play Services, se queda
+  oculto y la app sigue funcionando en local exactamente igual que
+  siempre.
+- Al tocarlo se abre el selector de dispositivos de Google; al elegir
+  uno, el canal que estuviera sonando pasa a reproducirse en el
+  Chromecast (play/pausa, barra de progreso... todo se sigue controlando
+  desde el móvil) y la pantalla del móvil muestra un aviso de "Enviando a
+  &lt;nombre del Chromecast&gt;" en vez del propio vídeo. Bloquear la
+  pantalla, salir de la app o cambiar a otra no corta el envío: solo
+  cambiar de canal o detener el envío desde el propio selector lo hace.
+- **En Android TV el botón no aparece**: un Android TV ya es, de por sí,
+  la pantalla grande a la que normalmente se envía algo desde el móvil,
+  así que no tiene sentido ahí.
+- **Limitación conocida**: el Chromecast recibe la URL del stream
+  directamente (a través del receptor multimedia genérico de Google, ya
+  que esta app no aloja uno propio), sin pasar por la lógica interna que
+  añade las cabeceras HTTP propias del canal (`headers`/`referer` del
+  JSON) o descifra el DRM ClearKey — eso solo lo sabe hacer el
+  reproductor local. Un canal de IPTV normal, por URL directa y sin esas
+  cosas (la gran mayoría), se envía sin problema; uno que sí las necesite
+  puede fallar al enviarlo aunque reproduzca perfectamente en el móvil.
+- No he podido probar esto en un Chromecast real —si algo no va como se
+  espera, avisa para revisarlo.
+
 ## Reconexión automática
 
 Si un canal de IPTV se corta del todo —no un simple parpadeo de red
@@ -551,8 +584,10 @@ app/src/main/java/com/example/superplayer/
   ui/       MainActivity (categorías + buscador), StreamListActivity,
             EpgGridActivity + EpgGridAdapter + EpgGridMath (parrilla EPG)
   player/   PlayerActivity (MediaController), PlaybackService (MediaSessionService
-            + ExoPlayer real), StreamMediaSourceFactory (DASH/HLS/progresivo +
-            DRM por canal), StreamMediaExtras, ClearKeyUtil
+            + ExoPlayer real, envuelto en CastPlayer para Chromecast),
+            StreamMediaSourceFactory (DASH/HLS/progresivo + DRM por canal),
+            StreamMediaExtras, ClearKeyUtil, CastOptionsProviderImpl
+            (configuración mínima de Chromecast)
 ```
 
 Funciones incluidas: categorías, buscador (filtra canales por nombre,
@@ -563,9 +598,10 @@ el propio dispositivo o desde una URL (con copia de respaldo sin conexión
 para las cinco listas remotas), radio con "ahora suena" + reproducción en
 segundo plano / pantalla de bloqueo, guía EPG opcional en XMLTV o JSON
 (programa actual en la lista de canales, vista de parrilla por horas, y
-como respaldo en la pantalla de radio), imagen en imagen (solo en móvil) y
-reconexión automática para canales de vídeo, y gesto de volumen/brillo
-deslizando verticalmente (derecha/izquierda).
+como respaldo en la pantalla de radio), imagen en imagen y envío a
+Chromecast (ambos solo en móvil), reconexión automática para canales de
+vídeo, y gesto de volumen/brillo deslizando verticalmente (derecha/
+izquierda).
 
 ## Si la app se cierra sola
 
@@ -601,6 +637,10 @@ de un PC.
   límite de antigüedad ni se borra sola: siempre es la última que se
   descargó bien, sin más gestión. Tampoco hay botón para borrarla a mano
   si alguna vez hiciera falta.
+- Al enviar un canal a un Chromecast, los que necesiten cabeceras HTTP
+  propias o DRM ClearKey pueden no funcionar (ver la limitación explicada
+  en la sección "Chromecast" de arriba): el receptor genérico de Google
+  solo recibe la URL del stream, no esa configuración extra.
 
 ## Compilar sin PC (GitHub Actions)
 

@@ -111,6 +111,18 @@
             </intent-filter>
         </service>
 
+        <!--
+            Chromecast (ver CastOptionsProviderImpl/PlaybackService/
+            PlayerActivity.castButton): el framework de Cast localiza esta
+            clase por reflexión a partir de este meta-data; aquí SÍ hace
+            falta el nombre completo del paquete (quien lo lee es esta
+            librería, no el propio Android, así que no vale el punto inicial
+            que sí usan las Activity de arriba).
+        -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.example.superplayer.player.CastOptionsProviderImpl" />
+
     </application>
 
 </manifest>

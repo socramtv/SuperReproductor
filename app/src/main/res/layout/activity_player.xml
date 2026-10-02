@@ -91,24 +91,51 @@
         android:contentDescription="@string/action_track_selection" />
 
     <!--
-        Entra en modo imagen-en-imagen a petición (ver maybeEnterPictureInPicture
-        en PlayerActivity). Además de este botón, salir de la app mientras un
+        Chromecast (ver PlayerActivity.isCastButtonUsable/onCastSessionChanged)
+        + PiP (ver maybeEnterPictureInPicture), agrupados arriba a la
+        derecha. MediaRouteButton es una vista especial del propio framework
+        de mediarouter/Cast -su icono cambia solo según busca/conecta/está
+        conectada-, por eso no es un ImageButton normal como su vecino, pero
+        acepta el mismo fondo circular y tinte blanco para quedar igual de
+        integrada. Empieza oculto (ver PlayerActivity.onCreate) y
+        CastButtonFactory lo muestra solo en cuanto aparece algún Chromecast
+        en la red; si el dispositivo no tiene Google Play Services, se queda
+        oculto del todo. Además del botón de PiP, salir de la app mientras un
         canal de vídeo está en reproducción (Inicio, cambiar de app) también
         entra en PiP solo, sin tener que tocar nada (ver onUserLeaveHint).
-        Oculto para canales de radio (ya siguen sonando en segundo plano sin
-        PiP) y se oculta junto al resto de controles.
+        Ambos se ocultan junto al resto de controles; PiP además se oculta
+        del todo para radio o mientras se está enviando a un Chromecast (ver
+        PlayerActivity.applyControlsVisibility).
     -->
-    <ImageButton
-        android:id="@+id/pipButton"
-        android:layout_width="46dp"
-        android:layout_height="46dp"
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_gravity="top|end"
         android:layout_margin="16dp"
-        android:padding="10dp"
-        android:background="@drawable/bg_round_button"
-        android:src="@drawable/ic_picture_in_picture"
-        android:tint="@android:color/white"
-        android:contentDescription="@string/action_pip" />
+        android:orientation="horizontal">
+
+        <androidx.mediarouter.app.MediaRouteButton
+            android:id="@+id/castButton"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:padding="10dp"
+            android:background="@drawable/bg_round_button"
+            android:visibility="gone"
+            app:mediaRouteButtonTint="@android:color/white"
+            android:contentDescription="@string/action_cast" />
+
+        <ImageButton
+            android:id="@+id/pipButton"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:layout_marginStart="8dp"
+            android:padding="10dp"
+            android:background="@drawable/bg_round_button"
+            android:src="@drawable/ic_picture_in_picture"
+            android:tint="@android:color/white"
+            android:contentDescription="@string/action_pip" />
+
+    </LinearLayout>
 
     <!--
         "Qué se está viendo" para canales de VÍDEO (la radio ya tiene su
