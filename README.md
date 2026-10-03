@@ -383,6 +383,23 @@ primera aproximación sin poder probarla en un dispositivo real; si al
 usarla el "centro" para mostrar/ocultar controles queda demasiado
 estrecho (o demasiado ancho) se puede ajustar.
 
+**Fallo corregido (solo se daba en Android TV):** al cambiar de canal con
+el mando, la barra de controles (el engranaje de ajustes, el icono de
+Chromecast y el cartel de "ahora suena" de arriba) a veces se quedaba en
+pantalla aunque el canal ya estuviera sonando/viéndose de verdad, en vez de
+ocultarse sola a los pocos segundos como de costumbre — antes solo se
+quitaba pausando y volviendo a dar a play a mano. Que aparezcan un momento
+al cambiar de canal es normal (el propio reproductor los saca solos con
+cada cambio de canal); lo que fallaba es que luego no se ocultaban solos.
+No se ha podido reproducir este fallo fuera de una TV real para dar con la
+causa exacta (lo más probable es algún aviso de cambio de estado que no le
+llega a tiempo al reproductor en ese tipo de dispositivo), así que el
+arreglo es una comprobación periódica de respaldo en vez de una corrección
+del origen: unos segundos después de cambiar de canal (más que de sobra
+para el tiempo normal que tardan en ocultarse solos), si detecta que el
+reproductor ya está reproduciendo de verdad mientras los controles siguen
+visibles, los oculta a mano. Avisa si lo sigues viendo.
+
 ### Avanzar/retroceder sin perder el cambio de canal
 
 Cambiar de canal es un **toque**; avanzar o retroceder el vídeo (en los

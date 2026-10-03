@@ -224,6 +224,74 @@ class PlayerActivity : AppCompatActivity() {
         reconnectHandler.postDelayed(runnable, delayMs)
     }
 
+    // -----------------------------------------------------------------
+    // Controles "pegados" tras cambiar de canal: visto solo en Android TV
+    // (en el móvil no pasa) -la barra de arriba (engranaje de ajustes,
+    // Chromecast) y el cartel de "ahora suena" se quedan en pantalla
+    // aunque el canal ya esté sonando/viéndose de verdad, en vez de
+    // ocultarse solos a los pocos segundos como de costumbre; antes solo
+    // se quitaban pausando y volviendo a dar a play a mano. Mostrarlos un
+    // momento al cambiar de canal es normal -PlayerView los saca solo con
+    // cada cambio de estado del reproductor (controllerAutoShow, de
+    // serie)-, lo que falla es que luego no se ocultan solos. No se ha
+    // podido reproducir este fallo en este entorno para dar con la causa
+    // exacta (lo más probable es algún aviso de cambio de estado que no le
+    // llega a tiempo a PlayerView en ese dispositivo en concreto), así que
+    // esto es una red de seguridad en vez de una corrección del origen:
+    // bastante después de cuando ya deberían haberse ocultado solos (ver
+    // STUCK_CONTROLS_FIRST_CHECK_DELAY_MS, por encima de los 5s de margen
+    // normales de Media3 sin tocar nada en activity_player.xml), comprueba
+    // si el reproductor ya está reproduciendo de verdad (isPlaying)
+    // mientras los controles siguen visibles, y si es así, los oculta a
+    // mano (hideController) en vez de esperar a que se ocurran ellos
+    // solos. De paso, misma idea con el círculo de carga (por si acaso):
+    // si se diera el caso de quedarse visible con el canal ya sonando,
+    // fuerza a PlayerView a releer el estado actual desde cero (soltarle
+    // el controller y devolvérselo). Si todo va bien (el caso normal, y
+    // siempre visto en el móvil), ninguno de los dos llega a actuar.
+    // -----------------------------------------------------------------
+    private val stuckControlsWatchdogHandler = Handler(Looper.getMainLooper())
+    private var stuckControlsWatchdogRunnable: Runnable? = null
+
+    private fun cancelStuckControlsWatchdog() {
+        stuckControlsWatchdogRunnable?.let { stuckControlsWatchdogHandler.removeCallbacks(it) }
+        stuckControlsWatchdogRunnable = null
+    }
+
+    private fun startStuckControlsWatchdog() {
+        cancelStuckControlsWatchdog()
+        var attempts = 0
+        val runnable = object : Runnable {
+            override fun run() {
+                attempts++
+                val ctrl = controller
+                if (ctrl != null && ctrl.isPlaying) {
+                    val controlsStuck = binding.playerView.isControllerFullyVisible
+                    val bufferingView = binding.playerView.findViewById<View?>(androidx.media3.ui.R.id.exo_buffering)
+                    val bufferingStuck = bufferingView != null && bufferingView.visibility == View.VISIBLE
+                    if (controlsStuck || bufferingStuck) {
+                        if (controlsStuck) {
+                            binding.playerView.hideController()
+                        }
+                        if (bufferingStuck) {
+                            binding.playerView.player = null
+                            binding.playerView.player = ctrl
+                        }
+                        stuckControlsWatchdogRunnable = null
+                        return
+                    }
+                }
+                if (attempts < STUCK_CONTROLS_MAX_ATTEMPTS) {
+                    stuckControlsWatchdogHandler.postDelayed(this, STUCK_CONTROLS_CHECK_INTERVAL_MS)
+                } else {
+                    stuckControlsWatchdogRunnable = null
+                }
+            }
+        }
+        stuckControlsWatchdogRunnable = runnable
+        stuckControlsWatchdogHandler.postDelayed(runnable, STUCK_CONTROLS_FIRST_CHECK_DELAY_MS)
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             scheduleAutoReconnectOrShowError(error)
@@ -500,6 +568,7 @@ class PlayerActivity : AppCompatActivity() {
         currentIndex = newIndex
 
         cancelPendingReconnect()
+        cancelStuckControlsWatchdog()
         autoReconnectAttempts = 0
         playbackStarted = false
         pendingMediaItem = null
@@ -709,6 +778,7 @@ class PlayerActivity : AppCompatActivity() {
         unregisterCastSessionListener()
         epgHandler.removeCallbacks(epgRefreshRunnable)
         cancelPendingReconnect()
+        cancelStuckControlsWatchdog()
         autoReconnectAttempts = 0
         val ctrl = controller
         if (ctrl != null) {
@@ -916,6 +986,7 @@ class PlayerActivity : AppCompatActivity() {
         ctrl.setMediaItem(item)
         ctrl.playWhenReady = true
         ctrl.prepare()
+        startStuckControlsWatchdog()
     }
 
     // -----------------------------------------------------------------
@@ -1136,6 +1207,16 @@ class PlayerActivity : AppCompatActivity() {
         // rendirse y mostrar el error es RECONNECT_DELAYS_MS.size (ver
         // scheduleAutoReconnectOrShowError).
         private val RECONNECT_DELAYS_MS = longArrayOf(2_000L, 5_000L, 10_000L)
+
+        // "¿Se han quedado pegados los controles tras cambiar de canal?"
+        // (ver startStuckControlsWatchdog): cuánto se espera antes de la
+        // primera comprobación (por encima del timeout de 5s de serie de
+        // Media3, para no pisar el aviso normal de controles al cambiar de
+        // canal), cada cuánto se repite si hace falta reintentar, y cuántas
+        // veces lo intenta antes de rendirse.
+        private const val STUCK_CONTROLS_FIRST_CHECK_DELAY_MS = 6_500L
+        private const val STUCK_CONTROLS_CHECK_INTERVAL_MS = 1_000L
+        private const val STUCK_CONTROLS_MAX_ATTEMPTS = 6
 
         // Imagen en imagen: relación de aspecto máxima/mínima que admite
         // Android (documentado por la propia PictureInPictureParams.Builder.
