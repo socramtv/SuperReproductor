@@ -12,4 +12,12 @@
     <dimen name="epg_channel_column_width">100dp</dimen>
     <dimen name="epg_row_height">56dp</dimen>
     <dimen name="epg_header_height">28dp</dimen>
+
+    <!-- Tope de alto del logo de cabecera de la portada (ver README, sección
+         "Logo de cabecera"): en el móvil, de sobra alto como para que nunca
+         llegue a aplicarse de verdad (es solo una red de seguridad); en TV
+         (values-television/dimens.xml) se reduce de verdad, porque ahí la
+         pantalla es mucho más ancha que alta y el logo a todo lo ancho
+         ocupaba demasiada altura. -->
+    <dimen name="header_logo_max_height">400dp</dimen>
 </resources>

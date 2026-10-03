@@ -804,6 +804,18 @@ ningún texto de título (el logo ya lleva el nombre dibujado).
   para no repetir cabecera por todas partes.
 - El fondo oscuro del logo es parte de la propia imagen (no es
   transparente), así que se ve igual en modo claro y en modo oscuro.
+- **En Android TV** se usa una segunda imagen, más apaisada, guardada
+  aparte en `app/src/main/res/drawable-television/header_logo.jpg` (mismo
+  nombre que la del móvil, `header_logo.jpg`, pero en una carpeta con el
+  calificador `-television`: Android elige sola cuál de las dos usar según
+  el tipo de dispositivo, sin ningún código de por medio). Hacía falta
+  porque en una TV la pantalla es mucho más ancha que alta, y el mismo
+  logo a todo lo ancho —pensado para la proporción de un móvil— ocupaba
+  muchísimo alto, media pantalla o más. Por si alguna TV en concreto aun
+  así necesitara más alto del que debe, el logo también lleva un tope de
+  alto (`android:maxHeight`, ver `values/dimens.xml` y
+  `values-television/dimens.xml`): en el móvil el tope es tan alto que
+  nunca llega a aplicarse de verdad, y en TV se queda en 100dp.
 
 ## Que aparezca en el menú principal de Android TV
 

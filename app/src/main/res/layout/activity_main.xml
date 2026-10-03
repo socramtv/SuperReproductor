@@ -13,13 +13,19 @@
          que es la foto de fondo (césped, camisetas blancas, escudos...) no
          hay un solo color de icono que se viera bien en todas las zonas, así
          que los iconos van en su propia barra sólida justo debajo, con
-         contraste garantizado siempre en vez de depender de qué haya debajo. -->
+         contraste garantizado siempre en vez de depender de qué haya debajo.
+         android:maxHeight (solo entra en juego si hiciera falta, ver
+         dimens.xml): en TV, drawable-television/header_logo.jpg ya es una
+         imagen más apaisada pensada para no ocupar tanto alto en una
+         pantalla mucho más ancha que alta; el tope es un segundo seguro por
+         si alguna TV en concreto aun así necesitara más alto del que debe. -->
     <ImageView
         android:id="@+id/headerLogo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/surface_dark"
         android:adjustViewBounds="true"
+        android:maxHeight="@dimen/header_logo_max_height"
         android:scaleType="fitCenter"
         android:src="@drawable/header_logo"
         android:contentDescription="@string/app_name" />

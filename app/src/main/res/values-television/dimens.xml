@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ver values/dimens.xml: en TV la pantalla es mucho más ancha que
+         alta, así que el mismo logo que en el móvil se queda en 70-90dp de
+         alto aquí podía salir muy alto a todo lo ancho. Con la imagen más
+         apaisada de drawable-television/header_logo.jpg ya no hace falta
+         casi nunca, pero se deja como tope por si alguna TV tiene una
+         pantalla lógica (dp) especialmente ancha. -->
+    <dimen name="header_logo_max_height">100dp</dimen>
+</resources>
