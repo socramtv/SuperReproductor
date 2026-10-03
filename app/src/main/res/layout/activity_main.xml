@@ -11,9 +11,25 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:minHeight="?attr/actionBarSize"
-        android:background="@color/surface_dark"
-        app:title="@string/app_name"
-        app:titleTextColor="@color/on_background" />
+        android:background="@color/surface_dark">
+
+        <!-- Logo de cabecera en vez del título de texto (ver README,
+             sección "Logo de cabecera"): alto fijo para que la barra
+             superior no crezca más allá de su tamaño estándar, ancho libre
+             (adjustViewBounds mantiene la proporción real de la imagen) y
+             centrado en el hueco libre entre el icono de navegación (si lo
+             hay) y los iconos de acción de la derecha. -->
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_gravity="center"
+            android:paddingVertical="6dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:src="@drawable/header_logo"
+            android:contentDescription="@string/app_name" />
+
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <LinearLayout
         android:layout_width="match_parent"

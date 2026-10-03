@@ -770,6 +770,31 @@ idealmente 512×512 o más) antes de compilar — si ya lo subiste a tu
 repositorio de GitHub en una entrega anterior, no hace falta volver a
 hacerlo: este zip no lo incluye ni lo borra.
 
+## Logo de cabecera
+
+En la pantalla principal (la "portada", donde se cargan las listas), la
+barra superior muestra el logo `header_logo.jpg`
+(`app/src/main/res/drawable/header_logo.jpg`) en vez del texto "Socram
+TV+ 🇳🇬 🇪🇸": se ve con su proporción real (nunca recortado ni estirado),
+centrado, con un alto fijo de 44dp (más 6dp de margen arriba y abajo) para
+que la barra no crezca más allá de su tamaño normal.
+
+- **Medidas**: sirve cualquier imagen apaisada (más ancha que alta) con
+  una proporción parecida a la actual — la que mandaste es de 2018×448 px
+  (proporción 4,5:1). No hace falta un tamaño exacto: con que sea apaisada
+  y de al menos unos 900-1000 px de ancho (para que no se vea borrosa en
+  pantallas de alta densidad) basta; yo la ajusto al tamaño final al
+  meterla en el proyecto. Esta la he guardado redimensionada a 1200×266 px
+  — de sobra para cómo se ve en pantalla, y bastante más ligera que el
+  original para no engordar la app sin necesidad.
+- Solo aparece en esta pantalla (la portada); las demás (categoría,
+  parrilla EPG, reproductor) no llevan logo, para no repetir cabecera por
+  todas partes.
+- El fondo oscuro del logo es parte de la propia imagen (no es
+  transparente), así que se ve igual en modo claro y en modo oscuro: un
+  recuadro con su propio fondo sobre la barra superior, en vez de mezclarse
+  con el color de fondo de la barra.
+
 ## Que aparezca en el menú principal de Android TV
 
 El launcher de Android TV (la pantalla de inicio con filas de apps) no
