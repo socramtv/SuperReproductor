@@ -43,6 +43,7 @@ import com.example.superplayer.R
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ActivityPlayerBinding
 import com.example.superplayer.model.Stream
+import com.example.superplayer.model.streamFromJson
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
@@ -574,7 +575,7 @@ class PlayerActivity : AppCompatActivity() {
         binding = ActivityPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val stream = pendingStream
+        val stream = pendingStream ?: readStreamFromShortcutIntent()
         if (stream == null) {
             Toast.makeText(this, getString(R.string.player_error, "canal no encontrado"), Toast.LENGTH_LONG).show()
             finish()
@@ -634,6 +635,21 @@ class PlayerActivity : AppCompatActivity() {
 
         ensureNotificationPermission()
         resolveAndPlay(stream)
+    }
+
+    /**
+     * Si esta pantalla se abrió desde un acceso directo del icono de la app
+     * (ver ShortcutsHelper) en vez de desde dentro de la propia app
+     * (MainActivity/StreamListActivity/EpgGridActivity, que rellenan
+     * pendingStream justo antes de abrir esta pantalla): el Stream completo
+     * viaja en el propio Intent, porque un acceso directo puede abrirse con
+     * el proceso recién arrancado, sin ninguna lista cargada todavía de la
+     * que sacarlo por id. null si esta pantalla no se abrió así (el Intent
+     * no trae ese extra), que es lo normal cuando sí hay pendingStream.
+     */
+    private fun readStreamFromShortcutIntent(): Stream? {
+        val json = intent.getStringExtra(ShortcutsHelper.EXTRA_SHORTCUT_STREAM_JSON) ?: return null
+        return streamFromJson(json)
     }
 
     /** Abre `stream.url` fuera de la app (YouTube, o el navegador si no está instalada) y cierra esta pantalla. */

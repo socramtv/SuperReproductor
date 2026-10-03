@@ -15,6 +15,7 @@ import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.databinding.ActivityStreamListBinding
 import com.example.superplayer.model.Stream
 import com.example.superplayer.player.PlayerActivity
+import com.example.superplayer.player.ShortcutsHelper
 
 /**
  * Muestra los canales de UNA categoría. Recibe la lista a través de
@@ -67,13 +68,17 @@ class StreamListActivity : AppCompatActivity() {
     }
 
     private fun toggleFavorite(stream: Stream) {
-        val nowFav = favoritesStore.toggle(stream.id)
+        val nowFav = favoritesStore.toggle(stream)
         Toast.makeText(
             this,
             getString(if (nowFav) R.string.added_to_favorites else R.string.removed_from_favorites),
             Toast.LENGTH_SHORT
         ).show()
         adapter.notifyDataSetChanged()
+        // También desde aquí, para que un favorito marcado/quitado dentro de
+        // una categoría (no solo desde la portada) actualice los accesos
+        // directos al momento (ver MainActivity.refreshShortcuts).
+        ShortcutsHelper.refresh(this, favoritesStore.getAllStreams())
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

@@ -1,5 +1,7 @@
 package com.example.superplayer.model
 
+import org.json.JSONObject
+
 /**
  * Esquema del JSON que lee esta app. Se acepta la raíz de dos formas:
  *
@@ -78,3 +80,81 @@ data class DrmInfo(
     val key: String? = null,
     val rawLicenseJson: String? = null
 )
+
+/**
+ * Serializa un Stream suelto a JSON (formato propio de esta app, nada que
+ * ver con el JSON de listas que lee PlaylistRepository): para guardar un
+ * favorito completo (ver FavoritesStore) y para que viaje dentro del
+ * Intent de un acceso directo del icono de la app (ver
+ * player/ShortcutsHelper.kt). Un acceso directo puede abrirse con el
+ * proceso recién arrancado, sin ninguna lista cargada todavía de la que
+ * sacar ese canal por id, así que tiene que traer todos sus datos él
+ * mismo -incluidas las cabeceras HTTP o el DRM propios del canal, si los
+ * tiene, para que reproduzca igual que abierto desde dentro de la app.
+ */
+fun Stream.toJson(): String {
+    val obj = JSONObject()
+    obj.put("name", name)
+    obj.put("type", type)
+    obj.put("url", url)
+    if (icon != null) obj.put("icon", icon)
+    obj.put("category", category)
+    if (headers.isNotEmpty()) {
+        val headersObj = JSONObject()
+        for ((key, value) in headers) headersObj.put(key, value)
+        obj.put("headers", headersObj)
+    }
+    val drmValue = drm
+    if (drmValue != null) {
+        val drmObj = JSONObject()
+        if (drmValue.keyId != null) drmObj.put("keyId", drmValue.keyId)
+        if (drmValue.key != null) drmObj.put("key", drmValue.key)
+        if (drmValue.rawLicenseJson != null) drmObj.put("rawLicenseJson", drmValue.rawLicenseJson)
+        obj.put("drm", drmObj)
+    }
+    if (tokenUrl != null) obj.put("tokenUrl", tokenUrl)
+    if (tvgId != null) obj.put("tvgId", tvgId)
+    return obj.toString()
+}
+
+/** El Stream que guardó [Stream.toJson], o null si [json] no es válido (nunca debería pasar con lo que guarda esta misma app, pero por si acaso). */
+fun streamFromJson(json: String): Stream? {
+    return try {
+        val obj = JSONObject(json)
+        val headers = mutableMapOf<String, String>()
+        obj.optJSONObject("headers")?.let { headersObj ->
+            val keys = headersObj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                headers[key] = headersObj.optString(key)
+            }
+        }
+        val drmObj = obj.optJSONObject("drm")
+        val drm = if (drmObj != null) {
+            DrmInfo(
+                keyId = drmObj.optStringOrNull("keyId"),
+                key = drmObj.optStringOrNull("key"),
+                rawLicenseJson = drmObj.optStringOrNull("rawLicenseJson")
+            )
+        } else null
+        Stream(
+            name = obj.getString("name"),
+            type = obj.optString("type", ""),
+            url = obj.getString("url"),
+            icon = obj.optStringOrNull("icon"),
+            category = obj.optString("category", ""),
+            headers = headers,
+            drm = drm,
+            tokenUrl = obj.optStringOrNull("tokenUrl"),
+            tvgId = obj.optStringOrNull("tvgId")
+        )
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/** Como JSONObject.optString, pero un valor JSON null explícito (o ausente) da null en vez del texto "null"/"". */
+private fun JSONObject.optStringOrNull(key: String): String? {
+    if (isNull(key)) return null
+    return optString(key).takeIf { it.isNotBlank() }
+}

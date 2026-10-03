@@ -44,7 +44,8 @@ class EpgGridAdapter(
     private val densityProvider: () -> Float,
     private val onRowScrollAttached: (HorizontalScrollView) -> Unit,
     private val onRowScrollDetached: (HorizontalScrollView) -> Unit,
-    private val onChannelClick: (Stream) -> Unit
+    private val onChannelClick: (Stream) -> Unit,
+    private val onCellClick: (EpgGridMath.Cell) -> Unit
 ) : RecyclerView.Adapter<EpgGridAdapter.ViewHolder>() {
 
     var searchQuery: String = ""
@@ -135,6 +136,10 @@ class EpgGridAdapter(
                             else -> R.drawable.bg_epg_cell
                         }
                     )
+                    // Solo las celdas CON programa abren el diálogo de
+                    // detalles (ver EpgGridActivity.showProgrammeDetails):
+                    // un hueco sin datos de guía no tiene nada que mostrar.
+                    setOnClickListener { onCellClick(cell) }
                 } else {
                     text = ""
                     background = ContextCompat.getDrawable(context, R.drawable.bg_epg_cell_empty)

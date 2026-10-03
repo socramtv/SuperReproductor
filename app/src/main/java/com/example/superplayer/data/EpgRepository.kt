@@ -38,7 +38,12 @@ import org.xmlpull.v1.XmlPullParser
  */
 object EpgRepository {
 
-    private data class Programme(val startMillis: Long, val stopMillis: Long, val title: String)
+    private data class Programme(
+        val startMillis: Long,
+        val stopMillis: Long,
+        val title: String,
+        val iconUrl: String? = null
+    )
 
     @Volatile private var loadedUrl: String? = null
     @Volatile private var loading = false
@@ -77,8 +82,14 @@ object EpgRepository {
         return null
     }
 
-    /** Un tramo de programación ya resuelto para pintar en pantalla (título + horario). */
-    data class EpgEntry(val title: String, val startMillis: Long, val stopMillis: Long)
+    /**
+     * Un tramo de programación ya resuelto para pintar en pantalla (título +
+     * horario). [iconUrl] es el póster del programa si el XMLTV trae un
+     * <icon src="..."> para ese <programme> (ver parseXmlTv); null si no
+     * trae, o si la guía viene en el otro formato admitido (JSON de listas
+     * tipo tdtchannels.com, que no documenta nada de icono por programa).
+     */
+    data class EpgEntry(val title: String, val startMillis: Long, val stopMillis: Long, val iconUrl: String? = null)
 
     /** "Ahora", "Después" y "Esta noche" de un canal, para la lista de canales (ver [schedule]). */
     data class EpgSchedule(val now: EpgEntry?, val next: EpgEntry?, val tonight: EpgEntry?)
@@ -145,7 +156,8 @@ object EpgRepository {
                 EpgEntry(
                     title = it.title,
                     startMillis = it.startMillis.coerceAtLeast(fromMillis),
-                    stopMillis = it.stopMillis.coerceAtMost(toMillis)
+                    stopMillis = it.stopMillis.coerceAtMost(toMillis),
+                    iconUrl = it.iconUrl
                 )
             }
     }
@@ -182,7 +194,7 @@ object EpgRepository {
         return if (min <= max) min to max else null
     }
 
-    private fun Programme.toEntry() = EpgEntry(title, startMillis, stopMillis)
+    private fun Programme.toEntry() = EpgEntry(title, startMillis, stopMillis, iconUrl)
 
     /** Instante "22:00 de hoy", entendiendo "hoy" como día de emisión (ver [schedule]). */
     private fun tonightAnchorMillis(nowMillis: Long): Long {
@@ -262,6 +274,7 @@ object EpgRepository {
         var start = -1L
         var stop = -1L
         var title: String? = null
+        var iconUrl: String? = null
 
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT) {
@@ -273,8 +286,17 @@ object EpgRepository {
                         start = parseXmlTvDate(parser.getAttributeValue(null, "start"))
                         stop = parseXmlTvDate(parser.getAttributeValue(null, "stop"))
                         title = null
+                        iconUrl = null
                     }
                     "title" -> if (inProgramme) inTitle = true
+                    // <icon src="..."/> va suelta (sin texto dentro, solo el
+                    // atributo): a diferencia de <title>, no hace falta
+                    // mirar su cierre ni su TEXT, con el START_TAG ya está
+                    // todo lo que trae. Si un programa trajera más de una
+                    // (no debería), se queda con la primera.
+                    "icon" -> if (inProgramme && iconUrl == null) {
+                        iconUrl = parser.getAttributeValue(null, "src")?.trim()?.takeIf { it.isNotBlank() }
+                    }
                 }
                 XmlPullParser.TEXT -> if (inProgramme && inTitle && title == null) {
                     val text = parser.text?.trim()
@@ -286,12 +308,13 @@ object EpgRepository {
                         val ch = channel
                         val t = title
                         if (!ch.isNullOrBlank() && !t.isNullOrBlank() && start > 0 && stop > start) {
-                            result.getOrPut(ch) { mutableListOf() }.add(Programme(start, stop, t))
+                            result.getOrPut(ch) { mutableListOf() }.add(Programme(start, stop, t, iconUrl))
                         }
                         inProgramme = false
                         inTitle = false
                         channel = null
                         title = null
+                        iconUrl = null
                         start = -1L
                         stop = -1L
                     }

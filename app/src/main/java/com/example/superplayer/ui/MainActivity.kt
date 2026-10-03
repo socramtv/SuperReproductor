@@ -23,6 +23,7 @@ import com.example.superplayer.model.Category
 import com.example.superplayer.model.PlaylistData
 import com.example.superplayer.model.Stream
 import com.example.superplayer.player.PlayerActivity
+import com.example.superplayer.player.ShortcutsHelper
 
 class MainActivity : AppCompatActivity() {
 
@@ -253,6 +254,17 @@ class MainActivity : AppCompatActivity() {
         // Sin bloquear nada: si esta lista trae guía EPG (o ya la teníamos
         // cargada de antes), se descarga/parsea sola en segundo plano.
         EpgRepository.load(data.epgUrl)
+        // Por si algún favorito cambió de logo/url desde la última vez, o se
+        // marcó antes de que existiera esto (ver FavoritesStore); barato,
+        // así que no pasa nada por hacerlo en cada carga de lista.
+        val allStreams = data.categories.flatMap { it.streams }
+        favoritesStore.refreshStoredStreams(allStreams)
+        refreshShortcuts()
+    }
+
+    /** Vuelve a publicar los accesos directos del icono de la app a partir de los favoritos actuales (ver ShortcutsHelper). */
+    private fun refreshShortcuts() {
+        ShortcutsHelper.refresh(this, favoritesStore.getAllStreams())
     }
 
     private fun buildCategoryListWithFavorites(): List<Category> {
@@ -280,7 +292,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleFavorite(stream: Stream) {
-        val nowFav = favoritesStore.toggle(stream.id)
+        val nowFav = favoritesStore.toggle(stream)
         Toast.makeText(
             this,
             getString(if (nowFav) R.string.added_to_favorites else R.string.removed_from_favorites),
@@ -288,6 +300,7 @@ class MainActivity : AppCompatActivity() {
         ).show()
         categoryAdapter.submit(buildCategoryListWithFavorites())
         streamAdapter.notifyDataSetChanged()
+        refreshShortcuts()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

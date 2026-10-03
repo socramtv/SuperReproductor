@@ -1,9 +1,22 @@
 package com.example.superplayer.data
 
 import android.content.Context
+import com.example.superplayer.model.Stream
+import com.example.superplayer.model.streamFromJson
+import com.example.superplayer.model.toJson
 import java.io.File
 
-/** Favoritos guardados localmente en SharedPreferences (identificados por URL del stream). */
+/**
+ * Favoritos guardados localmente en SharedPreferences, identificados por
+ * URL del stream (ver Stream.id). Además del conjunto de ids de siempre
+ * (para isFavorite/getAll, usados para la categoría "⭐ Favoritos" de la
+ * lista de canales, que ya filtra la lista ACTUALMENTE cargada por id),
+ * guarda el Stream COMPLETO de cada uno (ver Stream.toJson): lo necesitan
+ * los accesos directos del icono de la app (ver player/ShortcutsHelper.kt
+ * y MainActivity.refreshShortcuts), que tienen que poder abrir un canal
+ * favorito aunque el proceso acabe de arrancar y todavía no haya ninguna
+ * lista cargada de la que sacarlo por id.
+ */
 class FavoritesStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("favorites", Context.MODE_PRIVATE)
@@ -12,20 +25,54 @@ class FavoritesStore(context: Context) {
         prefs.getStringSet(KEY_IDS, emptySet())?.contains(streamId) == true
 
     /** Cambia el estado de favorito y devuelve el nuevo valor (true = ahora es favorito). */
-    fun toggle(streamId: String): Boolean {
+    fun toggle(stream: Stream): Boolean {
         val current = HashSet(prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet())
-        val nowFavorite = if (current.contains(streamId)) {
-            current.remove(streamId)
+        val editor = prefs.edit()
+        val nowFavorite = if (current.contains(stream.id)) {
+            current.remove(stream.id)
+            editor.remove(jsonKey(stream.id))
             false
         } else {
-            current.add(streamId)
+            current.add(stream.id)
+            editor.putString(jsonKey(stream.id), stream.toJson())
             true
         }
-        prefs.edit().putStringSet(KEY_IDS, current).apply()
+        editor.putStringSet(KEY_IDS, current).apply()
         return nowFavorite
     }
 
     fun getAll(): Set<String> = prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet()
+
+    /** Los Stream completos de los favoritos que sí tienen datos guardados (ver refreshStoredStreams), para los accesos directos. */
+    fun getAllStreams(): List<Stream> {
+        val ids = prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet()
+        return ids.mapNotNull { id -> prefs.getString(jsonKey(id), null)?.let { streamFromJson(it) } }
+    }
+
+    /**
+     * Actualiza el Stream guardado de cada favorito que también esté en
+     * [streams] (la lista recién cargada): por si cambió algo del canal
+     * (logo, url, cabeceras...) desde la última vez, o por si se marcó
+     * como favorito antes de que existiera esto y todavía no tenía nada
+     * guardado. Los favoritos que no estén en ESTA lista en concreto
+     * (están en otra de tus 5 listas) se dejan tal cual: solo toggle()
+     * los añade o quita de verdad.
+     */
+    fun refreshStoredStreams(streams: List<Stream>) {
+        val ids = prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet()
+        if (ids.isEmpty()) return
+        val byId = streams.associateBy { it.id }
+        val editor = prefs.edit()
+        var changed = false
+        for (id in ids) {
+            val stream = byId[id] ?: continue
+            editor.putString(jsonKey(id), stream.toJson())
+            changed = true
+        }
+        if (changed) editor.apply()
+    }
+
+    private fun jsonKey(streamId: String) = "fav_json_$streamId"
 
     companion object {
         private const val KEY_IDS = "favorite_ids"

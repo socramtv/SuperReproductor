@@ -282,6 +282,31 @@ depender de acertar exactamente en el icono pequeño. En el móvil no cambia
 nada: tocar el corazón sigue siendo lo normal (mantener pulsada la fila
 también funciona ahí, por si lo prefieres).
 
+### Accesos directos manteniendo pulsado el icono de la app
+
+Si tu lanzador lo admite (la mayoría desde Android 7.1), mantener pulsado
+el icono de Socram TV+ en la pantalla de inicio muestra un menú con hasta
+4 de tus canales favoritos (los primeros 4 por orden dentro de "⭐
+Favoritos"); tocar uno abre directamente su reproductor, sin pasar por la
+pantalla principal — incluso si la app no estaba abierta en segundo plano
+(arranque en frío).
+
+- Se actualizan solos al cargar una lista o marcar/desmarcar un favorito:
+  no hace falta tocar nada a mano para refrescarlos.
+- Sin ningún favorito marcado, ese menú no aparece (o aparece vacío,
+  según el lanzador).
+- El icono de cada acceso directo es siempre la misma estrella dorada de
+  "favorito" de la app, no el logo del canal: así no depende de tener ya
+  descargada la imagen del canal, ni de haber conexión en ese momento.
+- Para que funcionen incluso tras un arranque en frío, los datos
+  completos de cada canal favorito (nombre, URL, cabeceras, DRM si
+  tiene...) se guardan junto con el favorito, no solo su identificador —
+  así el acceso directo no depende de que ninguna lista esté cargada
+  todavía.
+- No he podido probar esto en un dispositivo real —si el menú no aparece
+  al mantener pulsado el icono, o un acceso directo no abre el canal
+  correctamente, avisa para revisarlo.
+
 ## Radio, "ahora suena" y reproducción en segundo plano
 
 No hace falta marcar nada especial en el JSON/M3U para que un canal se
@@ -574,11 +599,21 @@ dentro de su celda correspondiente.
   momento). Al escribir, la parrilla se queda solo con los canales que
   coincidan; el nombre de cualquiera de ellos se pinta en dorado, tenga o
   no un programa suyo visible ahora mismo en pantalla. Si la coincidencia
-  SÍ cae dentro de la franja de horas actual, además se resalta esa celda
-  en concreto con un borde dorado, para encontrarla de un vistazo. La
-  búsqueda **no mueve sola** la franja de horas hasta la coincidencia: si
-  un canal sale en dorado pero no ves ninguna celda resaltada, desplaza la
-  franja con los botones de arriba hasta encontrarla.
+  de título cae fuera de la franja de horas actual, la franja **salta
+  sola** hasta ella (al tramo en emisión o al más próximo a "ahora" entre
+  los que coincidan; si todos ya terminaron, al más reciente de esos), y
+  además se resalta esa celda en concreto con un borde dorado para
+  encontrarla de un vistazo. Una coincidencia solo por nombre de canal
+  (sin ningún programa suyo que coincida) no mueve la franja, porque no
+  hay un horario concreto al que saltar.
+- Tocar una celda **con programa** (un hueco en blanco no tiene nada que
+  mostrar) abre un diálogo con su horario completo y, si la guía XMLTV de
+  esa lista incluye una imagen propia de ese programa (etiqueta `<icon>`
+  dentro de `<programme>` en el XML), también su póster. No todas las
+  guías XMLTV traen esa etiqueta —depende de quien la publique—, y la
+  guía JSON de listas tipo tdtchannels.com nunca trae imagen por programa
+  (solo el logo del canal, que ya se ve en la propia lista): en esos casos
+  el diálogo se queda solo con el horario, sin póster.
 - Si la lista no trae guía EPG, o todavía se está descargando, o ningún
   canal tiene coincidencia (de guía, o de una búsqueda en curso), se
   muestra un aviso en vez de una parrilla vacía — puede hacer falta volver
@@ -587,10 +622,10 @@ dentro de su celda correspondiente.
 
 **En Android TV**, el mando mueve el foco entre canales (arriba/abajo) y
 hasta los tres botones de franja horaria con normalidad; las celdas de
-programa en sí son solo visuales en esta primera versión (no se pueden
-seleccionar una por una con el mando todavía). No he podido probar esta
-pantalla en una TV real —si el mando se comporta raro aquí, avisa para
-revisarlo.
+programa aceptan el toque/clic (para abrir el diálogo de detalles/póster
+de arriba) pero no se pueden seleccionar una por una ni enfocar con el
+mando todavía. No he podido probar esta pantalla en una TV real —si el
+mando se comporta raro aquí, avisa para revisarlo.
 
 ## Estructura
 
@@ -606,20 +641,23 @@ app/src/main/java/com/example/superplayer/
             + ExoPlayer real, envuelto en CastPlayer para Chromecast),
             StreamMediaSourceFactory (DASH/HLS/progresivo + DRM por canal),
             StreamMediaExtras, ClearKeyUtil, CastOptionsProviderImpl
-            (configuración mínima de Chromecast)
+            (configuración mínima de Chromecast), ShortcutsHelper (accesos
+            directos de favoritos en el lanzador)
 ```
 
 Funciones incluidas: categorías, buscador (filtra canales por nombre,
 tanto en la portada como dentro de una categoría), favoritos persistentes
-(categoría "⭐ Favoritos" arriba de todo cuando hay alguno), carga de
+(categoría "⭐ Favoritos" arriba de todo cuando hay alguno, con accesos
+directos del lanzador manteniendo pulsado el icono de la app), carga de
 JSON (propio, "exolist" o listas públicas tipo tdtchannels.com)/M3U desde
 el propio dispositivo o desde una URL (con copia de respaldo sin conexión
 para las cinco listas remotas), radio con "ahora suena" + reproducción en
 segundo plano / pantalla de bloqueo, guía EPG opcional en XMLTV o JSON
-(programa actual en la lista de canales, vista de parrilla por horas, y
-como respaldo en la pantalla de radio), imagen en imagen y envío a
-Chromecast (ambos solo en móvil), reconexión automática para canales de
-vídeo, modo claro/oscuro, y gesto de volumen/brillo deslizando
+(programa actual en la lista de canales, vista de parrilla por horas con
+salto automático a la franja de una búsqueda y póster del programa si la
+guía lo trae, y como respaldo en la pantalla de radio), imagen en imagen y
+envío a Chromecast (ambos solo en móvil), reconexión automática para
+canales de vídeo, modo claro/oscuro, y gesto de volumen/brillo deslizando
 verticalmente (derecha/izquierda).
 
 ## Si la app se cierra sola
@@ -660,6 +698,16 @@ de un PC.
   propias o DRM ClearKey pueden no funcionar (ver la limitación explicada
   en la sección "Chromecast" de arriba): el receptor genérico de Google
   solo recibe la URL del stream, no esa configuración extra.
+- El póster del diálogo de la parrilla EPG depende de que la guía XMLTV de
+  esa lista incluya `<icon>` por programa: no todas las guías lo traen, y
+  la guía JSON de listas tipo tdtchannels.com nunca lo trae (solo logo de
+  canal). Sin esa etiqueta, el diálogo se queda solo con el horario.
+- Los accesos directos de favoritos (mantener pulsado el icono de la app)
+  no se han probado en un dispositivo real: en teoría deberían abrir el
+  reproductor directamente aunque la app esté totalmente cerrada, pero si
+  el lanzador no los muestra, o uno de ellos no abre el canal
+  correctamente, avisa para revisarlo. El icono de cada acceso directo es
+  siempre la estrella dorada genérica, no el logo del canal.
 - El modo claro se ha revisado leyendo el código de cada pantalla (colores
   de fondo/texto/bordes), pero no se ha visto renderizado en un móvil real
   todavía: si algún texto o borde se ve con poco contraste en alguna

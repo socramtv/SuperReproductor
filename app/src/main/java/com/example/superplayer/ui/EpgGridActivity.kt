@@ -7,6 +7,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -14,6 +15,7 @@ import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
+import coil.load
 import com.example.superplayer.R
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ActivityEpgGridBinding
@@ -50,10 +52,17 @@ import java.util.Locale
  * entre el nombre de los canales y el título de su programación, en TODA
  * la guía ya descargada (no solo en la franja de 3 horas visible en ese
  * momento): un canal con una coincidencia fuera de la ventana actual sigue
- * apareciendo en la lista filtrada, y su nombre se pinta en dorado como
- * pista de que hay que mover la franja (botones de arriba) para encontrarla;
- * si la coincidencia SÍ está dentro de la ventana visible, además se resalta
- * esa celda en concreto.
+ * apareciendo en la lista filtrada, y su nombre se pinta en dorado. Si la
+ * coincidencia es de TÍTULO de programa (no solo de nombre de canal, que
+ * no tiene un instante propio) y cae fuera de la franja visible, la franja
+ * se mueve sola hasta ahí (ver jumpToSearchMatchIfNeeded); si ya se ve
+ * dentro de la franja actual, en vez de moverla se resalta esa celda en
+ * concreto.
+ *
+ * Tocar una celda CON programa abre un diálogo con su título completo (las
+ * celdas lo recortan a dos líneas), su horario y -si la guía XMLTV trae un
+ * <icon> para ese programa- su póster (ver showProgrammeDetails); las
+ * celdas vacías (sin datos de guía) no hacen nada al tocarlas.
  */
 class EpgGridActivity : AppCompatActivity() {
 
@@ -105,7 +114,8 @@ class EpgGridActivity : AppCompatActivity() {
             densityProvider = { resources.displayMetrics.density },
             onRowScrollAttached = { registerSyncedScroll(it) },
             onRowScrollDetached = { unregisterSyncedScroll(it) },
-            onChannelClick = { openPlayer(it) }
+            onChannelClick = { openPlayer(it) },
+            onCellClick = { showProgrammeDetails(it) }
         )
         binding.channelsRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.channelsRecyclerView.adapter = adapter
@@ -256,6 +266,75 @@ class EpgGridActivity : AppCompatActivity() {
         } else {
             binding.emptyView.visibility = View.GONE
         }
+        jumpToSearchMatchIfNeeded(query, filtered)
+    }
+
+    /**
+     * Si la búsqueda tiene una coincidencia de TÍTULO de programa (no solo
+     * de nombre de canal, que no tiene un instante propio al que saltar)
+     * fuera de la franja horaria visible ahora mismo, mueve la franja sola
+     * hasta ahí (ver EpgGridMath.bestSearchJumpTarget) en vez de dejar que
+     * haya que encontrarla a mano con los botones "◀ 3 h"/"3 h ▶" de
+     * arriba. Si la coincidencia ya se ve en la franja actual, o no hay
+     * ninguna coincidencia de título, no toca la franja para nada.
+     */
+    private fun jumpToSearchMatchIfNeeded(query: String, filtered: List<Stream>) {
+        if (query.isBlank()) return
+        val entries = filtered.flatMap { EpgRepository.allEntries(it.tvgId) }
+        val target = EpgGridMath.bestSearchJumpTarget(entries, query, System.currentTimeMillis()) ?: return
+        val windowEnd = windowStart + EpgGridMath.WINDOW_MILLIS
+        if (target >= windowStart && target < windowEnd) return // ya se ve, no hace falta moverla
+        windowStart = EpgGridMath.clampWindowStart(EpgGridMath.roundDownToHour(target), dataStart, dataEnd)
+        renderWindow()
+    }
+
+    /**
+     * Diálogo con los detalles de un programa de la parrilla al tocar su
+     * celda (ver EpgGridAdapter.onCellClick): título completo (las celdas
+     * lo recortan a dos líneas), horario y -si la guía XMLTV trae un
+     * <icon> para ese programa (ver EpgRepository.parseXmlTv)- su póster.
+     * Las celdas vacías (sin programa) no llaman a esto.
+     */
+    private fun showProgrammeDetails(cell: EpgGridMath.Cell) {
+        val entry = cell.entry ?: return
+        val density = resources.displayMetrics.density
+        val sidePad = (24 * density).toInt()
+        val topPad = (16 * density).toInt()
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(sidePad, topPad, sidePad, 0)
+        }
+
+        if (!entry.iconUrl.isNullOrBlank()) {
+            val posterHeightPx = (170 * density).toInt()
+            val posterMarginPx = (12 * density).toInt()
+            val poster = ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, posterHeightPx).apply {
+                    bottomMargin = posterMarginPx
+                }
+                scaleType = ImageView.ScaleType.CENTER_CROP
+            }
+            poster.load(entry.iconUrl) {
+                placeholder(R.drawable.ic_placeholder)
+                error(R.drawable.ic_placeholder)
+            }
+            container.addView(poster)
+        }
+
+        container.addView(
+            TextView(this).apply {
+                text = EpgRepository.formatRange(entry)
+                textSize = 14f
+                setTextColor(ContextCompat.getColor(this@EpgGridActivity, R.color.on_surface_muted))
+            }
+        )
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(entry.title)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

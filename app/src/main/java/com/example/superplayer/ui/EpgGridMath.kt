@@ -90,6 +90,28 @@ object EpgGridMath {
     }
 
     /**
+     * Mejor instante al que mover la franja horaria para la búsqueda en
+     * curso (ver EpgGridActivity.jumpToSearchMatchIfNeeded): el inicio del
+     * tramo de [entries] cuyo TÍTULO coincide con [query] más cercano a
+     * "ahora" sin haber terminado todavía (el que está en emisión, o el
+     * próximo que empiece); si todas las coincidencias de título ya
+     * terminaron, la más reciente de esas. [entries] debe ser la guía
+     * completa de los canales que interese buscar (ver
+     * EpgRepository.allEntries), no solo la franja visible.
+     *
+     * null si no hay ninguna coincidencia de TÍTULO (una coincidencia solo
+     * por nombre de canal no tiene un instante propio al que saltar, así
+     * que no cuenta aquí) o si [query] está en blanco.
+     */
+    fun bestSearchJumpTarget(entries: List<EpgRepository.EpgEntry>, query: String, nowMillis: Long): Long? {
+        if (query.isBlank()) return null
+        val matches = entries.filter { it.title.contains(query, ignoreCase = true) }
+        val upcoming = matches.filter { it.stopMillis > nowMillis }.minByOrNull { it.startMillis }
+        if (upcoming != null) return upcoming.startMillis
+        return matches.maxByOrNull { it.startMillis }?.startMillis
+    }
+
+    /**
      * Recorta un inicio de franja candidato para que la ventana
      * [start, start+WINDOW_MILLIS) no se salga nunca del rango de datos
      * cargado (dataStart/dataEnd, ver EpgRepository.dataRange): no deja ir
