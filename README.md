@@ -772,13 +772,13 @@ hacerlo: este zip no lo incluye ni lo borra.
 
 ## Logo de cabecera
 
-En la pantalla principal (la "portada", donde se cargan las listas), la
-barra superior es el logo `header_logo.jpg`
-(`app/src/main/res/drawable/header_logo.jpg`) a todo lo ancho, con los
-iconos de buscador/parrilla EPG/claro-oscuro **encima** de la imagen (no
-al lado): el logo hace de fondo de toda la barra, con su proporción real
-(nunca recortado ni estirado — el alto de la barra sale solo de esa
-proporción según el ancho de la pantalla).
+En la pantalla principal (la "portada", donde se cargan las listas), arriba
+del todo se ve el logo `header_logo.jpg`
+(`app/src/main/res/drawable/header_logo.jpg`) a todo lo ancho, con su
+proporción real (nunca recortado ni estirado — el alto sale solo de esa
+proporción según el ancho de la pantalla). Justo debajo, la barra de
+siempre con los iconos de buscador/parrilla EPG/claro-oscuro, ya sin
+ningún texto de título (el logo ya lleva el nombre dibujado).
 
 - **Medidas**: sirve cualquier imagen apaisada (más ancha que alta) con
   una proporción parecida a la actual — la que mandaste es de 2018×448 px
@@ -788,11 +788,17 @@ proporción según el ancho de la pantalla).
   meterla en el proyecto. Esta la he guardado redimensionada a 1200×266 px
   — de sobra para cómo se ve en pantalla, y bastante más ligera que el
   original para no engordar la app sin necesidad.
-- Los tres iconos de la barra (buscador, parrilla EPG, claro/oscuro) usan
-  un blanco fijo (`@color/player_text`) en vez del color normal de icono
-  -que cambia con el modo claro/oscuro-, porque el logo tiene fondo oscuro
-  siempre: un icono oscuro (el que tocaría en modo claro) se perdería
-  encima de esa imagen.
+- Los iconos van en su **propia barra sólida** debajo del logo, no encima
+  de la imagen: se probó a ponerlos encima, pero al ser una foto tan
+  variada (césped, camisetas blancas, escudos...) no había un solo color
+  de icono que se viera bien en todas sus zonas. En su barra de siempre el
+  contraste queda garantizado, con el mismo color de icono de toda la vida
+  que cambia con el modo claro/oscuro.
+- De paso se corrigió un fallo que ya existía desde el modo claro/oscuro:
+  el icono de luna 🌙 (el que se ve estando en modo claro) tenía el color
+  fijado en blanco, por lo que se perdía contra la barra blanca de ese
+  modo. Ahora tanto el sol como la luna se tiñen al mismo color que cambia
+  con el modo, igual que los otros dos iconos.
 - Solo aparece en esta pantalla (la portada); las demás (categoría,
   parrilla EPG, reproductor) siguen con su barra superior normal de texto,
   para no repetir cabecera por todas partes.

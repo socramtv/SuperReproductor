@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
         // sección "Logo de cabecera"): el logo YA lleva el nombre dibujado,
         // así que aquí no hace falta ningún título de texto.
         supportActionBar?.setDisplayShowTitleEnabled(false)
-        applySystemBarInsets(top = binding.headerFrame, bottom = binding.recyclerView)
+        applySystemBarInsets(top = binding.headerLogo, bottom = binding.recyclerView)
 
         favoritesStore = FavoritesStore(this)
 

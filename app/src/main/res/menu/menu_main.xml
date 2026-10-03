@@ -2,16 +2,10 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- app:iconTint="@color/player_text" (blanco fijo, ver colors.xml):
-         estos dos iconos van sobre el logo de cabecera, que tiene fondo
-         oscuro siempre, así que no pueden usar el tintado normal de icono
-         -que cambia con el modo claro/oscuro- o se perderían encima en
-         modo claro (ver README, sección "Logo de cabecera"). -->
     <item
         android:id="@+id/action_search"
         android:title="@string/action_search"
         android:icon="@android:drawable/ic_menu_search"
-        app:iconTint="@color/player_text"
         app:showAsAction="collapseActionView|ifRoom"
         app:actionViewClass="androidx.appcompat.widget.SearchView" />
 
@@ -19,15 +13,20 @@
         android:id="@+id/action_epg_grid"
         android:title="@string/action_epg_grid"
         android:icon="@android:drawable/ic_menu_agenda"
-        app:iconTint="@color/player_text"
         app:showAsAction="ifRoom" />
 
     <!-- Icono/título reales los pone MainActivity.updateThemeMenuItem según
-         el modo actual (sol/luna); esto es solo el valor inicial. -->
+         el modo actual (sol/luna); esto es solo el valor inicial.
+         app:iconTint="@color/on_background": ic_sun.xml/ic_moon.xml llevan
+         su relleno en blanco fijo, que se perdería contra la barra blanca
+         del modo claro; el tintado de icono de menú se vuelve a aplicar
+         solo con cada icono que ponga updateThemeMenuItem (comportamiento
+         de AppCompat), así que basta con ponerlo aquí una vez. -->
     <item
         android:id="@+id/action_theme_toggle"
         android:title="@string/action_switch_to_light"
         android:icon="@drawable/ic_sun"
+        app:iconTint="@color/on_background"
         app:showAsAction="ifRoom" />
 
 </menu>
