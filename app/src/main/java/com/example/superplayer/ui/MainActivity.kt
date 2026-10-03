@@ -49,7 +49,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setSupportActionBar(binding.toolbar)
-        applySystemBarInsets(top = binding.toolbar, bottom = binding.recyclerView)
+        // Sin esto, AppCompat rellena el título vacío del Toolbar con la
+        // etiqueta de la app (android:label, "Socram TV+ 🇳🇬 🇪🇸") por su
+        // cuenta, y aparecía un "Socra…" superpuesto al logo (ver README,
+        // sección "Logo de cabecera"): el logo YA lleva el nombre dibujado,
+        // así que aquí no hace falta ningún título de texto.
+        supportActionBar?.setDisplayShowTitleEnabled(false)
+        applySystemBarInsets(top = binding.headerFrame, bottom = binding.recyclerView)
 
         favoritesStore = FavoritesStore(this)
 

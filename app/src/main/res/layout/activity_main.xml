@@ -6,30 +6,41 @@
     android:orientation="vertical"
     android:background="@color/background_dark">
 
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/toolbar"
+    <FrameLayout
+        android:id="@+id/headerFrame"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:minHeight="?attr/actionBarSize"
         android:background="@color/surface_dark">
 
-        <!-- Logo de cabecera en vez del título de texto (ver README,
-             sección "Logo de cabecera"): alto fijo para que la barra
-             superior no crezca más allá de su tamaño estándar, ancho libre
-             (adjustViewBounds mantiene la proporción real de la imagen) y
-             centrado en el hueco libre entre el icono de navegación (si lo
-             hay) y los iconos de acción de la derecha. -->
+        <!-- Logo de cabecera a todo el ancho real de la barra (ver README,
+             sección "Logo de cabecera"): sin recortar ni deformar
+             (adjustViewBounds mantiene su proporción real: el alto final
+             sale solo de esa proporción, no hay que fijarlo a mano). -->
         <ImageView
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:layout_gravity="center"
-            android:paddingVertical="6dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:adjustViewBounds="true"
             android:scaleType="fitCenter"
             android:src="@drawable/header_logo"
             android:contentDescription="@string/app_name" />
 
-    </com.google.android.material.appbar.MaterialToolbar>
+        <!-- El Toolbar de siempre (buscador, parrilla EPG, claro/oscuro),
+             ahora sin fondo propio y superpuesto encima del logo en vez de
+             ir al lado: por eso usa sus propios iconos en blanco fijo
+             (@color/player_text, ver colors.xml) en vez del color normal de
+             icono, que cambia con el modo claro/oscuro -el logo tiene fondo
+             oscuro siempre, así que un icono oscuro en modo claro se
+             perdería encima-. El ThemeOverlay es un segundo seguro para
+             cualquier icono que no se tiña a mano explícitamente (p. ej. el
+             de "más opciones" si algún día no caben los tres). -->
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent"
+            android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar" />
+
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="match_parent"

@@ -773,11 +773,12 @@ hacerlo: este zip no lo incluye ni lo borra.
 ## Logo de cabecera
 
 En la pantalla principal (la "portada", donde se cargan las listas), la
-barra superior muestra el logo `header_logo.jpg`
-(`app/src/main/res/drawable/header_logo.jpg`) en vez del texto "Socram
-TV+ 🇳🇬 🇪🇸": se ve con su proporción real (nunca recortado ni estirado),
-centrado, con un alto fijo de 44dp (más 6dp de margen arriba y abajo) para
-que la barra no crezca más allá de su tamaño normal.
+barra superior es el logo `header_logo.jpg`
+(`app/src/main/res/drawable/header_logo.jpg`) a todo lo ancho, con los
+iconos de buscador/parrilla EPG/claro-oscuro **encima** de la imagen (no
+al lado): el logo hace de fondo de toda la barra, con su proporción real
+(nunca recortado ni estirado — el alto de la barra sale solo de esa
+proporción según el ancho de la pantalla).
 
 - **Medidas**: sirve cualquier imagen apaisada (más ancha que alta) con
   una proporción parecida a la actual — la que mandaste es de 2018×448 px
@@ -787,13 +788,16 @@ que la barra no crezca más allá de su tamaño normal.
   meterla en el proyecto. Esta la he guardado redimensionada a 1200×266 px
   — de sobra para cómo se ve en pantalla, y bastante más ligera que el
   original para no engordar la app sin necesidad.
+- Los tres iconos de la barra (buscador, parrilla EPG, claro/oscuro) usan
+  un blanco fijo (`@color/player_text`) en vez del color normal de icono
+  -que cambia con el modo claro/oscuro-, porque el logo tiene fondo oscuro
+  siempre: un icono oscuro (el que tocaría en modo claro) se perdería
+  encima de esa imagen.
 - Solo aparece en esta pantalla (la portada); las demás (categoría,
-  parrilla EPG, reproductor) no llevan logo, para no repetir cabecera por
-  todas partes.
+  parrilla EPG, reproductor) siguen con su barra superior normal de texto,
+  para no repetir cabecera por todas partes.
 - El fondo oscuro del logo es parte de la propia imagen (no es
-  transparente), así que se ve igual en modo claro y en modo oscuro: un
-  recuadro con su propio fondo sobre la barra superior, en vez de mezclarse
-  con el color de fondo de la barra.
+  transparente), así que se ve igual en modo claro y en modo oscuro.
 
 ## Que aparezca en el menú principal de Android TV
 
