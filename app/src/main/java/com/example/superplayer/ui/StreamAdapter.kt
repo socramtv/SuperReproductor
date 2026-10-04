@@ -4,13 +4,11 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.example.superplayer.R
 import com.example.superplayer.data.EpgRepository
-import com.example.superplayer.data.TmdbRepository
 import com.example.superplayer.databinding.ItemStreamBinding
 import com.example.superplayer.model.Stream
 
@@ -42,7 +40,10 @@ class StreamAdapter(
 
         fun bind(stream: Stream) {
             binding.streamName.text = stream.name
-            bindIconAndMovieInfo(stream)
+            binding.streamIcon.load(stream.icon) {
+                placeholder(R.drawable.ic_placeholder)
+                error(R.drawable.ic_placeholder)
+            }
             binding.favoriteIcon.setImageResource(
                 if (isFavorite(stream)) R.drawable.ic_favorite else R.drawable.ic_favorite_border
             )
@@ -66,58 +67,6 @@ class StreamAdapter(
                 true
             }
             binding.favoriteIcon.setOnClickListener { onToggleFavorite(stream) }
-        }
-
-        /**
-         * Icono normal del canal, o -si es una película que TMDb conoce- su
-         * póster, año, nota y sinopsis. Si aún no se ha consultado, se
-         * pide en segundo plano y esta misma fila se vuelve a pintar al
-         * llegar (solo si sigue mostrando esa película: las filas se
-         * reciclan al hacer scroll).
-         */
-        private fun bindIconAndMovieInfo(stream: Stream) {
-            val context = binding.root.context
-            val dp = context.resources.displayMetrics.density
-            val info = if (TmdbRepository.isMovieCandidate(stream)) {
-                TmdbRepository.cached(context, stream).also {
-                    if (it == null && !TmdbRepository.isResolved(context, stream)) {
-                        TmdbRepository.request(context, stream) {
-                            val pos = bindingAdapterPosition
-                            if (pos != RecyclerView.NO_POSITION && items.getOrNull(pos)?.id == stream.id) {
-                                notifyItemChanged(pos)
-                            }
-                        }
-                    }
-                }
-            } else null
-
-            val icon = binding.streamIcon
-            val posterUrl = info?.posterUrl
-            // Las filas se reciclan: tamaño y escala se fijan siempre, no solo para películas.
-            val lp = icon.layoutParams
-            lp.width = ((if (posterUrl != null) 60 else 44) * dp).toInt()
-            lp.height = ((if (posterUrl != null) 90 else 44) * dp).toInt()
-            icon.layoutParams = lp
-            icon.scaleType = if (posterUrl != null) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.CENTER_INSIDE
-            icon.setPadding(if (posterUrl != null) 0 else (6 * dp).toInt(), if (posterUrl != null) 0 else (6 * dp).toInt(),
-                if (posterUrl != null) 0 else (6 * dp).toInt(), if (posterUrl != null) 0 else (6 * dp).toInt())
-            icon.load(posterUrl ?: stream.icon) {
-                placeholder(R.drawable.ic_placeholder)
-                error(R.drawable.ic_placeholder)
-            }
-
-            if (info != null) {
-                val parts = mutableListOf<String>()
-                info.year?.let { parts.add(it) }
-                info.rating?.let { parts.add("★ " + String.format(java.util.Locale.US, "%.1f", it)) }
-                binding.streamMovieMeta.text = parts.joinToString(" · ")
-                binding.streamMovieMeta.visibility = if (parts.isEmpty()) View.GONE else View.VISIBLE
-                binding.streamOverview.text = info.overview.orEmpty()
-                binding.streamOverview.visibility = if (info.overview.isNullOrBlank()) View.GONE else View.VISIBLE
-            } else {
-                binding.streamMovieMeta.visibility = View.GONE
-                binding.streamOverview.visibility = View.GONE
-            }
         }
     }
 }

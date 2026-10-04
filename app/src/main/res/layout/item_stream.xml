@@ -54,28 +54,6 @@
         <!-- EPG: "ahora" / "después" / "esta noche" (solo si la lista trae
              guía y el canal tiene tvg-id con coincidencia); cada línea
              oculta por separado si no hay dato para ese hueco. -->
-        <!-- Películas (TMDb, ver TmdbRepository): "2019 · ★ 7.8" y sinopsis;
-             ocultas si el canal no es una película o TMDb no la conoce. -->
-        <TextView
-            android:id="@+id/streamMovieMeta"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/on_surface_muted"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/streamOverview"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/on_surface_muted"
-            android:textSize="12sp"
-            android:maxLines="3"
-            android:ellipsize="end"
-            android:visibility="gone" />
-
         <TextView
             android:id="@+id/streamNowPlaying"
             android:layout_width="match_parent"
