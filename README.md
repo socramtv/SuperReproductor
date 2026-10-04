@@ -644,6 +644,32 @@ de arriba) pero no se pueden seleccionar una por una ni enfocar con el
 mando todavía. No he podido probar esta pantalla en una TV real —si el
 mando se comporta raro aquí, avisa para revisarlo.
 
+## Información de películas (TMDb)
+
+Si una lista trae películas, cada fila de la categoría muestra además el
+**póster, el año, la nota (★) y la sinopsis** sacados de TMDb
+(themoviedb.org), en español.
+
+- **Cómo detecta que es una película** (las listas no lo declaran, se
+  adivina por canal): la URL termina en un archivo de vídeo (.mp4, .mkv,
+  .avi...) o lleva `/movie/` en la ruta, o la categoría se llama
+  "Películas"/"Movies"/"Cine"/"VOD"... y la URL no es un directo
+  (.m3u8/.mpd). Los canales de TV normales no se tocan.
+- **Cómo busca**: por el nombre ya limpio (sin calidad, idioma ni
+  corchetes: `Avengers.Endgame.2019.1080p.mkv` -> "Avengers Endgame",
+  2019). Si el nombre trae año, se usa para afinar.
+- Cada película se consulta **una sola vez**; el resultado (también el "no
+  encontrada") se guarda en el móvil. Sin internet o sin resultado, la fila
+  queda como siempre.
+- **Clave de API**: va en `app/build.gradle.kts` (`TMDB_API_KEY`). Si el
+  repositorio es público, la clave se ve; para evitarlo, crea en GitHub
+  (Settings > Secrets and variables > Actions) un secreto llamado
+  `TMDB_API_KEY`, añade `env: TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}` al
+  paso "Build debug APK" del workflow y borra la clave por defecto del
+  gradle (dejando `""`). Una clave vacía apaga la función.
+- Limitación: se toma el primer resultado de TMDb; con títulos muy
+  genéricos puede salir otra película.
+
 ## Estructura
 
 ```

@@ -13,6 +13,16 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        // Clave de TMDb (themoviedb.org) para la información de películas
+        // (ver README, "Información de películas (TMDb)"). Si existe la
+        // variable de entorno TMDB_API_KEY (p. ej. un secreto de GitHub
+        // Actions) manda esa; si no, la propiedad de gradle del mismo
+        // nombre; y si tampoco, esta por defecto. Vacía = función apagada.
+        val tmdbKey = System.getenv("TMDB_API_KEY")
+            ?: (project.findProperty("TMDB_API_KEY") as String?)
+            ?: "8057a54a57714cade319b15e4fc0c3b4"
+        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbKey\"")
     }
 
     buildTypes {
@@ -41,6 +51,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
