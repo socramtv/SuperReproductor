@@ -644,6 +644,27 @@ de arriba) pero no se pueden seleccionar una por una ni enfocar con el
 mando todavía. No he podido probar esta pantalla en una TV real —si el
 mando se comporta raro aquí, avisa para revisarlo.
 
+## Buscador global
+
+La lupa de la portada busca un canal **en todas las listas a la vez**, no
+solo en la que tienes abierta: incluye la lista cargada y las últimas copias
+guardadas de los 5 huecos (TV / Lista 2 / Cine / TDT / Radio).
+
+- No distingue mayúsculas ni tildes: "futbol" encuentra "Fútbol".
+- Varias palabras, en cualquier orden: "futbol 1" encuentra "Fútbol 1 HD" y
+  "1 Fútbol".
+- Si un canal está en varias listas (misma URL), sale una sola vez.
+- Los resultados se pueden abrir y recorrer con el cambio de canal
+  habitual, aunque vengan de listas distintas.
+- Las listas de los huecos se leen de su copia guardada (la que se hace al
+  cargarlas con éxito), así que un hueco que nunca has cargado no aparece, y
+  los archivos locales elegidos con "Cargar archivo" tampoco se guardan por
+  hueco: solo se busca en ellos mientras están cargados.
+- La primera vez que abres la lupa tras cargar una lista, el índice se
+  prepara en segundo plano (un instante); mientras tanto ya busca en la
+  lista actual.
+- El buscador dentro de una categoría sigue igual (solo esa categoría).
+
 ## Estructura
 
 ```

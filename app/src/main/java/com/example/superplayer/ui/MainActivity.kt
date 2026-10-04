@@ -38,6 +38,17 @@ class MainActivity : AppCompatActivity() {
     // "canal siguiente/anterior" recorra esos mismos resultados.
     private var currentSearchResults: List<Stream> = emptyList()
 
+    // Buscador global (ver README, "Buscador global"): índice con los canales
+    // de la lista cargada MÁS los de las copias guardadas de los demás
+    // huecos (TV/Lista 2/Cine/TDT/Radio), con el nombre ya normalizado (sin
+    // tildes ni mayúsculas). Se reconstruye en segundo plano al abrir la
+    // búsqueda si desde la última vez cambió alguna lista.
+    private class SearchEntry(val stream: Stream, val normName: String)
+    @Volatile private var searchIndex: List<SearchEntry>? = null
+    private var searchIndexDirty = true
+    private var searchIndexBuilding = false
+    private var lastQuery: String = ""
+
     private val openDocumentLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) loadFromUri(uri)
@@ -254,6 +265,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setPlaylist(data: PlaylistData) {
         playlist = data
+        searchIndexDirty = true
         binding.recyclerView.adapter = categoryAdapter
         categoryAdapter.submit(buildCategoryListWithFavorites())
         binding.emptyView.visibility = if (data.categories.isEmpty()) View.VISIBLE else View.GONE
@@ -323,8 +335,12 @@ class MainActivity : AppCompatActivity() {
             }
         })
         searchItem.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
-            override fun onMenuItemActionExpand(item: MenuItem) = true
+            override fun onMenuItemActionExpand(item: MenuItem): Boolean {
+                refreshSearchIndexIfNeeded()
+                return true
+            }
             override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
+                lastQuery = ""
                 binding.recyclerView.adapter = categoryAdapter
                 return true
             }
@@ -334,15 +350,59 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applySearch(query: String) {
+        lastQuery = query
         if (query.isBlank()) {
             binding.recyclerView.adapter = categoryAdapter
             return
         }
-        val matches = playlist.categories.flatMap { it.streams }
-            .filter { it.name.contains(query, ignoreCase = true) }
+        // Todas las palabras tienen que aparecer (en cualquier orden), sin
+        // distinguir mayúsculas ni tildes: "futbol 1" encuentra "Fútbol 1 HD".
+        val words = normalizeForSearch(query).split(' ').filter { it.isNotEmpty() }
+        val index = searchIndex
+        val matches = if (index != null) {
+            index.filter { e -> words.all { e.normName.contains(it) } }.map { it.stream }
+        } else {
+            // Índice aún construyéndose: mientras tanto, solo la lista actual.
+            playlist.categories.flatMap { it.streams }
+                .filter { s -> normalizeForSearch(s.name).let { n -> words.all { n.contains(it) } } }
+        }
         currentSearchResults = matches
         streamAdapter.submit(matches)
         binding.recyclerView.adapter = streamAdapter
+    }
+
+    private fun refreshSearchIndexIfNeeded() {
+        if (!searchIndexDirty || searchIndexBuilding) return
+        searchIndexBuilding = true
+        searchIndexDirty = false
+        val current = playlist
+        Thread {
+            val seen = HashSet<String>()
+            val entries = ArrayList<SearchEntry>()
+            fun add(streams: List<Stream>) {
+                for (st in streams) {
+                    if (seen.add(st.id)) entries.add(SearchEntry(st, normalizeForSearch(st.name)))
+                }
+            }
+            // Primero la lista que se está viendo (manda si un canal está repetido)...
+            add(current.categories.flatMap { it.streams })
+            // ...y luego las copias guardadas de los 5 huecos. Una copia que
+            // no se pueda leer se ignora: la búsqueda sigue con el resto.
+            for (slot in 1..5) {
+                try {
+                    val raw = PlaylistCache.load(this, slot) ?: continue
+                    add(PlaylistRepository.parse(raw).categories.flatMap { it.streams })
+                } catch (e: Exception) {
+                }
+            }
+            runOnUiThread {
+                searchIndexBuilding = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                searchIndex = entries
+                // Si mientras tanto se cargó otra lista, queda pendiente para la próxima.
+                if (lastQuery.isNotBlank()) applySearch(lastQuery)
+            }
+        }.start()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -400,3 +460,12 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(this, EpgGridActivity::class.java))
     }
 }
+
+private val DIACRITICS = Regex("\\p{M}+")
+
+/** Minúsculas y sin tildes/diéresis (ñ -> n), para comparar nombres al buscar. */
+private fun normalizeForSearch(text: String): String =
+    java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+        .replace(DIACRITICS, "")
+        .lowercase(java.util.Locale.ROOT)
+        .trim()
