@@ -88,7 +88,7 @@ object TmdbRepository {
     /** True si ya se sabe (con o sin resultado) y no hace falta llamar a [request]. */
     fun isResolved(context: Context, stream: Stream): Boolean {
         val key = cleanTitle(stream.name).key
-        if (key in memory || key in missing) return true
+        if (memory.containsKey(key) || missing.contains(key)) return true
         return prefs(context).contains(key)
     }
 
