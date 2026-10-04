@@ -181,7 +181,7 @@ object TmdbRepository {
         val key: String get() = title.lowercase(Locale.ROOT) + "|" + (year ?: "")
     }
 
-    private val bracketed = Regex("""\[[^\]]*]|\{[^}]*}""")
+    private val bracketed = Regex("""\[[^\]]*\]|\{[^}]*\}""")
     private val yearInParens = Regex("""\(((?:19|20)\d{2})\)""")
     private val yearAtEnd = Regex("""[\s.\-_]((?:19|20)\d{2})\s*$""")
     private val parens = Regex("""\([^)]*\)""")
