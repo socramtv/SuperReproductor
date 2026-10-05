@@ -35,8 +35,9 @@
     <string name="list_slot_5">Radio 📻</string>
     <string name="list_slot_dialog_title">URL de %1$s</string>
     <string name="list_slot_dialog_hint">https://raw.githubusercontent.com/…</string>
-    <string name="category_filter_button">Filtrar categorías 🗂️</string>
-    <string name="category_filter_button_active">Categorías: %1$d de %2$d 🗂️</string>
+    <string name="category_filter_button">Categorías 🗂️</string>
+    <string name="category_filter_button_active">Categorías %1$d/%2$d 🗂️</string>
+    <string name="list_update_button">Actualizar 🔄</string>
     <string name="category_filter_title">Categorías a mostrar</string>
     <string name="category_filter_invert">Invertir</string>
     <string name="category_filter_none_selected">Elige al menos una categoría</string>

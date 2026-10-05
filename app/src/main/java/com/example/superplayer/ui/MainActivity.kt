@@ -141,9 +141,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Al abrir la app, vuelve a descargar en segundo plano las listas de los
-     * huecos cuya copia guardada tenga más de AUTO_REFRESH_MIN_AGE_MS (o no
-     * tenga copia), sin mostrar nada ni cambiar la lista que se esté viendo:
+     * Al abrir la app, vuelve a descargar en segundo plano (como mucho una
+     * vez al día) las listas de los huecos cuya copia guardada tenga más de
+     * AUTO_REFRESH_MIN_AGE_MS (o no tenga copia), sin mostrar nada ni cambiar la lista que se esté viendo:
      * solo deja la copia al día (para el buscador global, para abrir sin red
      * y para el "actualizada hace..." de los botones). Una descarga o
      * análisis que falle se ignora y se deja la copia anterior tal cual.
@@ -189,7 +189,7 @@ class MainActivity : AppCompatActivity() {
                 if (savedUrl.isNullOrBlank()) {
                     promptForListUrl(slot, label)
                 } else {
-                    loadFromRemoteUrl(slot, savedUrl)
+                    loadFromRemoteUrl(slot, savedUrl, preferCache = true)
                 }
             }
             button.setOnLongClickListener {
@@ -237,28 +237,47 @@ class MainActivity : AppCompatActivity() {
      * la hay. La copia se guarda únicamente cuando la descarga Y el análisis
      * posterior salen bien, nunca con una respuesta a medias.
      */
-    private fun loadFromRemoteUrl(slot: Int, url: String) {
-        Toast.makeText(this, R.string.loading_list, Toast.LENGTH_SHORT).show()
+    private fun loadFromRemoteUrl(slot: Int, url: String, preferCache: Boolean = false) {
+        // preferCache = true (pulsar el botón del hueco): si ya hay copia
+        // guardada se abre al instante sin tocar la red; la lista solo se
+        // vuelve a descargar con el botón "Actualizar" (ver refreshCurrentList)
+        // o con la puesta al día diaria (ver autoRefreshLists). Sin copia, o si
+        // la copia no se pudiera leer, se descarga igualmente.
+        if (!(preferCache && PlaylistCache.lastSavedAt(this, slot) != null)) {
+            Toast.makeText(this, R.string.loading_list, Toast.LENGTH_SHORT).show()
+        }
         Thread {
             var data: PlaylistData? = null
             var downloadError: Exception? = null
             var usedCache = false
-            try {
-                val raw = PlaylistRepository.downloadRaw(url)
-                data = PlaylistRepository.parse(raw)
-                PlaylistCache.save(this, slot, raw)
-            } catch (e: Exception) {
-                downloadError = e
+            if (preferCache) {
                 val cachedRaw = PlaylistCache.load(this, slot)
                 if (cachedRaw != null) {
-                    data = try {
-                        usedCache = true
-                        PlaylistRepository.parse(cachedRaw)
-                    } catch (e2: Exception) {
-                        // No debería pasar (solo se guarda una copia si antes analizó
-                        // bien), pero por si acaso: se trata como si no hubiera copia.
-                        usedCache = false
-                        null
+                    try {
+                        data = PlaylistRepository.parse(cachedRaw)
+                    } catch (e: Exception) {
+                        data = null
+                    }
+                }
+            }
+            if (data == null) {
+                try {
+                    val raw = PlaylistRepository.downloadRaw(url)
+                    data = PlaylistRepository.parse(raw)
+                    PlaylistCache.save(this, slot, raw)
+                } catch (e: Exception) {
+                    downloadError = e
+                    val cachedRaw = PlaylistCache.load(this, slot)
+                    if (cachedRaw != null) {
+                        data = try {
+                            usedCache = true
+                            PlaylistRepository.parse(cachedRaw)
+                        } catch (e2: Exception) {
+                            // No debería pasar (solo se guarda una copia si antes analizó
+                            // bien), pero por si acaso: se trata como si no hubiera copia.
+                            usedCache = false
+                            null
+                        }
                     }
                 }
             }
@@ -288,6 +307,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.start()
+    }
+
+    /** Botón "Actualizar": vuelve a descargar la lista remota que se está viendo (con la copia guardada como respaldo si no hay red). */
+    private fun refreshCurrentList() {
+        val slot = currentListKey.removePrefix("slot_").toIntOrNull() ?: return
+        val url = AppPrefs.getListUrl(this, slot)
+        if (url.isNullOrBlank()) return
+        loadFromRemoteUrl(slot, url)
     }
 
     private fun formatCacheDate(millis: Long?): String {
@@ -395,23 +422,32 @@ class MainActivity : AppCompatActivity() {
         return shown.sortedBy { position[it.name] ?: Int.MAX_VALUE }
     }
 
-    /** Botón de filtro: oculto si la lista tiene una sola categoría o ninguna; si hay filtro activo, dice cuántas se ven. */
+    /**
+     * Fila de botones de la lista cargada: Categorías (filtro) y Ordenar solo
+     * si tiene más de una categoría; Actualizar solo si es una lista remota
+     * (hueco). Con el filtro activo, el botón de Categorías dice cuántas se ven.
+     */
     private fun updateCategoryFilterButton() {
         val total = playlist.categories.size
-        val button = binding.categoryFilterButton
+        val filterButton = binding.categoryFilterButton
         val orderButton = binding.categoryOrderButton
-        if (total < 2) {
-            button.visibility = View.GONE
-            orderButton.visibility = View.GONE
-            return
+        val updateButton = binding.categoryUpdateButton
+        val multi = total >= 2
+        val isRemoteSlot = currentListKey.startsWith("slot_")
+
+        filterButton.visibility = if (multi) View.VISIBLE else View.GONE
+        orderButton.visibility = if (multi) View.VISIBLE else View.GONE
+        updateButton.visibility = if (isRemoteSlot) View.VISIBLE else View.GONE
+        binding.categoryButtonsRow.visibility = if (multi || isRemoteSlot) View.VISIBLE else View.GONE
+
+        if (multi) {
+            val shown = visibleCategories().size
+            filterButton.text = if (shown == total) getString(R.string.category_filter_button)
+            else getString(R.string.category_filter_button_active, shown, total)
+            filterButton.setOnClickListener { showCategoryFilterDialog() }
+            orderButton.setOnClickListener { showCategoryOrderDialog() }
         }
-        button.visibility = View.VISIBLE
-        orderButton.visibility = View.VISIBLE
-        orderButton.setOnClickListener { showCategoryOrderDialog() }
-        val shown = visibleCategories().size
-        button.text = if (shown == total) getString(R.string.category_filter_button)
-        else getString(R.string.category_filter_button_active, shown, total)
-        button.setOnClickListener { showCategoryFilterDialog() }
+        if (isRemoteSlot) updateButton.setOnClickListener { refreshCurrentList() }
     }
 
     /**
@@ -742,8 +778,8 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-// Una lista cuya copia guardada tenga menos horas que esto no se vuelve a descargar sola al abrir la app (ver autoRefreshLists).
-private const val AUTO_REFRESH_MIN_AGE_MS = 3L * 60 * 60 * 1000
+// Una lista cuya copia guardada tenga menos de un día no se vuelve a descargar sola al abrir la app (ver autoRefreshLists).
+private const val AUTO_REFRESH_MIN_AGE_MS = 24L * 60 * 60 * 1000
 
 private val DIACRITICS = Regex("\\p{M}+")
 

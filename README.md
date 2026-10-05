@@ -675,7 +675,7 @@ guardadas de los 5 huecos (TV / Lista 2 / Cine / TDT / Radio).
 
 ## Filtro de categorías por lista
 
-Debajo de los botones de listas hay un botón **"Filtrar categorías"** (solo
+Debajo de los botones de listas hay un botón **"Categorías"** (solo
 aparece si la lista cargada tiene más de una categoría). Abre una ventana
 con todas las categorías de esa lista y una casilla en cada una: marcadas =
 se muestran, desmarcadas = se ocultan de la portada.
@@ -687,7 +687,7 @@ se muestran, desmarcadas = se ocultan de la portada.
   archivo local): el de una no afecta a las otras, y se recuerda al cerrar
   la app. Lo que se guarda son las categorías ocultas, así que una categoría
   nueva que aparezca más adelante en la lista remota se ve por defecto.
-- Con el filtro activo, el botón dice "Categorías: 3 de 12".
+- Con el filtro activo, el botón dice "Categorías 3/12".
 - **Favoritos** no depende del filtro: sus canales salen siempre, aunque su
   categoría esté oculta.
 - El buscador global de la lupa sigue buscando en todos los canales, también
@@ -764,22 +764,32 @@ nueva, **"Formato de pantalla"**, que cada vez que se pulsa pasa al siguiente:
 Sale un aviso con el formato elegido. Es **uno solo para todos los canales** y
 se recuerda al cerrar la app (por defecto, Ajustar).
 
-## Actualizar listas al abrir la app
+## Actualizar listas
 
-Al abrir la app, las listas de los 5 huecos (TV, Lista 2, Cine, TDT, Radio) se
-vuelven a descargar solas **en segundo plano**, sin avisos y sin cambiar la
-lista que estés viendo.
+Las listas de los 5 huecos (TV, Lista 2, Cine, TDT, Radio) **no se descargan
+cada vez**: se actualizan de dos formas.
 
-- Solo se actualizan las que tengan **más de 3 horas** desde su última copia
-  (o ninguna copia), para no gastar datos cada vez que abres la app.
-- Cada botón de lista muestra debajo, en pequeño, cuándo se actualizó:
-  "hace 5 min", "hace 2 h", "hace 3 d".
-- Una lista que no se pueda descargar (sin red, servidor caído) o no se
-  entienda se ignora y se conserva la copia anterior.
-- Esa copia al día la usan el buscador global, la apertura sin conexión y la
-  siguiente vez que pulses el hueco. Al pulsar un hueco la app sigue
-  descargando siempre la lista nueva, como antes.
-- Los huecos sin URL guardada y el archivo local no se actualizan.
+- **Botón "Actualizar 🔄"** (junto a "Categorías" y "Ordenar", dentro de cada
+  lista remota): vuelve a descargar la lista que estás viendo y la recarga. Si
+  no hay red, se queda con la copia guardada y te lo avisa.
+- **Una vez al día, solas:** al abrir la app, en segundo plano y sin avisos, se
+  descargan las listas de los huecos cuya copia tenga más de 24 horas (o no
+  tenga ninguna). No cambia la lista que estés viendo.
+
+Si no pulsas el botón, una lista no se actualiza (más allá de esa puesta al día
+diaria).
+
+- **Pulsar el botón de un hueco** abre su copia guardada al instante, sin tocar
+  la red. Si todavía no hay copia (primera vez), la descarga.
+- Cada botón de hueco muestra debajo, en pequeño, cuándo se actualizó su copia
+  ("hace 5 min", "hace 2 h", "hace 3 d").
+- Una descarga que falle o una lista que no se entienda se ignora y se conserva
+  la copia anterior.
+- **Cambiar la URL** de un hueco (mantener pulsado el botón) sí descarga la
+  lista nueva en el momento.
+- La copia al día también la usan el buscador global y la apertura sin conexión.
+- El botón "Actualizar" no sale en el archivo local ni en la lista de ejemplo, y
+  los huecos sin URL guardada no se actualizan.
 
 ## Estructura
 

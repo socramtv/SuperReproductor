@@ -150,21 +150,25 @@
 
     </LinearLayout>
 
-    <!-- Filtro y orden de categorías de la lista cargada (ver MainActivity.
-         showCategoryFilterDialog / showCategoryOrderDialog); solo se
-         muestran si la lista tiene más de una categoría. -->
+    <!-- Categorías (filtro), Ordenar y Actualizar de la lista cargada (ver
+         MainActivity.updateCategoryFilterButton): Categorías y Ordenar solo
+         si la lista tiene más de una categoría; Actualizar solo si es una de
+         las 5 listas remotas (TV/Lista 2/Cine/TDT/Radio). Si no sale ningún
+         botón, toda la fila se oculta. -->
     <LinearLayout
+        android:id="@+id/categoryButtonsRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
         android:paddingTop="6dp"
-        android:paddingBottom="2dp">
+        android:paddingBottom="2dp"
+        android:visibility="gone">
 
         <android.widget.Button
             android:id="@+id/categoryFilterButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
             android:minWidth="0dp"
@@ -180,13 +184,29 @@
         <android.widget.Button
             android:id="@+id/categoryOrderButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingVertical="10dp"
+            android:text="@string/category_order_button"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            android:textColor="@color/on_background"
+            android:background="@drawable/bg_list_slot_button"
+            android:visibility="gone" />
+
+        <android.widget.Button
+            android:id="@+id/categoryUpdateButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginStart="4dp"
             android:minWidth="0dp"
             android:minHeight="0dp"
             android:paddingVertical="10dp"
-            android:text="@string/category_order_button"
+            android:text="@string/list_update_button"
             android:textAllCaps="false"
             android:textSize="13sp"
             android:textColor="@color/on_background"
