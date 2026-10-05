@@ -167,6 +167,18 @@ object AppPrefs {
         return result
     }
 
+    /**
+     * Formato de pantalla del reproductor (ver PlayerActivity.cycleVideoFormat):
+     * 0 = ajustar (con barras si hace falta, como siempre), 1 = estirar hasta
+     * llenar la pantalla, 2 = zoom (llenar recortando los bordes). Un solo
+     * valor para todos los canales, se recuerda al cerrar la app.
+     */
+    fun getVideoFormat(context: Context): Int = prefs(context).getInt("video_format", 0)
+
+    fun setVideoFormat(context: Context, format: Int) {
+        prefs(context).edit().putInt("video_format", format).apply()
+    }
+
     /** Todos los filtros de categorías guardados, por clave de lista (para la copia de seguridad, ver BackupManager). */
     fun getAllHiddenCategories(context: Context): Map<String, Set<String>> {
         val result = HashMap<String, Set<String>>()

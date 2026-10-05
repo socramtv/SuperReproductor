@@ -751,6 +751,36 @@ todas las categorías de la lista cargada para cambiar su orden en la portada.
 - El orden solo afecta a la portada; dentro de una categoría los canales
   siguen en el orden de la lista.
 
+## Formato de pantalla
+
+En el reproductor, el engranaje (arriba a la izquierda) tiene una opción
+nueva, **"Formato de pantalla"**, que cada vez que se pulsa pasa al siguiente:
+
+- **Ajustar:** como siempre, el vídeo entero con barras negras si hace falta.
+- **Estirar:** llena toda la pantalla deformando la imagen (para canales que
+  salen "aplastados" o con barras de más).
+- **Zoom:** llena la pantalla sin deformar, recortando los bordes.
+
+Sale un aviso con el formato elegido. Es **uno solo para todos los canales** y
+se recuerda al cerrar la app (por defecto, Ajustar).
+
+## Actualizar listas al abrir la app
+
+Al abrir la app, las listas de los 5 huecos (TV, Lista 2, Cine, TDT, Radio) se
+vuelven a descargar solas **en segundo plano**, sin avisos y sin cambiar la
+lista que estés viendo.
+
+- Solo se actualizan las que tengan **más de 3 horas** desde su última copia
+  (o ninguna copia), para no gastar datos cada vez que abres la app.
+- Cada botón de lista muestra debajo, en pequeño, cuándo se actualizó:
+  "hace 5 min", "hace 2 h", "hace 3 d".
+- Una lista que no se pueda descargar (sin red, servidor caído) o no se
+  entienda se ignora y se conserva la copia anterior.
+- Esa copia al día la usan el buscador global, la apertura sin conexión y la
+  siguiente vez que pulses el hueco. Al pulsar un hueco la app sigue
+  descargando siempre la lista nueva, como antes.
+- Los huecos sin URL guardada y el archivo local no se actualizan.
+
 ## Estructura
 
 ```

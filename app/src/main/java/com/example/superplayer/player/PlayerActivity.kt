@@ -40,6 +40,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import coil.load
 import com.example.superplayer.R
+import com.example.superplayer.data.AppPrefs
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ActivityPlayerBinding
 import com.example.superplayer.model.Stream
@@ -714,6 +715,7 @@ class PlayerActivity : AppCompatActivity() {
         // pausar y dar a play. Sincronizados desde el principio con el estado
         // real de los controles (ocultos al abrir), eso ya no puede pasar.
         applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
+        applyVideoFormat()
         binding.playerView.keepScreenOn = true
         binding.playerView.setOnTouchListener { _, event -> playerTapGestureDetector.onTouchEvent(event) }
 
@@ -1152,13 +1154,42 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /** Menú "Vídeo" / "Audio" / "Subtítulos" que abre el selector de pistas de Media3 para el tipo elegido. */
+    /** Pasa al siguiente formato de pantalla (ajustar -> estirar -> zoom -> ajustar), lo aplica y lo recuerda. */
+    private fun cycleVideoFormat() {
+        val next = (AppPrefs.getVideoFormat(this) + 1) % 3
+        AppPrefs.setVideoFormat(this, next)
+        applyVideoFormat()
+        Toast.makeText(this, getString(R.string.video_format_changed, videoFormatName(next)), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyVideoFormat() {
+        binding.playerView.resizeMode = when (AppPrefs.getVideoFormat(this)) {
+            1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+            2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
+    }
+
+    private fun videoFormatName(format: Int): String = getString(
+        when (format) {
+            1 -> R.string.video_format_fill
+            2 -> R.string.video_format_zoom
+            else -> R.string.video_format_fit
+        }
+    )
+
     private fun showTrackSelectionMenu(anchor: View) {
         val ctrl = controller ?: return
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, MENU_ID_VIDEO, 0, getString(R.string.track_video))
         popup.menu.add(0, MENU_ID_AUDIO, 1, getString(R.string.track_audio))
         popup.menu.add(0, MENU_ID_SUBTITLES, 2, getString(R.string.track_subtitles))
+        popup.menu.add(0, MENU_ID_FORMAT, 3, getString(R.string.video_format_menu, videoFormatName(AppPrefs.getVideoFormat(this))))
         popup.setOnMenuItemClickListener { item ->
+            if (item.itemId == MENU_ID_FORMAT) {
+                cycleVideoFormat()
+                return@setOnMenuItemClickListener true
+            }
             val trackType = when (item.itemId) {
                 MENU_ID_VIDEO -> C.TRACK_TYPE_VIDEO
                 MENU_ID_AUDIO -> C.TRACK_TYPE_AUDIO
@@ -1203,6 +1234,7 @@ class PlayerActivity : AppCompatActivity() {
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
         private const val MENU_ID_SUBTITLES = 3
+        private const val MENU_ID_FORMAT = 4
         private const val EPG_REFRESH_INTERVAL_MS = 60_000L
 
         // Ancho de las zonas laterales de toque (izquierda/derecha), como

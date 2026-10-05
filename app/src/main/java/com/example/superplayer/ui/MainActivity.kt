@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private var searchIndexDirty = true
     private var searchIndexBuilding = false
     private var lastQuery: String = ""
+    @Volatile private var autoRefreshing = false
 
     private val openDocumentLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -99,6 +100,79 @@ class MainActivity : AppCompatActivity() {
 
         setupListSlotButtons()
         loadInitialPlaylist()
+        updateSlotButtonLabels()
+        autoRefreshLists()
+    }
+
+    private fun slotDefs() = listOf(
+        Triple(1, binding.listButton1, R.string.list_slot_1),
+        Triple(2, binding.listButton2, R.string.list_slot_2),
+        Triple(3, binding.listButton3, R.string.list_slot_3),
+        Triple(4, binding.listButton4, R.string.list_slot_4),
+        Triple(5, binding.listButton5, R.string.list_slot_5)
+    )
+
+    /** Texto de cada botón de lista: su nombre y, debajo y más pequeño, cuándo se actualizó por última vez (si ya hay copia guardada). */
+    private fun updateSlotButtonLabels() {
+        for ((slot, button, labelRes) in slotDefs()) {
+            val label = getString(labelRes)
+            val saved = PlaylistCache.lastSavedAt(this, slot)
+            if (saved == null) {
+                button.text = label
+            } else {
+                val text = android.text.SpannableString("$label\n${formatAge(saved)}")
+                text.setSpan(
+                    android.text.style.RelativeSizeSpan(0.75f),
+                    label.length + 1, text.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                button.text = text
+            }
+        }
+    }
+
+    private fun formatAge(savedAtMillis: Long): String {
+        val minutes = ((System.currentTimeMillis() - savedAtMillis) / 60_000L).coerceAtLeast(0)
+        return when {
+            minutes < 1 -> getString(R.string.list_updated_now)
+            minutes < 60 -> getString(R.string.list_updated_minutes, minutes.toInt())
+            minutes < 24 * 60 -> getString(R.string.list_updated_hours, (minutes / 60).toInt())
+            else -> getString(R.string.list_updated_days, (minutes / (24 * 60)).toInt())
+        }
+    }
+
+    /**
+     * Al abrir la app, vuelve a descargar en segundo plano las listas de los
+     * huecos cuya copia guardada tenga más de AUTO_REFRESH_MIN_AGE_MS (o no
+     * tenga copia), sin mostrar nada ni cambiar la lista que se esté viendo:
+     * solo deja la copia al día (para el buscador global, para abrir sin red
+     * y para el "actualizada hace..." de los botones). Una descarga o
+     * análisis que falle se ignora y se deja la copia anterior tal cual.
+     */
+    private fun autoRefreshLists() {
+        if (autoRefreshing) return
+        autoRefreshing = true
+        Thread {
+            var changed = false
+            for (slot in 1..5) {
+                val url = AppPrefs.getListUrl(this, slot)
+                if (url.isNullOrBlank()) continue
+                val last = PlaylistCache.lastSavedAt(this, slot)
+                if (last != null && System.currentTimeMillis() - last < AUTO_REFRESH_MIN_AGE_MS) continue
+                try {
+                    val raw = PlaylistRepository.downloadRaw(url)
+                    PlaylistRepository.parse(raw) // solo se guarda si se entiende (igual que al cargar a mano)
+                    PlaylistCache.save(this, slot, raw)
+                    changed = true
+                } catch (e: Exception) {
+                }
+            }
+            runOnUiThread {
+                autoRefreshing = false
+                if (isFinishing || isDestroyed || !changed) return@runOnUiThread
+                searchIndexDirty = true
+                updateSlotButtonLabels()
+            }
+        }.start()
     }
 
     private fun setupListSlotButtons() {
@@ -193,6 +267,7 @@ class MainActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (finalData != null) {
                     setPlaylist(finalData, "slot_$slot")
+                    updateSlotButtonLabels()
                     if (usedCache) {
                         val savedAt = formatCacheDate(PlaylistCache.lastSavedAt(this, slot))
                         Toast.makeText(this, getString(R.string.list_load_offline_cached, savedAt), Toast.LENGTH_LONG).show()
@@ -222,6 +297,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        updateSlotButtonLabels()
         if (binding.recyclerView.adapter === streamAdapter) {
             streamAdapter.notifyDataSetChanged()
         }
@@ -665,6 +741,9 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(this, EpgGridActivity::class.java))
     }
 }
+
+// Una lista cuya copia guardada tenga menos horas que esto no se vuelve a descargar sola al abrir la app (ver autoRefreshLists).
+private const val AUTO_REFRESH_MIN_AGE_MS = 3L * 60 * 60 * 1000
 
 private val DIACRITICS = Regex("\\p{M}+")
 
