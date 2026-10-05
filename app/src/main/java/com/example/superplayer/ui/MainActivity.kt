@@ -325,6 +325,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateSlotButtonLabels()
+        updateCategoryFilterButton()
         if (binding.recyclerView.adapter === streamAdapter) {
             streamAdapter.notifyDataSetChanged()
         }
@@ -423,31 +424,57 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Fila de botones de la lista cargada: Categorías (filtro) y Ordenar solo
-     * si tiene más de una categoría; Actualizar solo si es una lista remota
-     * (hueco). Con el filtro activo, el botón de Categorías dice cuántas se ven.
+     * Fila de opciones de la lista cargada: un texto de estado y un botón de
+     * engranaje con el menú Categorías (filtro) / Ordenar / Actualizar.
+     * Categorías y Ordenar solo si la lista tiene más de una categoría;
+     * Actualizar solo si es una lista remota (hueco). Sin ninguna opción, la
+     * fila entera se oculta.
      */
     private fun updateCategoryFilterButton() {
         val total = playlist.categories.size
-        val filterButton = binding.categoryFilterButton
-        val orderButton = binding.categoryOrderButton
-        val updateButton = binding.categoryUpdateButton
         val multi = total >= 2
         val isRemoteSlot = currentListKey.startsWith("slot_")
-
-        filterButton.visibility = if (multi) View.VISIBLE else View.GONE
-        orderButton.visibility = if (multi) View.VISIBLE else View.GONE
-        updateButton.visibility = if (isRemoteSlot) View.VISIBLE else View.GONE
-        binding.categoryButtonsRow.visibility = if (multi || isRemoteSlot) View.VISIBLE else View.GONE
-
-        if (multi) {
-            val shown = visibleCategories().size
-            filterButton.text = if (shown == total) getString(R.string.category_filter_button)
-            else getString(R.string.category_filter_button_active, shown, total)
-            filterButton.setOnClickListener { showCategoryFilterDialog() }
-            orderButton.setOnClickListener { showCategoryOrderDialog() }
+        val row = binding.categoryButtonsRow
+        if (!multi && !isRemoteSlot) {
+            row.visibility = View.GONE
+            return
         }
-        if (isRemoteSlot) updateButton.setOnClickListener { refreshCurrentList() }
+        row.visibility = View.VISIBLE
+
+        val shown = if (multi) visibleCategories().size else total
+        val parts = ArrayList<String>()
+        if (multi) {
+            parts.add(
+                if (shown == total) getString(R.string.list_status_categories, total)
+                else getString(R.string.list_status_categories_filtered, shown, total)
+            )
+        }
+        if (isRemoteSlot) {
+            val slot = currentListKey.removePrefix("slot_").toIntOrNull()
+            val saved = if (slot != null) PlaylistCache.lastSavedAt(this, slot) else null
+            if (saved != null) parts.add(getString(R.string.list_status_updated, formatAge(saved)))
+        }
+        binding.categoryStatusText.text = parts.joinToString(" · ")
+
+        binding.categoryOptionsButton.setOnClickListener { anchor ->
+            val popup = androidx.appcompat.widget.PopupMenu(this, anchor)
+            if (multi) {
+                popup.menu.add(0, 1, 0,
+                    if (shown == total) getString(R.string.category_filter_button)
+                    else getString(R.string.category_filter_button_active, shown, total))
+                popup.menu.add(0, 2, 1, getString(R.string.category_order_button))
+            }
+            if (isRemoteSlot) popup.menu.add(0, 3, 2, getString(R.string.list_update_button))
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> showCategoryFilterDialog()
+                    2 -> showCategoryOrderDialog()
+                    3 -> refreshCurrentList()
+                }
+                true
+            }
+            popup.show()
+        }
     }
 
     /**

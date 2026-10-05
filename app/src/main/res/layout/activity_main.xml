@@ -150,68 +150,43 @@
 
     </LinearLayout>
 
-    <!-- Categorías (filtro), Ordenar y Actualizar de la lista cargada (ver
-         MainActivity.updateCategoryFilterButton): Categorías y Ordenar solo
-         si la lista tiene más de una categoría; Actualizar solo si es una de
-         las 5 listas remotas (TV/Lista 2/Cine/TDT/Radio). Si no sale ningún
-         botón, toda la fila se oculta. -->
+    <!-- Opciones de la lista cargada (ver MainActivity.
+         updateCategoryFilterButton): a la izquierda un texto de estado
+         (categorías que se ven y cuándo se actualizó) y a la derecha un
+         único botón de engranaje que abre el menú con Categorías, Ordenar y
+         Actualizar (esta última solo en las 5 listas remotas). Si la lista no
+         tiene nada que ofrecer, toda la fila se oculta. -->
     <LinearLayout
         android:id="@+id/categoryButtonsRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingHorizontal="12dp"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="12dp"
         android:paddingTop="6dp"
         android:paddingBottom="2dp"
         android:visibility="gone">
 
-        <android.widget.Button
-            android:id="@+id/categoryFilterButton"
+        <TextView
+            android:id="@+id/categoryStatusText"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginEnd="4dp"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:paddingVertical="10dp"
-            android:text="@string/category_filter_button"
-            android:textAllCaps="false"
-            android:textSize="13sp"
-            android:textColor="@color/on_background"
-            android:background="@drawable/bg_list_slot_button"
-            android:visibility="gone" />
+            android:textColor="@color/on_surface_muted"
+            android:textSize="12sp"
+            android:maxLines="2"
+            android:ellipsize="end" />
 
-        <android.widget.Button
-            android:id="@+id/categoryOrderButton"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="4dp"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:paddingVertical="10dp"
-            android:text="@string/category_order_button"
-            android:textAllCaps="false"
-            android:textSize="13sp"
-            android:textColor="@color/on_background"
-            android:background="@drawable/bg_list_slot_button"
-            android:visibility="gone" />
-
-        <android.widget.Button
-            android:id="@+id/categoryUpdateButton"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:paddingVertical="10dp"
-            android:text="@string/list_update_button"
-            android:textAllCaps="false"
-            android:textSize="13sp"
-            android:textColor="@color/on_background"
-            android:background="@drawable/bg_list_slot_button"
-            android:visibility="gone" />
+        <ImageButton
+            android:id="@+id/categoryOptionsButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:padding="10dp"
+            android:background="@drawable/bg_list_options_button"
+            android:src="@drawable/ic_settings"
+            android:tint="@color/on_background"
+            android:contentDescription="@string/list_options_button" />
 
     </LinearLayout>
 

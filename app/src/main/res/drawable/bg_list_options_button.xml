@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Botón redondo de "opciones de lista" (engranaje de la portada, ver
+     activity_main.xml / MainActivity.updateCategoryFilterButton): círculo con
+     el mismo fondo y borde que los botones de lista, para que combine en
+     modo claro y oscuro. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/primary">
+    <item android:id="@android:id/mask">
+        <shape android:shape="oval">
+            <solid android:color="@android:color/white" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/surface_dark" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/list_slot_border" />
+        </shape>
+    </item>
+</ripple>
