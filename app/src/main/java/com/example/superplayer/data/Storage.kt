@@ -131,6 +131,42 @@ object AppPrefs {
         prefs(context).edit().putStringSet("hidden_cats_$listKey", HashSet(hidden)).apply()
     }
 
+    /**
+     * Orden de categorías elegido por el usuario para cada lista (ver
+     * MainActivity.showCategoryOrderDialog): los nombres, en orden. Vacío =
+     * el orden original de la lista. Las categorías que no estén en este
+     * orden (nuevas en la lista remota) salen al final.
+     */
+    fun getCategoryOrder(context: Context, listKey: String): List<String> {
+        val raw = prefs(context).getString("cat_order_$listKey", null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(raw)
+            List(arr.length()) { arr.getString(it) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setCategoryOrder(context: Context, listKey: String, order: List<String>) {
+        val editor = prefs(context).edit()
+        if (order.isEmpty()) editor.remove("cat_order_$listKey")
+        else editor.putString("cat_order_$listKey", org.json.JSONArray(order).toString())
+        editor.apply()
+    }
+
+    /** Todos los órdenes guardados, por clave de lista (para la copia de seguridad). */
+    fun getAllCategoryOrders(context: Context): Map<String, List<String>> {
+        val result = HashMap<String, List<String>>()
+        for (key in prefs(context).all.keys) {
+            if (key.startsWith("cat_order_")) {
+                val listKey = key.removePrefix("cat_order_")
+                val order = getCategoryOrder(context, listKey)
+                if (order.isNotEmpty()) result[listKey] = order
+            }
+        }
+        return result
+    }
+
     /** Todos los filtros de categorías guardados, por clave de lista (para la copia de seguridad, ver BackupManager). */
     fun getAllHiddenCategories(context: Context): Map<String, Set<String>> {
         val result = HashMap<String, Set<String>>()

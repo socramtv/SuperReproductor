@@ -712,8 +712,8 @@ En el menú de los tres puntos de la portada:
 
 - **Exportar copia de seguridad:** guarda un archivo `socram-tv-copia.json`
   donde elijas (el propio sistema te deja escoger la carpeta, sin permisos
-  extra) con tus favoritos, las URLs de los 5 huecos de lista, el filtro de
-  categorías de cada lista y el modo claro/oscuro.
+  extra) con tus favoritos, las URLs de los 5 huecos de lista, el filtro y
+  el orden de categorías de cada lista y el modo claro/oscuro.
 - **Importar copia de seguridad:** elige ese archivo. Los favoritos se
   **suman** a los que ya tengas (no se borra ninguno); las URLs, los
   filtros y el modo claro/oscuro se sustituyen por los de la copia. Al
@@ -723,6 +723,25 @@ En el menú de los tres puntos de la portada:
   "Cargar archivo" tampoco se guarda (hay que volver a elegirlo).
 - Guarda el archivo fuera de la app (Descargas, Drive...) para que sobreviva
   a una desinstalación.
+
+## Ordenar categorías
+
+Junto al botón de filtro hay un botón **"Ordenar"**: abre una ventana con
+todas las categorías de la lista cargada para cambiar su orden en la portada.
+
+- **Móvil:** mantén pulsada una fila y arrástrala. **TV (mando):** usa las
+  flechas ▲ ▼ de cada fila.
+- **Aceptar** guarda; **Cancelar** descarta; **Restablecer** vuelve al orden
+  original de la lista.
+- **Cada lista tiene su orden** (igual que el filtro), se recuerda al cerrar
+  la app y va en la copia de seguridad.
+- Las categorías ocultas por el filtro también salen en esta ventana (con
+  "(oculta)") y conservan su sitio por si las vuelves a mostrar.
+- Una categoría nueva que aparezca más adelante en la lista remota sale al
+  final, en su orden original.
+- **Favoritos** siempre va arriba del todo.
+- El orden solo afecta a la portada; dentro de una categoría los canales
+  siguen en el orden de la lista.
 
 ## Estructura
 

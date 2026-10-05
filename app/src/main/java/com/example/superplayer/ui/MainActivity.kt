@@ -303,21 +303,35 @@ class MainActivity : AppCompatActivity() {
         ShortcutsHelper.refresh(this, favoritesStore.getAllStreams())
     }
 
-    /** Categorías de la lista cargada menos las que el usuario ha ocultado con el filtro. */
+    /**
+     * Categorías de la lista cargada menos las ocultas por el filtro, en el
+     * orden elegido con "Ordenar" (las que no estén en ese orden, p. ej.
+     * nuevas en la lista remota, van al final, en su orden original).
+     */
     private fun visibleCategories(): List<Category> {
         val hidden = AppPrefs.getHiddenCategories(this, currentListKey)
-        return if (hidden.isEmpty()) playlist.categories else playlist.categories.filter { it.name !in hidden }
+        val shown = if (hidden.isEmpty()) playlist.categories else playlist.categories.filter { it.name !in hidden }
+        val order = AppPrefs.getCategoryOrder(this, currentListKey)
+        if (order.isEmpty()) return shown
+        val position = HashMap<String, Int>()
+        order.forEachIndexed { i, name -> position.putIfAbsent(name, i) }
+        // sortedBy es estable: las que no tienen posición conservan su orden relativo.
+        return shown.sortedBy { position[it.name] ?: Int.MAX_VALUE }
     }
 
     /** Botón de filtro: oculto si la lista tiene una sola categoría o ninguna; si hay filtro activo, dice cuántas se ven. */
     private fun updateCategoryFilterButton() {
         val total = playlist.categories.size
         val button = binding.categoryFilterButton
+        val orderButton = binding.categoryOrderButton
         if (total < 2) {
             button.visibility = View.GONE
+            orderButton.visibility = View.GONE
             return
         }
         button.visibility = View.VISIBLE
+        orderButton.visibility = View.VISIBLE
+        orderButton.setOnClickListener { showCategoryOrderDialog() }
         val shown = visibleCategories().size
         button.text = if (shown == total) getString(R.string.category_filter_button)
         else getString(R.string.category_filter_button_active, shown, total)
@@ -363,6 +377,74 @@ class MainActivity : AppCompatActivity() {
             updateCategoryFilterButton()
             dialog.dismiss()
         }
+    }
+
+    /**
+     * Ventana para ordenar las categorías de la lista cargada: arrastrando
+     * una fila (pulsación larga) o con las flechas ▲ ▼ de cada fila (para
+     * el mando de la TV). El orden se guarda por lista; "Restablecer" vuelve
+     * al orden original de la lista.
+     */
+    private fun showCategoryOrderDialog() {
+        val hidden = AppPrefs.getHiddenCategories(this, currentListKey)
+        // Punto de partida: el orden ya guardado (si hay) aplicado a TODAS las categorías.
+        val saved = AppPrefs.getCategoryOrder(this, currentListKey)
+        val position = HashMap<String, Int>()
+        saved.forEachIndexed { i, name -> position.putIfAbsent(name, i) }
+        val names = playlist.categories.map { it.name }
+            .sortedBy { position[it] ?: Int.MAX_VALUE }
+            .toMutableList()
+        val orderAdapter = CategoryOrderAdapter(names, hidden)
+
+        val recycler = androidx.recyclerview.widget.RecyclerView(this).apply {
+            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this@MainActivity)
+            adapter = orderAdapter
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                (resources.displayMetrics.heightPixels * 0.55f).toInt()
+            )
+        }
+        androidx.recyclerview.widget.ItemTouchHelper(object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
+            androidx.recyclerview.widget.ItemTouchHelper.UP or androidx.recyclerview.widget.ItemTouchHelper.DOWN, 0
+        ) {
+            override fun onMove(
+                rv: androidx.recyclerview.widget.RecyclerView,
+                from: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+                to: androidx.recyclerview.widget.RecyclerView.ViewHolder
+            ): Boolean {
+                orderAdapter.move(from.bindingAdapterPosition, to.bindingAdapterPosition)
+                return true
+            }
+
+            override fun onSwiped(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder, direction: Int) {}
+        }).attachToRecyclerView(recycler)
+
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val hint = android.widget.TextView(this@MainActivity).apply {
+                setText(R.string.category_order_hint)
+                textSize = 12f
+                alpha = 0.7f
+                val pad = (16 * resources.displayMetrics.density).toInt()
+                setPadding(pad, 0, pad, (8 * resources.displayMetrics.density).toInt())
+            }
+            addView(hint)
+            addView(recycler)
+        }
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.category_order_title)
+            .setView(container)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                AppPrefs.setCategoryOrder(this, currentListKey, orderAdapter.names.toList())
+                categoryAdapter.submit(buildCategoryListWithFavorites())
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setNeutralButton(R.string.category_order_reset) { _, _ ->
+                AppPrefs.setCategoryOrder(this, currentListKey, emptyList())
+                categoryAdapter.submit(buildCategoryListWithFavorites())
+            }
+            .show()
     }
 
     private fun buildCategoryListWithFavorites(): List<Category> {

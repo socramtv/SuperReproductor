@@ -150,9 +150,9 @@
 
     </LinearLayout>
 
-    <!-- Filtro de categorías de la lista cargada (ver MainActivity.
-         showCategoryFilterDialog); solo se muestra si la lista tiene más de
-         una categoría. -->
+    <!-- Filtro y orden de categorías de la lista cargada (ver MainActivity.
+         showCategoryFilterDialog / showCategoryOrderDialog); solo se
+         muestran si la lista tiene más de una categoría. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -163,12 +163,30 @@
 
         <android.widget.Button
             android:id="@+id/categoryFilterButton"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
             android:minWidth="0dp"
             android:minHeight="0dp"
             android:paddingVertical="10dp"
             android:text="@string/category_filter_button"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            android:textColor="@color/on_background"
+            android:background="@drawable/bg_list_slot_button"
+            android:visibility="gone" />
+
+        <android.widget.Button
+            android:id="@+id/categoryOrderButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingVertical="10dp"
+            android:text="@string/category_order_button"
             android:textAllCaps="false"
             android:textSize="13sp"
             android:textColor="@color/on_background"

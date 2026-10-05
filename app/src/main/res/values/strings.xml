@@ -46,6 +46,11 @@
     <string name="backup_export_error">No se pudo guardar la copia: %1$s</string>
     <string name="backup_import_ok">Copia importada: %1$d favoritos nuevos, %2$d URLs de listas, %3$d filtros</string>
     <string name="backup_import_error">No se pudo importar: %1$s</string>
+    <string name="category_order_button">Ordenar ↕️</string>
+    <string name="category_order_title">Ordenar categorías</string>
+    <string name="category_order_hint">Mantén pulsada una fila y arrástrala, o usa ▲ ▼</string>
+    <string name="category_order_hidden_suffix">(oculta)</string>
+    <string name="category_order_reset">Restablecer</string>
     <string name="action_load_file_button">Archivo 📁</string>
     <string name="loading_list">Cargando lista…</string>
     <string name="list_load_error">No se pudo cargar esa lista (%1$s).</string>

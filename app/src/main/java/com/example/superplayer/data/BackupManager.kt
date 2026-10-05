@@ -10,8 +10,8 @@ import org.json.JSONObject
 /**
  * Copia de seguridad en un archivo JSON (ver README, "Copia de seguridad"):
  * favoritos (con los datos completos de cada canal), las URLs de los 5
- * huecos de lista, el filtro de categorías de cada lista y el modo
- * claro/oscuro. No incluye las listas descargadas ni la guía: se vuelven a
+ * huecos de lista, el filtro y el orden de categorías de cada lista y
+ * el modo claro/oscuro. No incluye las listas descargadas ni la guía: se vuelven a
  * bajar solas de sus URLs.
  *
  * Al importar, los favoritos se SUMAN a los que ya haya (nunca se borra
@@ -47,6 +47,12 @@ object BackupManager {
             if (names.isNotEmpty()) hidden.put(key, JSONArray(names.toList()))
         }
         root.put("hiddenCategories", hidden)
+
+        val orders = JSONObject()
+        for ((key, names) in AppPrefs.getAllCategoryOrders(context)) {
+            orders.put(key, JSONArray(names))
+        }
+        root.put("categoryOrder", orders)
 
         root.put("darkMode", AppPrefs.isDarkMode(context))
         return root.toString(2)
@@ -93,6 +99,16 @@ object BackupManager {
                 for (i in 0 until arr.length()) names.add(arr.getString(i))
                 AppPrefs.setHiddenCategories(context, key, names)
                 filterCount++
+            }
+        }
+
+        val orders = root.optJSONObject("categoryOrder")
+        if (orders != null) {
+            val keys = orders.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val arr = orders.optJSONArray(key) ?: continue
+                AppPrefs.setCategoryOrder(context, key, List(arr.length()) { arr.getString(it) })
             }
         }
 
