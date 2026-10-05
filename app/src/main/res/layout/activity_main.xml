@@ -153,7 +153,7 @@
     <!-- Opciones de la lista cargada (ver MainActivity.
          updateCategoryFilterButton): a la izquierda un texto de estado
          (categorías que se ven y cuándo se actualizó) y a la derecha un
-         único botón de engranaje que abre el menú con Categorías, Ordenar y
+         tres botones redondos solo con icono: Categorías, Ordenar y
          Actualizar (esta última solo en las 5 listas remotas). Si la lista no
          tiene nada que ofrecer, toda la fila se oculta. -->
     <LinearLayout
@@ -179,14 +179,37 @@
             android:ellipsize="end" />
 
         <ImageButton
-            android:id="@+id/categoryOptionsButton"
+            android:id="@+id/categoryFilterButton"
             android:layout_width="44dp"
             android:layout_height="44dp"
+            android:layout_marginStart="8dp"
             android:padding="10dp"
             android:background="@drawable/bg_list_options_button"
-            android:src="@drawable/ic_settings"
-            android:tint="@color/on_background"
-            android:contentDescription="@string/list_options_button" />
+            android:src="@drawable/ic_filter_list"
+            android:tint="@color/primary"
+            android:contentDescription="@string/category_filter_desc" />
+
+        <ImageButton
+            android:id="@+id/categoryOrderButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:padding="10dp"
+            android:background="@drawable/bg_list_options_button"
+            android:src="@drawable/ic_swap_vert"
+            android:tint="@color/primary"
+            android:contentDescription="@string/category_order_desc" />
+
+        <ImageButton
+            android:id="@+id/categoryUpdateButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:padding="10dp"
+            android:background="@drawable/bg_list_options_button"
+            android:src="@drawable/ic_refresh"
+            android:tint="@color/primary"
+            android:contentDescription="@string/list_update_desc" />
 
     </LinearLayout>
 

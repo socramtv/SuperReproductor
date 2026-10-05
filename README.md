@@ -677,8 +677,9 @@ guardadas de los 5 huecos (TV / Lista 2 / Cine / TDT / Radio).
 
 Debajo de los botones de listas hay una fila con un texto de estado a la
 izquierda ("33 categorías · actualizada hace 2 min", o "7 de 33 categorías"
-con filtro activo) y un **botón de engranaje ⚙** a la derecha, que abre un
-menú con **Categorías**, **Ordenar** y **Actualizar** (Categorías y Ordenar solo
+con filtro activo) y **tres botones redondos solo con icono** a la derecha (en
+color naranja, para que no parezcan una categoría más): **filtro**, **ordenar ↕** y
+**actualizar 🔄** (filtro y ordenar solo
 si la lista cargada tiene más de una categoría; Actualizar solo en las 5 listas
 remotas; si no hay ninguna, la fila no aparece).
 
@@ -693,7 +694,7 @@ portada.
   archivo local): el de una no afecta a las otras, y se recuerda al cerrar
   la app. Lo que se guarda son las categorías ocultas, así que una categoría
   nueva que aparezca más adelante en la lista remota se ve por defecto.
-- Con el filtro activo, el texto de estado dice "3 de 12 categorías" y el menú, "Categorías 3/12".
+- Con el filtro activo, el texto de estado dice "3 de 12 categorías" .
 - **Favoritos** no depende del filtro: sus canales salen siempre, aunque su
   categoría esté oculta.
 - El buscador global de la lupa sigue buscando en todos los canales, también
@@ -740,7 +741,7 @@ En el menú de los tres puntos de la portada:
 
 ## Ordenar categorías
 
-En el menú del engranaje ⚙ (ver "Filtro de categorías por lista") está **"Ordenar"**: abre una ventana con
+El botón redondo **↕** (ver "Filtro de categorías por lista") es **"Ordenar"**: abre una ventana con
 todas las categorías de la lista cargada para cambiar su orden en la portada.
 
 - **Móvil:** mantén pulsada una fila y arrástrala. **TV (mando):** usa las
@@ -775,7 +776,7 @@ se recuerda al cerrar la app (por defecto, Ajustar).
 Las listas de los 5 huecos (TV, Lista 2, Cine, TDT, Radio) **no se descargan
 cada vez**: se actualizan de dos formas.
 
-- **"Actualizar 🔄"** (en el menú del engranaje ⚙, dentro de cada lista remota): vuelve a descargar la lista que estás viendo y la recarga. Si
+- **El botón redondo 🔄** (en la fila de opciones, dentro de cada lista remota): vuelve a descargar la lista que estás viendo y la recarga. Si
   no hay red, se queda con la copia guardada y te lo avisa.
 - **Una vez al día, solas:** al abrir la app, en segundo plano y sin avisos, se
   descargan las listas de los huecos cuya copia tenga más de 24 horas (o no

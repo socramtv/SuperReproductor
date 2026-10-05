@@ -424,8 +424,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Fila de opciones de la lista cargada: un texto de estado y un botón de
-     * engranaje con el menú Categorías (filtro) / Ordenar / Actualizar.
+     * Fila de opciones de la lista cargada: un texto de estado y tres botones
+     * redondos con icono: Categorías (filtro) / Ordenar / Actualizar.
      * Categorías y Ordenar solo si la lista tiene más de una categoría;
      * Actualizar solo si es una lista remota (hueco). Sin ninguna opción, la
      * fila entera se oculta.
@@ -456,25 +456,12 @@ class MainActivity : AppCompatActivity() {
         }
         binding.categoryStatusText.text = parts.joinToString(" · ")
 
-        binding.categoryOptionsButton.setOnClickListener { anchor ->
-            val popup = androidx.appcompat.widget.PopupMenu(this, anchor)
-            if (multi) {
-                popup.menu.add(0, 1, 0,
-                    if (shown == total) getString(R.string.category_filter_button)
-                    else getString(R.string.category_filter_button_active, shown, total))
-                popup.menu.add(0, 2, 1, getString(R.string.category_order_button))
-            }
-            if (isRemoteSlot) popup.menu.add(0, 3, 2, getString(R.string.list_update_button))
-            popup.setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    1 -> showCategoryFilterDialog()
-                    2 -> showCategoryOrderDialog()
-                    3 -> refreshCurrentList()
-                }
-                true
-            }
-            popup.show()
-        }
+        binding.categoryFilterButton.visibility = if (multi) View.VISIBLE else View.GONE
+        binding.categoryOrderButton.visibility = if (multi) View.VISIBLE else View.GONE
+        binding.categoryUpdateButton.visibility = if (isRemoteSlot) View.VISIBLE else View.GONE
+        binding.categoryFilterButton.setOnClickListener { showCategoryFilterDialog() }
+        binding.categoryOrderButton.setOnClickListener { showCategoryOrderDialog() }
+        binding.categoryUpdateButton.setOnClickListener { refreshCurrentList() }
     }
 
     /**
