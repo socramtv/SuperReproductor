@@ -14,6 +14,7 @@ import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.superplayer.R
 import com.example.superplayer.data.AppPrefs
+import com.example.superplayer.data.BackupManager
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.data.PlaylistCache
@@ -56,6 +57,17 @@ class MainActivity : AppCompatActivity() {
     private val openDocumentLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) loadFromUri(uri)
+        }
+
+    // Copia de seguridad (ver BackupManager): el sistema pide dónde guardar el
+    // archivo / cuál abrir, así que no hacen falta permisos de almacenamiento.
+    private val exportBackupLauncher =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+            if (uri != null) exportBackupTo(uri)
+        }
+    private val importBackupLauncher =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri != null) importBackupFrom(uri)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -483,6 +495,14 @@ class MainActivity : AppCompatActivity() {
                 toggleTheme()
                 true
             }
+            R.id.action_backup_export -> {
+                exportBackupLauncher.launch("socram-tv-copia.json")
+                true
+            }
+            R.id.action_backup_import -> {
+                importBackupLauncher.launch(arrayOf("*/*"))
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -506,6 +526,41 @@ class MainActivity : AppCompatActivity() {
      * recreate() ni refrescar nada más aquí: al volver a crearse,
      * onCreateOptionsMenu ya calcula el icono/texto para el nuevo modo.
      */
+    private fun exportBackupTo(uri: Uri) {
+        try {
+            val text = BackupManager.export(this)
+            contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                ?: throw IllegalStateException("no se pudo abrir el archivo")
+            Toast.makeText(this, R.string.backup_export_ok, Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, getString(R.string.backup_export_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun importBackupFrom(uri: Uri) {
+        try {
+            val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                ?: throw IllegalStateException("no se pudo abrir el archivo")
+            val result = BackupManager.restore(this, text)
+            // Refresca lo que se ve: categorías (filtros), favoritos y accesos directos.
+            categoryAdapter.submit(buildCategoryListWithFavorites())
+            updateCategoryFilterButton()
+            refreshShortcuts()
+            Toast.makeText(
+                this,
+                getString(R.string.backup_import_ok, result.newFavorites, result.listUrls, result.filters),
+                Toast.LENGTH_LONG
+            ).show()
+            if (result.darkModeChanged) {
+                AppCompatDelegate.setDefaultNightMode(
+                    if (AppPrefs.isDarkMode(this)) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+                )
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, getString(R.string.backup_import_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun toggleTheme() {
         val goingDark = AppCompatDelegate.getDefaultNightMode() != AppCompatDelegate.MODE_NIGHT_YES
         AppPrefs.setDarkMode(this, goingDark)

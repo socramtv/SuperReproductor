@@ -72,6 +72,23 @@ class FavoritesStore(context: Context) {
         if (changed) editor.apply()
     }
 
+    /**
+     * Añade estos Stream a los favoritos (copia de seguridad, ver
+     * BackupManager): une con los que ya hay, no borra ninguno. Devuelve
+     * cuántos eran nuevos.
+     */
+    fun addAll(streams: List<Stream>): Int {
+        val current = HashSet(prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet())
+        val editor = prefs.edit()
+        var added = 0
+        for (stream in streams) {
+            if (current.add(stream.id)) added++
+            editor.putString(jsonKey(stream.id), stream.toJson())
+        }
+        editor.putStringSet(KEY_IDS, current).apply()
+        return added
+    }
+
     private fun jsonKey(streamId: String) = "fav_json_$streamId"
 
     companion object {
@@ -112,6 +129,17 @@ object AppPrefs {
 
     fun setHiddenCategories(context: Context, listKey: String, hidden: Set<String>) {
         prefs(context).edit().putStringSet("hidden_cats_$listKey", HashSet(hidden)).apply()
+    }
+
+    /** Todos los filtros de categorías guardados, por clave de lista (para la copia de seguridad, ver BackupManager). */
+    fun getAllHiddenCategories(context: Context): Map<String, Set<String>> {
+        val result = HashMap<String, Set<String>>()
+        for ((key, value) in prefs(context).all) {
+            if (key.startsWith("hidden_cats_") && value is Set<*>) {
+                result[key.removePrefix("hidden_cats_")] = value.filterIsInstance<String>().toSet()
+            }
+        }
+        return result
     }
 
     /**

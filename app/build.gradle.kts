@@ -16,6 +16,22 @@ android {
 
     }
 
+    // Firma FIJA para las APK de depuración (ver README, "Actualizar sin
+    // desinstalar"): sin esto, cada compilación de GitHub Actions genera una
+    // clave de depuración nueva, Android ve "otra app" y obliga a
+    // desinstalar la anterior (perdiendo favoritos y ajustes). Con la misma
+    // clave en todas las compilaciones, la nueva se instala encima de la
+    // vieja. Es una clave de uso personal, sin ningún secreto real: solo
+    // sirve para que Android reconozca las actualizaciones como de la misma app.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

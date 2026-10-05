@@ -40,6 +40,12 @@
     <string name="category_filter_title">Categorías a mostrar</string>
     <string name="category_filter_invert">Invertir</string>
     <string name="category_filter_none_selected">Elige al menos una categoría</string>
+    <string name="action_backup_export">Exportar copia de seguridad</string>
+    <string name="action_backup_import">Importar copia de seguridad</string>
+    <string name="backup_export_ok">Copia guardada</string>
+    <string name="backup_export_error">No se pudo guardar la copia: %1$s</string>
+    <string name="backup_import_ok">Copia importada: %1$d favoritos nuevos, %2$d URLs de listas, %3$d filtros</string>
+    <string name="backup_import_error">No se pudo importar: %1$s</string>
     <string name="action_load_file_button">Archivo 📁</string>
     <string name="loading_list">Cargando lista…</string>
     <string name="list_load_error">No se pudo cargar esa lista (%1$s).</string>

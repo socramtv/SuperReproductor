@@ -29,4 +29,17 @@
         app:iconTint="@color/on_background"
         app:showAsAction="ifRoom" />
 
+
+    <!-- Copia de seguridad (ver BackupManager): en el menú de los tres
+         puntos para no recargar la barra. -->
+    <item
+        android:id="@+id/action_backup_export"
+        android:title="@string/action_backup_export"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_backup_import"
+        android:title="@string/action_backup_import"
+        app:showAsAction="never" />
+
 </menu>

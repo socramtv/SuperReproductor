@@ -687,6 +687,43 @@ se muestran, desmarcadas = se ocultan de la portada.
 - La ventana es una lista de casillas en una columna (sin agrupar por
   país/región como en otras apps), con el número de canales de cada una.
 
+## Actualizar sin desinstalar
+
+Las APK de depuración que compila GitHub Actions ahora se firman siempre con
+la **misma clave** (`app/debug.keystore`, configurada en `signingConfigs` de
+`app/build.gradle.kts`). Antes, cada compilación generaba una clave nueva y
+Android la trataba como "otra app": había que desinstalar la anterior y se
+perdían favoritos y ajustes. Con la clave fija, la APK nueva se instala
+**encima** de la vieja y se conserva todo.
+
+- **Una última desinstalación:** la primera APK con esta clave tampoco se
+  puede instalar encima de las antiguas (tenían otra firma). Hay que
+  desinstalar una vez más; a partir de ahí, ya no.
+- No borres ni cambies `app/debug.keystore`: si cambia, vuelve a pasar lo de
+  antes. Está en el repositorio a propósito; es una clave de uso personal
+  (contraseña `android`) que solo sirve para que Android reconozca las
+  actualizaciones como de la misma app, no protege nada.
+- Si usas una APK ya instalada de otra fuente, no se podrá actualizar encima
+  (firma distinta).
+
+## Copia de seguridad
+
+En el menú de los tres puntos de la portada:
+
+- **Exportar copia de seguridad:** guarda un archivo `socram-tv-copia.json`
+  donde elijas (el propio sistema te deja escoger la carpeta, sin permisos
+  extra) con tus favoritos, las URLs de los 5 huecos de lista, el filtro de
+  categorías de cada lista y el modo claro/oscuro.
+- **Importar copia de seguridad:** elige ese archivo. Los favoritos se
+  **suman** a los que ya tengas (no se borra ninguno); las URLs, los
+  filtros y el modo claro/oscuro se sustituyen por los de la copia. Al
+  terminar sale un aviso con cuántos favoritos nuevos, URLs y filtros entraron.
+- No incluye las listas descargadas ni la guía de programación: se vuelven a
+  bajar solas de sus URLs al abrir cada hueco. El archivo cargado con
+  "Cargar archivo" tampoco se guarda (hay que volver a elegirlo).
+- Guarda el archivo fuera de la app (Descargas, Drive...) para que sobreviva
+  a una desinstalación.
+
 ## Estructura
 
 ```
