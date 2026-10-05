@@ -100,6 +100,21 @@ object AppPrefs {
     }
 
     /**
+     * Filtro de categorías por lista (ver MainActivity.showCategoryFilterDialog):
+     * guarda las categorías que el usuario ha OCULTADO de esa lista (no las
+     * visibles), para que una categoría nueva que aparezca más tarde en la
+     * lista remota se vea por defecto. `listKey` identifica la lista:
+     * "slot_1".."slot_5" para los huecos remotos, "file" para el archivo
+     * local, "sample" para la lista de ejemplo.
+     */
+    fun getHiddenCategories(context: Context, listKey: String): Set<String> =
+        HashSet(prefs(context).getStringSet("hidden_cats_$listKey", emptySet()) ?: emptySet())
+
+    fun setHiddenCategories(context: Context, listKey: String, hidden: Set<String>) {
+        prefs(context).edit().putStringSet("hidden_cats_$listKey", HashSet(hidden)).apply()
+    }
+
+    /**
      * Modo claro/oscuro elegido a mano (ver MainActivity.toggleTheme): por
      * defecto oscuro, que es como ha sido siempre la app hasta ahora, para
      * que a quien ya la tenga instalada no le cambie el aspecto solo al

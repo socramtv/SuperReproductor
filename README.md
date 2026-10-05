@@ -665,6 +665,28 @@ guardadas de los 5 huecos (TV / Lista 2 / Cine / TDT / Radio).
   lista actual.
 - El buscador dentro de una categoría sigue igual (solo esa categoría).
 
+## Filtro de categorías por lista
+
+Debajo de los botones de listas hay un botón **"Filtrar categorías"** (solo
+aparece si la lista cargada tiene más de una categoría). Abre una ventana
+con todas las categorías de esa lista y una casilla en cada una: marcadas =
+se muestran, desmarcadas = se ocultan de la portada.
+
+- **Invertir** marca las desmarcadas y desmarca las marcadas de una vez;
+  **Aceptar** guarda; **Cancelar** descarta los cambios. Hace falta dejar al
+  menos una categoría marcada.
+- **Cada lista tiene su filtro** (TV, Lista 2, Cine, TDT y Radio, más el
+  archivo local): el de una no afecta a las otras, y se recuerda al cerrar
+  la app. Lo que se guarda son las categorías ocultas, así que una categoría
+  nueva que aparezca más adelante en la lista remota se ve por defecto.
+- Con el filtro activo, el botón dice "Categorías: 3 de 12".
+- **Favoritos** no depende del filtro: sus canales salen siempre, aunque su
+  categoría esté oculta.
+- El buscador global de la lupa sigue buscando en todos los canales, también
+  en categorías ocultas.
+- La ventana es una lista de casillas en una columna (sin agrupar por
+  país/región como en otras apps), con el número de canales de cada una.
+
 ## Estructura
 
 ```

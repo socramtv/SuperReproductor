@@ -33,6 +33,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var streamAdapter: StreamAdapter
     private var playlist: PlaylistData = PlaylistData(emptyList())
 
+    // Qué lista hay cargada ("slot_1".."slot_5", "file" o "sample"): el
+    // filtro de categorías se guarda por lista (ver AppPrefs.getHiddenCategories).
+    private var currentListKey: String = "sample"
+
     // Última lista mostrada en streamAdapter (resultados de la búsqueda
     // actual); openPlayer() se la pasa a PlayerActivity para que el gesto de
     // "canal siguiente/anterior" recorra esos mismos resultados.
@@ -176,7 +180,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (finalData != null) {
-                    setPlaylist(finalData)
+                    setPlaylist(finalData, "slot_$slot")
                     if (usedCache) {
                         val savedAt = formatCacheDate(PlaylistCache.lastSavedAt(this, slot))
                         Toast.makeText(this, getString(R.string.list_load_offline_cached, savedAt), Toast.LENGTH_LONG).show()
@@ -223,14 +227,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
         try {
-            setPlaylist(PlaylistRepository.loadFromAssets(this, "sample_playlist.json"))
+            setPlaylist(PlaylistRepository.loadFromAssets(this, "sample_playlist.json"), "sample")
         } catch (e: Exception) {
             Toast.makeText(
                 this,
                 "No se pudo cargar la lista de ejemplo (${e.message}). Carga tu propio JSON.",
                 Toast.LENGTH_LONG
             ).show()
-            setPlaylist(PlaylistData(emptyList()))
+            setPlaylist(PlaylistData(emptyList()), "sample")
         }
     }
 
@@ -252,7 +256,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         AppPrefs.saveLastPlaylistUri(this, uri.toString())
-        setPlaylist(data)
+        setPlaylist(data, "file")
         if (announce) {
             val totalStreams = data.categories.sumOf { it.streams.size }
             Toast.makeText(
@@ -263,11 +267,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setPlaylist(data: PlaylistData) {
+    private fun setPlaylist(data: PlaylistData, listKey: String) {
         playlist = data
+        currentListKey = listKey
         searchIndexDirty = true
         binding.recyclerView.adapter = categoryAdapter
         categoryAdapter.submit(buildCategoryListWithFavorites())
+        updateCategoryFilterButton()
         binding.emptyView.visibility = if (data.categories.isEmpty()) View.VISIBLE else View.GONE
         // Sin bloquear nada: si esta lista trae guía EPG (o ya la teníamos
         // cargada de antes), se descarga/parsea sola en segundo plano.
@@ -285,6 +291,68 @@ class MainActivity : AppCompatActivity() {
         ShortcutsHelper.refresh(this, favoritesStore.getAllStreams())
     }
 
+    /** Categorías de la lista cargada menos las que el usuario ha ocultado con el filtro. */
+    private fun visibleCategories(): List<Category> {
+        val hidden = AppPrefs.getHiddenCategories(this, currentListKey)
+        return if (hidden.isEmpty()) playlist.categories else playlist.categories.filter { it.name !in hidden }
+    }
+
+    /** Botón de filtro: oculto si la lista tiene una sola categoría o ninguna; si hay filtro activo, dice cuántas se ven. */
+    private fun updateCategoryFilterButton() {
+        val total = playlist.categories.size
+        val button = binding.categoryFilterButton
+        if (total < 2) {
+            button.visibility = View.GONE
+            return
+        }
+        button.visibility = View.VISIBLE
+        val shown = visibleCategories().size
+        button.text = if (shown == total) getString(R.string.category_filter_button)
+        else getString(R.string.category_filter_button_active, shown, total)
+        button.setOnClickListener { showCategoryFilterDialog() }
+    }
+
+    /**
+     * Casillas con todas las categorías de la lista cargada (como "Spain /
+     * Populares / Deportivas..." de las apps de listas): marcadas = se ven.
+     * "Invertir" cambia todas a la vez; "Aceptar" guarda el filtro de ESTA
+     * lista (cada hueco tiene el suyo). Favoritos no depende del filtro: sus
+     * canales salen siempre, estén en una categoría oculta o no.
+     */
+    private fun showCategoryFilterDialog() {
+        val cats = playlist.categories
+        val hidden = AppPrefs.getHiddenCategories(this, currentListKey)
+        val checked = BooleanArray(cats.size) { cats[it].name !in hidden }
+        val labels = Array(cats.size) { "${cats[it].name} (${cats[it].streams.size})" }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.category_filter_title)
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked -> checked[which] = isChecked }
+            .setPositiveButton(android.R.string.ok, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setNeutralButton(R.string.category_filter_invert, null)
+            .create()
+        dialog.show()
+        // Se asignan después de show() para que "Invertir" y un "Aceptar"
+        // sin ninguna categoría marcada no cierren el diálogo solos.
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+            for (i in checked.indices) {
+                checked[i] = !checked[i]
+                dialog.listView.setItemChecked(i, checked[i])
+            }
+        }
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (checked.none { it }) {
+                Toast.makeText(this, R.string.category_filter_none_selected, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val newHidden = cats.filterIndexed { i, _ -> !checked[i] }.map { it.name }.toSet()
+            AppPrefs.setHiddenCategories(this, currentListKey, newHidden)
+            categoryAdapter.submit(buildCategoryListWithFavorites())
+            updateCategoryFilterButton()
+            dialog.dismiss()
+        }
+    }
+
     private fun buildCategoryListWithFavorites(): List<Category> {
         val favIds = favoritesStore.getAll()
         val favStreams = playlist.categories.flatMap { it.streams }.filter { favIds.contains(it.id) }
@@ -292,7 +360,7 @@ class MainActivity : AppCompatActivity() {
         if (favStreams.isNotEmpty()) {
             result.add(Category(getString(R.string.favorites_category_name), favStreams))
         }
-        result.addAll(playlist.categories)
+        result.addAll(visibleCategories())
         return result
     }
 
