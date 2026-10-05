@@ -266,6 +266,13 @@ class PlayerActivity : AppCompatActivity() {
                 attempts++
                 val ctrl = controller
                 if (ctrl != null && ctrl.isPlaying) {
+                    // Red de seguridad para los botones propios (engranaje, PiP,
+                    // cartel de "ahora suena"): deben seguir el estado real de
+                    // los controles; si con los controles ya ocultos alguno se
+                    // ha quedado visible, se esconden.
+                    if (!binding.playerView.isControllerFullyVisible && binding.trackSelectionButton.visibility == View.VISIBLE) {
+                        applyControlsVisibility(View.GONE)
+                    }
                     val controlsStuck = binding.playerView.isControllerFullyVisible
                     val bufferingView = binding.playerView.findViewById<View?>(androidx.media3.ui.R.id.exo_buffering)
                     val bufferingStuck = bufferingView != null && bufferingView.visibility == View.VISIBLE
@@ -699,6 +706,14 @@ class PlayerActivity : AppCompatActivity() {
             // resolution ambiguity"); hay que decir cuál de las dos es.
             PlayerView.ControllerVisibilityListener { visibility -> applyControlsVisibility(visibility) }
         )
+        // Estado inicial: en activity_player.xml el engranaje y el botón de PiP
+        // empiezan visibles, y el listener de arriba solo se entera de los
+        // CAMBIOS de visibilidad de los controles. Si al entrar en un canal los
+        // controles nunca llegan a mostrarse (o a ocultarse) por ese camino
+        // -visto en TV-, los botones se quedaban pegados en pantalla hasta
+        // pausar y dar a play. Sincronizados desde el principio con el estado
+        // real de los controles (ocultos al abrir), eso ya no puede pasar.
+        applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
         binding.playerView.keepScreenOn = true
         binding.playerView.setOnTouchListener { _, event -> playerTapGestureDetector.onTouchEvent(event) }
 

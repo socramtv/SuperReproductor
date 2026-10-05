@@ -400,6 +400,14 @@ para el tiempo normal que tardan en ocultarse solos), si detecta que el
 reproductor ya está reproduciendo de verdad mientras los controles siguen
 visibles, los oculta a mano. Avisa si lo sigues viendo.
 
+**Segundo fallo parecido (TV):** al entrar en un canal, el engranaje y el
+botón de imagen en imagen se quedaban en pantalla hasta pausar y dar a play.
+Causa: esos botones empiezan visibles en el diseño y solo se ocultaban cuando
+los controles del reproductor avisaban de que se ocultaban; si al entrar ese
+aviso no llegaba, se quedaban. Ahora se sincronizan con el estado real de los
+controles desde el primer momento (ocultos al abrir el canal) y la comprobación
+de respaldo también los esconde si ve alguno visible con los controles ocultos.
+
 ### Avanzar/retroceder sin perder el cambio de canal
 
 Cambiar de canal es un **toque**; avanzar o retroceder el vídeo (en los
