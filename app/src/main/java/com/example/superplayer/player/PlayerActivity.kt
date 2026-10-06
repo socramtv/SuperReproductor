@@ -1226,6 +1226,12 @@ class PlayerActivity : AppCompatActivity() {
             (button.parent as? android.view.ViewGroup)?.removeView(button)
             bar.addView(button, index)
         }
+        // Separación del borde derecho: el engranaje de velocidad y el resto
+        // quedaban pegados al borde, sobre la franja negra de los lados del
+        // vídeo, y parecían escondidos. Mismo margen que el botón de
+        // Chromecast de arriba.
+        val extraEnd = (88 * resources.displayMetrics.density).toInt()
+        bar.setPadding(bar.paddingLeft, bar.paddingTop, bar.paddingRight + extraEnd, bar.paddingBottom)
         binding.playerActionsFallback.visibility = View.GONE
     }
 
