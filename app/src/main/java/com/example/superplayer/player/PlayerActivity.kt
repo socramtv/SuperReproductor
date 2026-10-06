@@ -805,10 +805,22 @@ class PlayerActivity : AppCompatActivity() {
                 ctrl.clearMediaItems()
                 playbackStarted = false
             } else if (!isCurrentStreamRadio && !isCastingRemote) {
-                // Vídeo/TV en segundo plano (bloqueo, Home...): igual que
-                // antes, se pausa (no tiene sentido gastar datos/batería
-                // decodificando vídeo que no se ve).
-                ctrl.pause()
+                if (AppPrefs.isBackgroundAudio(this) && !isInPictureInPictureMode) {
+                    // Vídeo/TV en segundo plano (bloqueo, Home...) con
+                    // "Audio en segundo plano" activado: sigue sonando solo
+                    // el audio (como una radio) y se desactiva la pista de
+                    // vídeo para no gastar batería decodificando imagen que
+                    // no se ve. Se reactiva al volver (onControllerConnected).
+                    // Si ya estaba en pausa, se queda en pausa.
+                    ctrl.trackSelectionParameters = ctrl.trackSelectionParameters
+                        .buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+                        .build()
+                } else {
+                    // Sin esa opción (o si se cerró la ventana PiP): se
+                    // pausa, igual que antes.
+                    ctrl.pause()
+                }
             }
             // Radio, o enviando a un Chromecast, + no isFinishing (p. ej. se
             // bloqueó la pantalla): se deja sonando/enviando; la reproducción
@@ -990,6 +1002,12 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun onControllerConnected(mediaController: MediaController) {
         controller = mediaController
+        // Por si se desactivó el vídeo al pasar a segundo plano (ver onStop):
+        // el reproductor vive en el servicio y conserva ese ajuste.
+        mediaController.trackSelectionParameters = mediaController.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
+            .build()
         binding.playerView.player = mediaController
         mediaController.addListener(playerListener)
         maybeStartPlayback()
@@ -1185,9 +1203,22 @@ class PlayerActivity : AppCompatActivity() {
         popup.menu.add(0, MENU_ID_AUDIO, 1, getString(R.string.track_audio))
         popup.menu.add(0, MENU_ID_SUBTITLES, 2, getString(R.string.track_subtitles))
         popup.menu.add(0, MENU_ID_FORMAT, 3, getString(R.string.video_format_menu, videoFormatName(AppPrefs.getVideoFormat(this))))
+        popup.menu.add(0, MENU_ID_BG_AUDIO, 4, getString(
+            if (AppPrefs.isBackgroundAudio(this)) R.string.background_audio_on else R.string.background_audio_off
+        ))
         popup.setOnMenuItemClickListener { item ->
             if (item.itemId == MENU_ID_FORMAT) {
                 cycleVideoFormat()
+                return@setOnMenuItemClickListener true
+            }
+            if (item.itemId == MENU_ID_BG_AUDIO) {
+                val enabled = !AppPrefs.isBackgroundAudio(this)
+                AppPrefs.setBackgroundAudio(this, enabled)
+                Toast.makeText(
+                    this,
+                    getString(if (enabled) R.string.background_audio_on else R.string.background_audio_off),
+                    Toast.LENGTH_SHORT
+                ).show()
                 return@setOnMenuItemClickListener true
             }
             val trackType = when (item.itemId) {
@@ -1235,6 +1266,7 @@ class PlayerActivity : AppCompatActivity() {
         private const val MENU_ID_AUDIO = 2
         private const val MENU_ID_SUBTITLES = 3
         private const val MENU_ID_FORMAT = 4
+        private const val MENU_ID_BG_AUDIO = 5
         private const val EPG_REFRESH_INTERVAL_MS = 60_000L
 
         // Ancho de las zonas laterales de toque (izquierda/derecha), como

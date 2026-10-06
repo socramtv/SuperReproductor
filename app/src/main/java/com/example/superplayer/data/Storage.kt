@@ -179,6 +179,13 @@ object AppPrefs {
         prefs(context).edit().putInt("video_format", format).apply()
     }
 
+    /** Si un canal de vídeo/TV sigue sonando (solo audio) al bloquear la pantalla o cambiar de app. Por defecto sí. */
+    fun isBackgroundAudio(context: Context): Boolean = prefs(context).getBoolean("background_audio", true)
+
+    fun setBackgroundAudio(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean("background_audio", enabled).apply()
+    }
+
     /** Todos los filtros de categorías guardados, por clave de lista (para la copia de seguridad, ver BackupManager). */
     fun getAllHiddenCategories(context: Context): Map<String, Set<String>> {
         val result = HashMap<String, Set<String>>()

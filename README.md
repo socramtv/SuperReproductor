@@ -331,8 +331,15 @@ una pantalla de "ahora suena" en vez del hueco negro del vídeo.
   canal no trae imagen, el sistema pone un icono genérico en su lugar.
   Volver a abrir la app y salir del reproductor (botón atrás) sí para la
   radio.
-- Para un canal de vídeo/TV normal, el comportamiento no cambia: al
-  bloquear el teléfono o cambiar de app se pausa, igual que antes.
+- Un canal de **vídeo/TV** también puede seguir sonando en segundo plano
+  (solo el audio, como una radio): al bloquear el teléfono o cambiar de
+  app deja de decodificar la imagen (ahorra batería) y mantiene el sonido
+  con los controles en la notificación y en la pantalla de bloqueo. Al
+  volver a la app, el vídeo se reactiva solo. Se activa/desactiva en el
+  engranaje del reproductor, opción **"Audio en segundo plano: sí/no"**
+  (por defecto, sí). Si lo pones en "no", al bloquear o cambiar de app se
+  pausa como antes. Si el vídeo estaba en pausa al salir, se queda en
+  pausa. Si cierras la ventanita de imagen en imagen, se pausa.
 - La primera vez, Android puede pedir permiso de notificaciones (Android
   13 o superior); sin ese permiso la radio sigue sonando en segundo plano
   igual, pero no se ven los controles en la pantalla de bloqueo.

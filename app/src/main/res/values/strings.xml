@@ -58,6 +58,8 @@
     <string name="category_order_hint">Mantén pulsada una fila y arrástrala, o usa ▲ ▼</string>
     <string name="category_order_hidden_suffix">(oculta)</string>
     <string name="category_order_reset">Restablecer</string>
+    <string name="background_audio_on">Audio en segundo plano: sí</string>
+    <string name="background_audio_off">Audio en segundo plano: no</string>
     <string name="video_format_menu">Formato de pantalla: %1$s</string>
     <string name="video_format_fit">Ajustar</string>
     <string name="video_format_fill">Estirar</string>
