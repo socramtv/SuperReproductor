@@ -112,21 +112,10 @@ class MainActivity : AppCompatActivity() {
         Triple(5, binding.listButton5, R.string.list_slot_5)
     )
 
-    /** Texto de cada botón de lista: su nombre y, debajo y más pequeño, cuándo se actualizó por última vez (si ya hay copia guardada). */
+    /** Texto de cada botón de lista: solo su nombre (la fecha de actualización se ve en la fila de estado de abajo). */
     private fun updateSlotButtonLabels() {
-        for ((slot, button, labelRes) in slotDefs()) {
-            val label = getString(labelRes)
-            val saved = PlaylistCache.lastSavedAt(this, slot)
-            if (saved == null) {
-                button.text = label
-            } else {
-                val text = android.text.SpannableString("$label\n${formatAge(saved)}")
-                text.setSpan(
-                    android.text.style.RelativeSizeSpan(0.75f),
-                    label.length + 1, text.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-                button.text = text
-            }
+        for ((_, button, labelRes) in slotDefs()) {
+            button.text = getString(labelRes)
         }
     }
 
