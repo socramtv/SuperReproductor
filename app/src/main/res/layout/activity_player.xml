@@ -78,59 +78,82 @@
 
     </LinearLayout>
 
-    <ImageButton
-        android:id="@+id/trackSelectionButton"
+    <!--
+        Chromecast (ver PlayerActivity.isCastButtonUsable/onCastSessionChanged),
+        solo, arriba a la derecha. MediaRouteButton es una vista especial del
+        propio framework de mediarouter/Cast -su icono cambia solo según
+        busca/conecta/está conectada-, por eso no es un ImageButton normal,
+        pero acepta el mismo fondo circular y tinte blanco. Empieza oculto
+        (ver PlayerActivity.onCreate) y CastButtonFactory lo muestra solo en
+        cuanto aparece algún Chromecast en la red; si el dispositivo no tiene
+        Google Play Services, se queda oculto del todo.
+    -->
+    <androidx.mediarouter.app.MediaRouteButton
+        android:id="@+id/castButton"
         android:layout_width="46dp"
         android:layout_height="46dp"
-        android:layout_gravity="top|start"
+        android:layout_gravity="top|end"
         android:layout_margin="16dp"
         android:padding="10dp"
         android:background="@drawable/bg_round_button"
-        android:src="@drawable/ic_settings"
-        android:tint="@android:color/white"
-        android:contentDescription="@string/action_track_selection" />
+        android:visibility="gone"
+        app:mediaRouteButtonTint="@android:color/white"
+        android:contentDescription="@string/action_cast" />
 
     <!--
-        Chromecast (ver PlayerActivity.isCastButtonUsable/onCastSessionChanged)
-        + PiP (ver maybeEnterPictureInPicture), agrupados arriba a la
-        derecha. MediaRouteButton es una vista especial del propio framework
-        de mediarouter/Cast -su icono cambia solo según busca/conecta/está
-        conectada-, por eso no es un ImageButton normal como su vecino, pero
-        acepta el mismo fondo circular y tinte blanco para quedar igual de
-        integrada. Empieza oculto (ver PlayerActivity.onCreate) y
-        CastButtonFactory lo muestra solo en cuanto aparece algún Chromecast
-        en la red; si el dispositivo no tiene Google Play Services, se queda
-        oculto del todo. Además del botón de PiP, salir de la app mientras un
-        canal de vídeo está en reproducción (Inicio, cambiar de app) también
-        entra en PiP solo, sin tener que tocar nada (ver onUserLeaveHint).
-        Ambos se ocultan junto al resto de controles; PiP además se oculta
-        del todo para radio o mientras se está enviando a un Chromecast (ver
-        PlayerActivity.applyControlsVisibility).
+        Fila de acciones del reproductor: vídeo+audio (un solo botón),
+        subtítulos, formato de pantalla e imagen en imagen. En
+        PlayerActivity.onCreate se MUEVEN a la fila de abajo de los controles
+        de Media3 (la de la hora y el engranaje, justo debajo de la barra de
+        progreso), para que queden alineadas con ella y aparezcan y
+        desaparezcan con los controles. Este contenedor solo es el plan B si
+        esa fila no se encuentra: se queda abajo a la derecha.
     -->
     <LinearLayout
+        android:id="@+id/playerActionsFallback"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_margin="16dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="72dp"
+        android:layout_marginBottom="4dp"
         android:orientation="horizontal">
 
-        <androidx.mediarouter.app.MediaRouteButton
-            android:id="@+id/castButton"
-            android:layout_width="46dp"
-            android:layout_height="46dp"
-            android:padding="10dp"
-            android:background="@drawable/bg_round_button"
-            android:visibility="gone"
-            app:mediaRouteButtonTint="@android:color/white"
-            android:contentDescription="@string/action_cast" />
+        <ImageButton
+            android:id="@+id/trackSelectionButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_tune"
+            android:tint="@android:color/white"
+            android:contentDescription="@string/action_track_selection" />
+
+        <ImageButton
+            android:id="@+id/subtitlesButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_subtitles"
+            android:tint="@android:color/white"
+            android:contentDescription="@string/action_subtitles" />
+
+        <ImageButton
+            android:id="@+id/videoFormatButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_aspect_ratio"
+            android:tint="@android:color/white"
+            android:contentDescription="@string/action_video_format" />
 
         <ImageButton
             android:id="@+id/pipButton"
-            android:layout_width="46dp"
-            android:layout_height="46dp"
-            android:layout_marginStart="8dp"
-            android:padding="10dp"
-            android:background="@drawable/bg_round_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_picture_in_picture"
             android:tint="@android:color/white"
             android:contentDescription="@string/action_pip" />

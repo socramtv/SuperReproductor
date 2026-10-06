@@ -267,7 +267,7 @@ class PlayerActivity : AppCompatActivity() {
                 attempts++
                 val ctrl = controller
                 if (ctrl != null && ctrl.isPlaying) {
-                    // Red de seguridad para los botones propios (engranaje, PiP,
+                    // Red de seguridad para los botones propios (vídeo/audio, PiP,
                     // cartel de "ahora suena"): deben seguir el estado real de
                     // los controles; si con los controles ya ocultos alguno se
                     // ha quedado visible, se esconden.
@@ -548,6 +548,10 @@ class PlayerActivity : AppCompatActivity() {
      */
     private fun applyControlsVisibility(visibility: Int) {
         binding.trackSelectionButton.visibility = visibility
+        binding.subtitlesButton.visibility = if (isCastingRemote) View.GONE else visibility
+        // El formato de pantalla (ajustar/estirar/zoom) solo tiene sentido con
+        // vídeo propio en pantalla: ni en radio ni al enviar a Chromecast.
+        binding.videoFormatButton.visibility = if (isCurrentStreamRadio || isCastingRemote) View.GONE else visibility
         // En Android TV, o si el framework de Cast no está disponible en
         // este dispositivo, el botón se queda oculto del todo (ver
         // isCastButtonUsable).
@@ -677,6 +681,9 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
+        binding.subtitlesButton.setOnClickListener { showSubtitlesDialog() }
+        binding.videoFormatButton.setOnClickListener { cycleVideoFormat() }
+        moveActionButtonsIntoControlsBar()
         binding.pipButton.setOnClickListener { maybeEnterPictureInPicture() }
 
         // Chromecast: en Android TV ni se intenta montar el botón (no tiene
@@ -910,6 +917,8 @@ class PlayerActivity : AppCompatActivity() {
             // que un toque los vuelva a sacar mientras se está en PiP.
             binding.playerView.useController = false
             binding.trackSelectionButton.visibility = View.GONE
+            binding.subtitlesButton.visibility = View.GONE
+            binding.videoFormatButton.visibility = View.GONE
             binding.castButton.visibility = View.GONE
             binding.pipButton.visibility = View.GONE
             binding.videoNowPlayingBar.visibility = View.GONE
@@ -1171,7 +1180,6 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    /** Menú "Vídeo" / "Audio" / "Subtítulos" que abre el selector de pistas de Media3 para el tipo elegido. */
     /** Pasa al siguiente formato de pantalla (ajustar -> estirar -> zoom -> ajustar), lo aplica y lo recuerda. */
     private fun cycleVideoFormat() {
         val next = (AppPrefs.getVideoFormat(this) + 1) % 3
@@ -1196,21 +1204,41 @@ class PlayerActivity : AppCompatActivity() {
         }
     )
 
+    /**
+     * Mueve los cuatro botones de acción (vídeo+audio, subtítulos, formato,
+     * PiP) a la fila de abajo de los controles de Media3 -la de la hora y el
+     * engranaje, justo debajo de la barra de progreso-, a la izquierda del
+     * engranaje. Así quedan alineados con esa fila y aparecen/desaparecen
+     * con los controles. Si esa fila no se encuentra (cambio de versión de
+     * Media3), se quedan donde están en el layout (abajo a la derecha).
+     */
+    private fun moveActionButtonsIntoControlsBar() {
+        val id = resources.getIdentifier("exo_basic_controls", "id", packageName)
+        if (id == 0) return
+        val bar = binding.playerView.findViewById<android.view.ViewGroup?>(id) ?: return
+        val buttons = listOf(
+            binding.trackSelectionButton,
+            binding.subtitlesButton,
+            binding.videoFormatButton,
+            binding.pipButton
+        )
+        for ((index, button) in buttons.withIndex()) {
+            (button.parent as? android.view.ViewGroup)?.removeView(button)
+            bar.addView(button, index)
+        }
+        binding.playerActionsFallback.visibility = View.GONE
+    }
+
+    /** Botón "Vídeo y audio": un solo botón con Vídeo, Audio y el ajuste de audio en segundo plano. */
     private fun showTrackSelectionMenu(anchor: View) {
         val ctrl = controller ?: return
         val popup = PopupMenu(this, anchor)
-        popup.menu.add(0, MENU_ID_VIDEO, 0, getString(R.string.track_video))
+        if (!isCurrentStreamRadio) popup.menu.add(0, MENU_ID_VIDEO, 0, getString(R.string.track_video))
         popup.menu.add(0, MENU_ID_AUDIO, 1, getString(R.string.track_audio))
-        popup.menu.add(0, MENU_ID_SUBTITLES, 2, getString(R.string.track_subtitles))
-        popup.menu.add(0, MENU_ID_FORMAT, 3, getString(R.string.video_format_menu, videoFormatName(AppPrefs.getVideoFormat(this))))
-        popup.menu.add(0, MENU_ID_BG_AUDIO, 4, getString(
+        popup.menu.add(0, MENU_ID_BG_AUDIO, 2, getString(
             if (AppPrefs.isBackgroundAudio(this)) R.string.background_audio_on else R.string.background_audio_off
         ))
         popup.setOnMenuItemClickListener { item ->
-            if (item.itemId == MENU_ID_FORMAT) {
-                cycleVideoFormat()
-                return@setOnMenuItemClickListener true
-            }
             if (item.itemId == MENU_ID_BG_AUDIO) {
                 val enabled = !AppPrefs.isBackgroundAudio(this)
                 AppPrefs.setBackgroundAudio(this, enabled)
@@ -1221,17 +1249,25 @@ class PlayerActivity : AppCompatActivity() {
                 ).show()
                 return@setOnMenuItemClickListener true
             }
-            val trackType = when (item.itemId) {
-                MENU_ID_VIDEO -> C.TRACK_TYPE_VIDEO
-                MENU_ID_AUDIO -> C.TRACK_TYPE_AUDIO
-                else -> C.TRACK_TYPE_TEXT
-            }
+            val trackType = if (item.itemId == MENU_ID_VIDEO) C.TRACK_TYPE_VIDEO else C.TRACK_TYPE_AUDIO
             TrackSelectionDialogBuilder(this, item.title ?: "", ctrl, trackType)
                 .build()
                 .show()
             true
         }
         popup.show()
+    }
+
+    /** Botón de subtítulos: abre el selector de pistas de texto, o avisa si el canal no trae ninguna. */
+    private fun showSubtitlesDialog() {
+        val ctrl = controller ?: return
+        if (ctrl.currentTracks.groups.none { it.type == C.TRACK_TYPE_TEXT }) {
+            Toast.makeText(this, getString(R.string.no_subtitles), Toast.LENGTH_SHORT).show()
+            return
+        }
+        TrackSelectionDialogBuilder(this, getString(R.string.track_subtitles), ctrl, C.TRACK_TYPE_TEXT)
+            .build()
+            .show()
     }
 
     // -----------------------------------------------------------------
@@ -1264,8 +1300,6 @@ class PlayerActivity : AppCompatActivity() {
 
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
-        private const val MENU_ID_SUBTITLES = 3
-        private const val MENU_ID_FORMAT = 4
         private const val MENU_ID_BG_AUDIO = 5
         private const val EPG_REFRESH_INTERVAL_MS = 60_000L
 

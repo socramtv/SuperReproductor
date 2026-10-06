@@ -9,7 +9,10 @@
     <string name="empty_streams">No hay canales en esta categoría.</string>
     <string name="load_success">Lista cargada: %1$d categorías, %2$d canales</string>
     <string name="player_error">Error de reproducción: %1$s</string>
-    <string name="action_track_selection">Calidad de vídeo / audio</string>
+    <string name="action_track_selection">Vídeo y audio</string>
+    <string name="action_subtitles">Subtítulos</string>
+    <string name="action_video_format">Formato de pantalla</string>
+    <string name="no_subtitles">Este canal no tiene subtítulos</string>
     <string name="action_pip">Ver en ventana flotante</string>
     <!-- Chromecast (ver PlayerActivity): botón para "enviar" el canal
          actual a un Chromecast u otro dispositivo compatible con Google

@@ -336,7 +336,7 @@ una pantalla de "ahora suena" en vez del hueco negro del vídeo.
   app deja de decodificar la imagen (ahorra batería) y mantiene el sonido
   con los controles en la notificación y en la pantalla de bloqueo. Al
   volver a la app, el vídeo se reactiva solo. Se activa/desactiva en el
-  engranaje del reproductor, opción **"Audio en segundo plano: sí/no"**
+  botón **Vídeo y audio** del reproductor, opción **"Audio en segundo plano: sí/no"**
   (por defecto, sí). Si lo pones en "no", al bloquear o cambiar de app se
   pausa como antes. Si el vídeo estaba en pausa al salir, se queda en
   pausa. Si cierras la ventanita de imagen en imagen, se pausa.
@@ -478,8 +478,8 @@ lo necesita: ya sigue sonando en segundo plano sin más), puedes seguir
 viéndolo en una ventana flotante mientras usas otra app o navegas el
 menú:
 
-- Tocando el botón de PiP (arriba a la derecha, junto al de calidad de
-  vídeo/audio).
+- Tocando el botón de PiP (en la fila de botones de abajo, bajo la barra de
+  progreso).
 - O automáticamente, sin tocar nada, al salir de la app — con el botón
   de Inicio, cambiando a otra app, etc. Con el botón **Atrás** no: eso
   sigue cerrando el reproductor como siempre.
@@ -500,7 +500,7 @@ TV con la misma característica de Android que ya declara el manifiesto
 ## Chromecast
 
 Mientras se reproduce un canal (vídeo o radio), el botón de "enviar"
-(arriba a la derecha, junto al de imagen en imagen) deja mandarlo a un
+(arriba a la derecha) deja mandarlo a un
 Chromecast o cualquier otro dispositivo compatible con Google Cast que
 esté en la misma red WiFi que el móvil:
 
@@ -765,10 +765,25 @@ todas las categorías de la lista cargada para cambiar su orden en la portada.
 - El orden solo afecta a la portada; dentro de una categoría los canales
   siguen en el orden de la lista.
 
+## Botones del reproductor
+
+Debajo de la barra de progreso, a la izquierda del engranaje de Media3 (el de
+velocidad), hay una fila con cuatro botones:
+
+1. **Vídeo y audio** (un solo botón): menú con *Vídeo*, *Audio* (para elegir
+   calidad/pista) y *Audio en segundo plano: sí/no*.
+2. **Subtítulos:** selector de subtítulos (avisa si el canal no trae).
+3. **Formato de pantalla:** Ajustar / Estirar / Zoom.
+4. **Imagen en imagen** (ventana flotante).
+
+El botón de **Chromecast** se queda arriba a la derecha. Todos aparecen y
+desaparecen junto con los controles. En radio no salen formato ni imagen en
+imagen.
+
 ## Formato de pantalla
 
-En el reproductor, el engranaje (arriba a la izquierda) tiene una opción
-nueva, **"Formato de pantalla"**, que cada vez que se pulsa pasa al siguiente:
+En el reproductor, el botón **Formato de pantalla** (fila de botones de abajo,
+bajo la barra de progreso) cada vez que se pulsa pasa al siguiente:
 
 - **Ajustar:** como siempre, el vídeo entero con barras negras si hace falta.
 - **Estirar:** llena toda la pantalla deformando la imagen (para canales que
