@@ -80,7 +80,7 @@
 
     <!--
         Chromecast (ver PlayerActivity.isCastButtonUsable/onCastSessionChanged),
-        solo, arriba a la derecha. MediaRouteButton es una vista especial del
+        solo, arriba a la derecha (con margen de sobra para que no quede escondido en la franja negra del borde). MediaRouteButton es una vista especial del
         propio framework de mediarouter/Cast -su icono cambia solo según
         busca/conecta/está conectada-, por eso no es un ImageButton normal,
         pero acepta el mismo fondo circular y tinte blanco. Empieza oculto
@@ -93,7 +93,8 @@
         android:layout_width="46dp"
         android:layout_height="46dp"
         android:layout_gravity="top|end"
-        android:layout_margin="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="88dp"
         android:padding="10dp"
         android:background="@drawable/bg_round_button"
         android:visibility="gone"

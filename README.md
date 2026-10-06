@@ -776,7 +776,7 @@ velocidad), hay una fila con cuatro botones:
 3. **Formato de pantalla:** Ajustar / Estirar / Zoom.
 4. **Imagen en imagen** (ventana flotante).
 
-El botón de **Chromecast** se queda arriba a la derecha. Todos aparecen y
+El botón de **Chromecast** se queda arriba a la derecha (algo separado del borde). Todos aparecen y
 desaparecen junto con los controles. En radio no salen formato ni imagen en
 imagen.
 
