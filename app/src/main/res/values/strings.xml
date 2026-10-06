@@ -12,6 +12,14 @@
     <string name="action_track_selection">Vídeo y audio</string>
     <string name="action_subtitles">Subtítulos</string>
     <string name="action_video_format">Formato de pantalla</string>
+    <string name="action_sleep_timer">Temporizador de apagado</string>
+    <string name="sleep_timer_title">Temporizador de apagado</string>
+    <string name="sleep_timer_title_active">Temporizador: quedan %1$d min</string>
+    <string name="sleep_timer_off">Desactivar temporizador</string>
+    <string name="sleep_timer_option">%1$d minutos</string>
+    <string name="sleep_timer_set">Se apagará en %1$d minutos</string>
+    <string name="sleep_timer_cancelled">Temporizador desactivado</string>
+    <string name="sleep_timer_fired">Temporizador: reproducción detenida</string>
     <string name="no_subtitles">Este canal no tiene subtítulos</string>
     <string name="action_pip">Ver en ventana flotante</string>
     <!-- Chromecast (ver PlayerActivity): botón para "enviar" el canal

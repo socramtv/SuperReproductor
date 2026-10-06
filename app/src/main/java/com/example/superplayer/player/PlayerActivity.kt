@@ -549,6 +549,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun applyControlsVisibility(visibility: Int) {
         binding.trackSelectionButton.visibility = visibility
         binding.subtitlesButton.visibility = if (isCastingRemote) View.GONE else visibility
+        binding.sleepTimerButton.visibility = visibility
         // El formato de pantalla (ajustar/estirar/zoom) solo tiene sentido con
         // vídeo propio en pantalla: ni en radio ni al enviar a Chromecast.
         binding.videoFormatButton.visibility = if (isCurrentStreamRadio || isCastingRemote) View.GONE else visibility
@@ -683,6 +684,8 @@ class PlayerActivity : AppCompatActivity() {
         binding.trackSelectionButton.setOnClickListener { anchor -> showTrackSelectionMenu(anchor) }
         binding.subtitlesButton.setOnClickListener { showSubtitlesDialog() }
         binding.videoFormatButton.setOnClickListener { cycleVideoFormat() }
+        binding.sleepTimerButton.setOnClickListener { showSleepTimerDialog() }
+        updateSleepTimerButton()
         moveActionButtonsIntoControlsBar()
         binding.pipButton.setOnClickListener { maybeEnterPictureInPicture() }
 
@@ -764,6 +767,13 @@ class PlayerActivity : AppCompatActivity() {
         if (currentStream == null) return // canal no válido, o ya redirigido a una app externa (ver onCreate)
         epgHandler.removeCallbacks(epgRefreshRunnable)
         epgHandler.postDelayed(epgRefreshRunnable, EPG_REFRESH_INTERVAL_MS)
+        SleepTimer.activityListener = {
+            if (!isFinishing && !isDestroyed) {
+                Toast.makeText(this, getString(R.string.sleep_timer_fired), Toast.LENGTH_LONG).show()
+                finish()
+            }
+        }
+        updateSleepTimerButton()
         val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture = future
@@ -800,6 +810,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         unregisterCastSessionListener()
+        SleepTimer.activityListener = null
         epgHandler.removeCallbacks(epgRefreshRunnable)
         cancelPendingReconnect()
         cancelStuckControlsWatchdog()
@@ -811,6 +822,7 @@ class PlayerActivity : AppCompatActivity() {
                 ctrl.stop()
                 ctrl.clearMediaItems()
                 playbackStarted = false
+                SleepTimer.cancel()
             } else if (!isCurrentStreamRadio && !isCastingRemote) {
                 if (AppPrefs.isBackgroundAudio(this) && !isInPictureInPictureMode) {
                     // Vídeo/TV en segundo plano (bloqueo, Home...) con
@@ -919,6 +931,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.trackSelectionButton.visibility = View.GONE
             binding.subtitlesButton.visibility = View.GONE
             binding.videoFormatButton.visibility = View.GONE
+            binding.sleepTimerButton.visibility = View.GONE
             binding.castButton.visibility = View.GONE
             binding.pipButton.visibility = View.GONE
             binding.videoNowPlayingBar.visibility = View.GONE
@@ -1220,6 +1233,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.trackSelectionButton,
             binding.subtitlesButton,
             binding.videoFormatButton,
+            binding.sleepTimerButton,
             binding.pipButton
         )
         for ((index, button) in buttons.withIndex()) {
@@ -1264,6 +1278,42 @@ class PlayerActivity : AppCompatActivity() {
         popup.show()
     }
 
+    /** Botón del temporizador de apagado: 30/60/90/120 minutos (o desactivarlo si ya hay uno en marcha). */
+    private fun showSleepTimerDialog() {
+        val options = ArrayList<Int>()
+        val labels = ArrayList<String>()
+        val active = SleepTimer.isActive()
+        if (active) labels.add(getString(R.string.sleep_timer_off))
+        for (m in SLEEP_TIMER_MINUTES) {
+            options.add(m)
+            labels.add(getString(R.string.sleep_timer_option, m))
+        }
+        val title = if (active) getString(R.string.sleep_timer_title_active, SleepTimer.remainingMinutes())
+        else getString(R.string.sleep_timer_title)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                val offset = if (active) 1 else 0
+                if (active && which == 0) {
+                    SleepTimer.cancel()
+                    Toast.makeText(this, getString(R.string.sleep_timer_cancelled), Toast.LENGTH_SHORT).show()
+                } else {
+                    val minutes = options[which - offset]
+                    SleepTimer.start(minutes)
+                    Toast.makeText(this, getString(R.string.sleep_timer_set, minutes), Toast.LENGTH_SHORT).show()
+                }
+                updateSleepTimerButton()
+            }
+            .show()
+    }
+
+    /** El icono del temporizador se pinta del color de la app mientras hay uno en marcha. */
+    private fun updateSleepTimerButton() {
+        val color = if (SleepTimer.isActive()) ContextCompat.getColor(this, R.color.primary)
+        else android.graphics.Color.WHITE
+        binding.sleepTimerButton.imageTintList = android.content.res.ColorStateList.valueOf(color)
+    }
+
     /** Botón de subtítulos: abre el selector de pistas de texto, o avisa si el canal no trae ninguna. */
     private fun showSubtitlesDialog() {
         val ctrl = controller ?: return
@@ -1304,6 +1354,7 @@ class PlayerActivity : AppCompatActivity() {
         // el límite de tamaño de Binder en playlists grandes).
         var pendingChannelList: List<Stream> = emptyList()
 
+        private val SLEEP_TIMER_MINUTES = listOf(30, 60, 90, 120)
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
         private const val MENU_ID_BG_AUDIO = 5

@@ -150,6 +150,16 @@
             android:contentDescription="@string/action_video_format" />
 
         <ImageButton
+            android:id="@+id/sleepTimerButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_timer"
+            android:tint="@android:color/white"
+            android:contentDescription="@string/action_sleep_timer" />
+
+        <ImageButton
             android:id="@+id/pipButton"
             android:layout_width="48dp"
             android:layout_height="48dp"

@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.media3.cast.CastPlayer
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -54,6 +55,10 @@ class PlaybackService : MediaSessionService() {
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(StreamMediaSourceFactory(this))
+            // Con la pantalla bloqueada, mantiene la CPU y el WiFi despiertos
+            // mientras suena (si no, algunos móviles cortan el stream y el
+            // temporizador de apagado se retrasa).
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         player.setHandleAudioBecomingNoisy(true)
         localPlayer = player
@@ -74,6 +79,14 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, sessionPlayer)
             .setSessionActivity(openAppIntent)
             .build()
+
+        // Temporizador de apagado (ver SleepTimer): al acabar, para del todo.
+        SleepTimer.serviceCallback = {
+            mediaSession?.player?.let { p ->
+                p.stop()
+                p.clearMediaItems()
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -87,6 +100,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        SleepTimer.serviceCallback = null
+        SleepTimer.cancel()
         mediaSession?.let { session ->
             session.player.release()
             session.release()

@@ -768,13 +768,20 @@ todas las categorías de la lista cargada para cambiar su orden en la portada.
 ## Botones del reproductor
 
 Debajo de la barra de progreso, a la izquierda del engranaje de Media3 (el de
-velocidad), hay una fila con cuatro botones:
+velocidad), hay una fila con cinco botones:
 
 1. **Vídeo y audio** (un solo botón): menú con *Vídeo*, *Audio* (para elegir
    calidad/pista) y *Audio en segundo plano: sí/no*.
 2. **Subtítulos:** selector de subtítulos (avisa si el canal no trae).
 3. **Formato de pantalla:** Ajustar / Estirar / Zoom.
-4. **Imagen en imagen** (ventana flotante).
+4. **Temporizador de apagado** (icono de reloj): 30, 60, 90 o 120 minutos.
+   Al acabar, la reproducción se para sola (también con la pantalla bloqueada o
+   la app en segundo plano; si el reproductor está abierto, se cierra y vuelves
+   a la lista). Mientras hay uno en marcha, el icono se pinta de naranja; al
+   pulsarlo otra vez ves los minutos que quedan y puedes desactivarlo o poner
+   otro tiempo. Funciona también con radio. Si sales del reproductor con el
+   botón Atrás, el temporizador se cancela.
+5. **Imagen en imagen** (ventana flotante).
 
 El botón de **Chromecast** se queda arriba a la derecha (algo separado del borde). Todos aparecen y
 desaparecen junto con los controles. En radio no salen formato ni imagen en
