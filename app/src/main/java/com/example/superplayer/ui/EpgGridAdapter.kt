@@ -116,7 +116,7 @@ class EpgGridAdapter(
          * datos de guía quedan vacías.
          */
         private fun buildCellView(context: Context, cell: EpgGridMath.Cell, widthPx: Int, query: String): LinearLayout {
-            val density = resources.displayMetrics.density
+            val density = context.resources.displayMetrics.density
             return LinearLayout(context).apply {
                 layoutParams = LinearLayout.LayoutParams(widthPx, LinearLayout.LayoutParams.MATCH_PARENT)
                 orientation = LinearLayout.VERTICAL
