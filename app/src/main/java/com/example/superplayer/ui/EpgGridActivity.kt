@@ -18,6 +18,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import com.example.superplayer.R
 import com.example.superplayer.data.EpgRepository
+import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.databinding.ActivityEpgGridBinding
 import com.example.superplayer.model.Stream
 import com.example.superplayer.player.PlayerActivity
@@ -71,6 +72,11 @@ class EpgGridActivity : AppCompatActivity() {
 
     /** Todos los canales con guía (sin filtrar por búsqueda); ver applySearch. */
     private var allChannels: List<Stream> = emptyList()
+
+    /** true = el corazón de la barra está activo: solo se ven los canales favoritos (ver toggleFavoritesOnly). */
+    private var onlyFavorites = false
+    private var currentQuery = ""
+    private var favoritesItem: MenuItem? = null
     private var dataStart: Long = 0L
     private var dataEnd: Long = 0L
     private var windowStart: Long = 0L
@@ -220,12 +226,14 @@ class EpgGridActivity : AppCompatActivity() {
         // gesto de "canal siguiente/anterior" en el reproductor recorre el
         // mismo conjunto de siempre (mismo criterio que StreamListActivity
         // con su propio buscador).
-        PlayerActivity.pendingChannelList = allChannels
+        PlayerActivity.pendingChannelList = if (onlyFavorites) baseChannels() else allChannels
         startActivity(Intent(this, PlayerActivity::class.java))
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_search, menu)
+        menuInflater.inflate(R.menu.menu_epg_grid, menu)
+        favoritesItem = menu.findItem(R.id.action_epg_favorites)
+        updateFavoritesIcon()
         val searchItem = menu.findItem(R.id.action_search)
         val searchView = searchItem.actionView as SearchView
         searchView.queryHint = getString(R.string.epg_grid_search_hint)
@@ -251,22 +259,46 @@ class EpgGridActivity : AppCompatActivity() {
      */
     private fun applySearch(query: String) {
         if (!::adapter.isInitialized) return
+        currentQuery = query
+        val base = baseChannels()
         val filtered = if (query.isBlank()) {
-            allChannels
+            base
         } else {
-            allChannels.filter {
+            base.filter {
                 EpgGridMath.matchesSearch(it.name, EpgRepository.allEntries(it.tvgId), query)
             }
         }
         adapter.searchQuery = query
         adapter.submit(filtered)
         if (filtered.isEmpty()) {
-            binding.emptyView.text = getString(R.string.epg_grid_search_empty, query)
+            binding.emptyView.text = when {
+                query.isNotBlank() -> getString(R.string.epg_grid_search_empty, query)
+                onlyFavorites -> getString(R.string.epg_grid_favorites_empty)
+                else -> getString(R.string.epg_grid_empty)
+            }
             binding.emptyView.visibility = View.VISIBLE
         } else {
             binding.emptyView.visibility = View.GONE
         }
         jumpToSearchMatchIfNeeded(query, filtered)
+    }
+
+    /** Los canales sobre los que actúa la búsqueda: todos los que tienen guía, o solo los favoritos si el corazón está activo. */
+    private fun baseChannels(): List<Stream> {
+        if (!onlyFavorites) return allChannels
+        val favorites = FavoritesStore(this).getAll()
+        return allChannels.filter { it.id in favorites }
+    }
+
+    /** Botón del corazón: alterna entre ver todos los canales con guía o solo los favoritos (combinado con la búsqueda). */
+    private fun toggleFavoritesOnly() {
+        onlyFavorites = !onlyFavorites
+        updateFavoritesIcon()
+        applySearch(currentQuery)
+    }
+
+    private fun updateFavoritesIcon() {
+        favoritesItem?.setIcon(if (onlyFavorites) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline)
     }
 
     /**
@@ -340,6 +372,10 @@ class EpgGridActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
             finish()
+            return true
+        }
+        if (item.itemId == R.id.action_epg_favorites) {
+            toggleFavoritesOnly()
             return true
         }
         return super.onOptionsItemSelected(item)

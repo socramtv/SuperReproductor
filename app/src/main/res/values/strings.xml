@@ -125,5 +125,7 @@
          busca a la vez entre el nombre de los canales y el título de su
          programación, en toda la guía ya descargada. -->
     <string name="epg_grid_search_hint">Buscar canal o programa…</string>
+    <string name="epg_grid_favorites_only">Solo favoritos</string>
+    <string name="epg_grid_favorites_empty">Ningún canal favorito tiene guía EPG. Marca canales con el corazón en la lista y vuelve.</string>
     <string name="epg_grid_search_empty">Sin resultados para «%1$s», ni en el nombre del canal ni en su programación ya descargada.</string>
 </resources>

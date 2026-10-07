@@ -9,8 +9,8 @@
         horas de la cabecera no quedarían alineadas con los programas de
         debajo.
     -->
-    <dimen name="epg_channel_column_width">100dp</dimen>
-    <dimen name="epg_row_height">56dp</dimen>
+    <dimen name="epg_channel_column_width">108dp</dimen>
+    <dimen name="epg_row_height">76dp</dimen>
     <dimen name="epg_header_height">28dp</dimen>
 
     <!-- Tope de alto del logo de cabecera de la portada (ver README, sección

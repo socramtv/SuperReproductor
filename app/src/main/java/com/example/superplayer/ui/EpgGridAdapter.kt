@@ -110,24 +110,44 @@ class EpgGridAdapter(
             }
         }
 
-        private fun buildCellView(context: Context, cell: EpgGridMath.Cell, widthPx: Int, query: String): TextView {
-            return TextView(context).apply {
+        /**
+         * Celda de un programa: título arriba (hasta 2 líneas) y debajo, más
+         * pequeño y apagado, su horario ("06:00–10:55"). Las celdas sin
+         * datos de guía quedan vacías.
+         */
+        private fun buildCellView(context: Context, cell: EpgGridMath.Cell, widthPx: Int, query: String): LinearLayout {
+            val density = resources.displayMetrics.density
+            return LinearLayout(context).apply {
                 layoutParams = LinearLayout.LayoutParams(widthPx, LinearLayout.LayoutParams.MATCH_PARENT)
-                textSize = 11f
+                orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
-                maxLines = 2
-                ellipsize = TextUtils.TruncateAt.END
-                val horizontalPadding = (6 * resources.displayMetrics.density).toInt()
+                val horizontalPadding = (8 * density).toInt()
                 setPadding(horizontalPadding, 0, horizontalPadding, 0)
-                if (cell.entry != null) {
-                    val isMatch = query.isNotBlank() && cell.entry.title.contains(query, ignoreCase = true)
-                    text = cell.entry.title
-                    setTextColor(
-                        ContextCompat.getColor(
-                            context,
-                            if (isMatch || cell.isNow) R.color.on_background else R.color.on_surface_muted
+                val entry = cell.entry
+                if (entry != null) {
+                    val isMatch = query.isNotBlank() && entry.title.contains(query, ignoreCase = true)
+                    val title = TextView(context).apply {
+                        text = entry.title
+                        textSize = 12f
+                        maxLines = 2
+                        ellipsize = TextUtils.TruncateAt.END
+                        setTextColor(
+                            ContextCompat.getColor(
+                                context,
+                                if (isMatch || cell.isNow) R.color.on_background else R.color.on_surface_muted
+                            )
                         )
-                    )
+                    }
+                    val time = TextView(context).apply {
+                        text = EpgRepository.formatRange(entry)
+                        textSize = 11f
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                        setTextColor(ContextCompat.getColor(context, R.color.on_surface_muted))
+                        setPadding(0, (2 * density).toInt(), 0, 0)
+                    }
+                    addView(title)
+                    addView(time)
                     background = ContextCompat.getDrawable(
                         context,
                         when {
@@ -141,7 +161,6 @@ class EpgGridAdapter(
                     // un hueco sin datos de guía no tiene nada que mostrar.
                     setOnClickListener { onCellClick(cell) }
                 } else {
-                    text = ""
                     background = ContextCompat.getDrawable(context, R.drawable.bg_epg_cell_empty)
                 }
             }

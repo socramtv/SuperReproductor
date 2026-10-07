@@ -625,6 +625,13 @@ dentro de su celda correspondiente.
 - Tocar el nombre de un canal (a la izquierda, siempre fijo aunque
   desplaces la parrilla) abre su reproductor, igual que en cualquier otra
   lista de la app.
+- El **corazón ♥** de la barra superior (a la izquierda de la lupa) enseña
+  solo los canales marcados como favoritos (con guía). Pulsado se pone
+  dorado; otra vez vuelve a todos. Se combina con la lupa (busca solo entre
+  tus favoritos) y el gesto de canal siguiente/anterior del reproductor
+  recorre solo los favoritos mientras está activo.
+- Las filas son más altas y cada programa muestra su **título** y, debajo,
+  su **horario** ("06:00–10:55").
 - El icono de lupa 🔍 de la barra superior busca a la vez entre el
   **nombre de los canales** y el **título de su programación**, en toda la
   guía ya descargada (no solo en la franja de 3 horas que se ve en ese
