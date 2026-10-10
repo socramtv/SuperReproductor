@@ -34,6 +34,15 @@
     <string name="sleep_timer_set">Se apagará en %1$d minutos</string>
     <string name="sleep_timer_cancelled">Temporizador desactivado</string>
     <string name="sleep_timer_fired">Temporizador: reproducción detenida</string>
+    <string name="action_guide">Guía de canales</string>
+    <string name="guide_title">Guía de canales</string>
+    <string name="guide_now">Ahora: %1$s</string>
+    <string name="guide_next">%1$s · %2$s</string>
+    <string name="guide_no_data">Sin datos de guía</string>
+    <string name="epg_grid_focus_info">%1$s · %2$s · %3$s — OK: detalles y recordatorio</string>
+    <string name="widget_description">Tus canales favoritos a un toque</string>
+    <string name="widget_title">⭐ Favoritos</string>
+    <string name="widget_empty">Marca canales como favoritos en la app para verlos aquí</string>
     <string name="no_subtitles">Este canal no tiene subtítulos</string>
     <string name="action_pip">Ver en ventana flotante</string>
     <!-- Chromecast (ver PlayerActivity): botón para "enviar" el canal

@@ -131,7 +131,8 @@ class EpgGridActivity : AppCompatActivity() {
             onRowScrollDetached = { unregisterSyncedScroll(it) },
             onChannelClick = { openPlayer(it) },
             onCellClick = { stream, cell -> showProgrammeDetails(stream, cell) },
-            isReminderSet = { stream, entry -> ReminderManager.isSet(this, stream.id, entry.startMillis) }
+            isReminderSet = { stream, entry -> ReminderManager.isSet(this, stream.id, entry.startMillis) },
+            onCellFocus = { stream, cell -> showFocusedProgramme(stream, cell) }
         )
         binding.channelsRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.channelsRecyclerView.adapter = adapter
@@ -150,6 +151,20 @@ class EpgGridActivity : AppCompatActivity() {
         }
 
         renderWindow()
+    }
+
+    /**
+     * Barra de abajo con el programa enfocado (mando de TV): canal, título y
+     * horario, para saber en cuál estás antes de pulsar OK (detalles y
+     * recordatorio).
+     */
+    private fun showFocusedProgramme(stream: Stream, cell: EpgGridMath.Cell) {
+        val entry = cell.entry ?: return
+        val reminder = if (ReminderManager.isSet(this, stream.id, entry.startMillis)) "  ⏰" else ""
+        binding.focusInfoText.text = getString(
+            R.string.epg_grid_focus_info, stream.name, entry.title, EpgRepository.formatRange(entry)
+        ) + reminder
+        binding.focusInfoText.visibility = View.VISIBLE
     }
 
     private fun shiftWindow(deltaMillis: Long) {

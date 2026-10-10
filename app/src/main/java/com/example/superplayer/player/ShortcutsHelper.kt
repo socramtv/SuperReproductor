@@ -64,5 +64,12 @@ object ShortcutsHelper {
             // (o falla por lo que sea), la app sigue funcionando exactamente
             // igual, simplemente sin ellos.
         }
+
+        // El widget de favoritos de la pantalla de inicio cambia con los mismos eventos.
+        try {
+            com.example.superplayer.widget.FavoritesWidgetProvider.refreshAll(context)
+        } catch (e: Exception) {
+            // Sin widget colocado o fallo del launcher: no pasa nada.
+        }
     }
 }

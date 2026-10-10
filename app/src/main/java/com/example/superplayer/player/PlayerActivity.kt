@@ -22,6 +22,7 @@ import android.view.View
 import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AppCompatActivity
@@ -46,6 +47,7 @@ import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ActivityPlayerBinding
 import com.example.superplayer.model.Stream
 import com.example.superplayer.model.streamFromJson
+import com.example.superplayer.ui.MiniGuideAdapter
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
@@ -551,6 +553,7 @@ class PlayerActivity : AppCompatActivity() {
         binding.trackSelectionButton.visibility = visibility
         binding.subtitlesButton.visibility = if (isCastingRemote) View.GONE else visibility
         binding.sleepTimerButton.visibility = visibility
+        binding.guideButton.visibility = if (channelList.size > 1) visibility else View.GONE
         // El formato de pantalla (ajustar/estirar/zoom) solo tiene sentido con
         // vídeo propio en pantalla: ni en radio ni al enviar a Chromecast.
         binding.videoFormatButton.visibility = if (isCurrentStreamRadio || isCastingRemote) View.GONE else visibility
@@ -577,7 +580,12 @@ class PlayerActivity : AppCompatActivity() {
     private fun switchChannel(direction: Int) {
         val size = channelList.size
         if (size <= 1 || currentIndex < 0) return
-        val newIndex = ((currentIndex + direction) % size + size) % size
+        switchToIndex(((currentIndex + direction) % size + size) % size)
+    }
+
+    /** Cambia al canal [newIndex] de channelList (lo usan el cambio con gestos/mando y la mini-guía). */
+    private fun switchToIndex(newIndex: Int) {
+        if (newIndex !in channelList.indices || newIndex == currentIndex) return
         val newStream = channelList[newIndex]
         saveContinueWatching() // posición del canal/película que se deja
         currentIndex = newIndex
@@ -626,6 +634,16 @@ class PlayerActivity : AppCompatActivity() {
     // -----------------------------------------------------------------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Tecla GUÍA del mando: abre/cierra la mini-guía.
+        if (event.keyCode == KeyEvent.KEYCODE_GUIDE && channelList.size > 1) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) toggleMiniGuide()
+            return true
+        }
+        // Con la mini-guía abierta, las flechas mueven el foco por su lista
+        // (no cambian de canal): se deja pasar todo tal cual.
+        if (binding.miniGuidePanel.visibility == View.VISIBLE) {
+            return super.dispatchKeyEvent(event)
+        }
         val isDpadLeftRight = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
             event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
         if (isDpadLeftRight && binding.playerView.isControllerFullyVisible) {
@@ -687,6 +705,8 @@ class PlayerActivity : AppCompatActivity() {
         binding.subtitlesButton.setOnClickListener { showSubtitlesDialog() }
         binding.videoFormatButton.setOnClickListener { cycleVideoFormat() }
         binding.sleepTimerButton.setOnClickListener { showSleepTimerDialog() }
+        binding.guideButton.setOnClickListener { toggleMiniGuide() }
+        onBackPressedDispatcher.addCallback(this, miniGuideBackCallback)
         updateSleepTimerButton()
         moveActionButtonsIntoControlsBar()
         binding.pipButton.setOnClickListener { maybeEnterPictureInPicture() }
@@ -935,6 +955,8 @@ class PlayerActivity : AppCompatActivity() {
             binding.subtitlesButton.visibility = View.GONE
             binding.videoFormatButton.visibility = View.GONE
             binding.sleepTimerButton.visibility = View.GONE
+            binding.guideButton.visibility = View.GONE
+            hideMiniGuide()
             binding.castButton.visibility = View.GONE
             binding.pipButton.visibility = View.GONE
             binding.videoNowPlayingBar.visibility = View.GONE
@@ -1249,6 +1271,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.trackSelectionButton,
             binding.subtitlesButton,
             binding.videoFormatButton,
+            binding.guideButton,
             binding.sleepTimerButton,
             binding.pipButton
         )
@@ -1310,6 +1333,58 @@ class PlayerActivity : AppCompatActivity() {
         val duration = ctrl.duration
         if (duration == C.TIME_UNSET || duration < MIN_VOD_DURATION_MS) return
         ContinueWatching.save(this, stream, ctrl.currentPosition, duration)
+    }
+
+    // -----------------------------------------------------------------
+    // Mini-guía: panel de la derecha con los canales de la lista actual,
+    // su programa de ahora (con barra de progreso) y el siguiente.
+    // -----------------------------------------------------------------
+
+    private var miniGuideAdapter: MiniGuideAdapter? = null
+
+    private val miniGuideBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            hideMiniGuide()
+        }
+    }
+
+    private fun toggleMiniGuide() {
+        if (binding.miniGuidePanel.visibility == View.VISIBLE) hideMiniGuide() else showMiniGuide()
+    }
+
+    private fun showMiniGuide() {
+        if (channelList.size <= 1) return
+        var adapter = miniGuideAdapter
+        if (adapter == null) {
+            adapter = MiniGuideAdapter(
+                channels = channelList,
+                currentIdProvider = { currentStream?.id },
+                onPick = { index ->
+                    hideMiniGuide()
+                    switchToIndex(index)
+                }
+            )
+            miniGuideAdapter = adapter
+            binding.miniGuideList.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+            binding.miniGuideList.adapter = adapter
+        } else {
+            adapter.notifyDataSetChanged() // refresca "ahora"/"después" y el canal resaltado
+        }
+        binding.playerView.hideController()
+        binding.miniGuidePanel.visibility = View.VISIBLE
+        miniGuideBackCallback.isEnabled = true
+        val index = currentIndex.coerceAtLeast(0)
+        (binding.miniGuideList.layoutManager as androidx.recyclerview.widget.LinearLayoutManager)
+            .scrollToPositionWithOffset(index, 120)
+        // Mando de TV: el foco empieza en el canal que se está viendo.
+        binding.miniGuideList.post {
+            binding.miniGuideList.findViewHolderForAdapterPosition(index)?.itemView?.requestFocus()
+        }
+    }
+
+    private fun hideMiniGuide() {
+        binding.miniGuidePanel.visibility = View.GONE
+        miniGuideBackCallback.isEnabled = false
     }
 
     /** Botón del temporizador de apagado: 30/60/90/120 minutos (o desactivarlo si ya hay uno en marcha). */

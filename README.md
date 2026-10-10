@@ -275,6 +275,30 @@ tres puntos → **"Ordenar favoritos"**: arrastra una fila (pulsación larga) o 
 icono de la app, y entra en la copia de seguridad. Un favorito nuevo se añade
 al final.
 
+## Mini-guía en el reproductor, widget y foco en la guía (TV)
+
+**Mini-guía.** En el reproductor, el botón de **guía** (icono de lista, en la fila
+de abajo, entre formato de pantalla y el reloj) abre un panel a la derecha con los
+canales de la lista que estás viendo: logo, nombre, el programa de **ahora** con
+una barrita de lo que lleva, y el **siguiente** con su hora. El canal actual sale
+resaltado. Tocar uno cambia a él sin salir del reproductor; Atrás o el mismo
+botón cierran el panel. En la TV, el botón **GUÍA** del mando lo abre y cierra, y
+con el panel abierto las flechas mueven el foco por la lista (arriba/abajo) y OK
+elige. Si el canal no tiene guía, sale "Sin datos de guía". Solo aparece cuando
+hay más de un canal en la lista.
+
+**Widget de favoritos.** Mantén pulsada la pantalla de inicio → Widgets →
+Socram TV+. Muestra hasta **6 favoritos** (en el orden de "Ordenar favoritos") con
+logo y nombre, y debajo el programa de ahora si la guía ya está cargada en ese
+momento (si no, solo el nombre). Tocar uno abre el canal directamente; tocar el
+título abre la app. Se actualiza cada 30 minutos y al instante cuando marcas,
+quitas u ordenas favoritos. Sin favoritos, avisa de que los marques en la app.
+
+**Guía EPG en la TV.** Al navegar la parrilla con el mando, el programa enfocado
+lleva ahora un **marco naranja** y, abajo, una barra con "canal · programa · hora"
+(y ⏰ si ya tiene recordatorio). Pulsa OK para ver los detalles y poner o quitar
+el recordatorio.
+
 ## Copia de seguridad sin conexión
 
 Cada uno de los cinco huecos guarda, además de la URL, una copia del

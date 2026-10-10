@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila del canal que se está viendo en la mini-guía del reproductor -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/primary">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#33FF6B4A" />
+        </shape>
+    </item>
+</ripple>

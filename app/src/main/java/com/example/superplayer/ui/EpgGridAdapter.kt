@@ -47,7 +47,9 @@ class EpgGridAdapter(
     private val onChannelClick: (Stream) -> Unit,
     private val onCellClick: (Stream, EpgGridMath.Cell) -> Unit,
     /** true si hay un recordatorio puesto para ese programa (se marca con ⏰ junto al horario). */
-    private val isReminderSet: (Stream, EpgRepository.EpgEntry) -> Boolean = { _, _ -> false }
+    private val isReminderSet: (Stream, EpgRepository.EpgEntry) -> Boolean = { _, _ -> false },
+    /** Se llama cuando una celda con programa recibe el foco (mando de TV): ver EpgGridActivity.showFocusedProgramme. */
+    private val onCellFocus: (Stream, EpgGridMath.Cell) -> Unit = { _, _ -> }
 ) : RecyclerView.Adapter<EpgGridAdapter.ViewHolder>() {
 
     var searchQuery: String = ""
@@ -163,6 +165,12 @@ class EpgGridAdapter(
                     // detalles (ver EpgGridActivity.showProgrammeDetails):
                     // un hueco sin datos de guía no tiene nada que mostrar.
                     setOnClickListener { onCellClick(stream, cell) }
+                    // Mando de TV: la celda se puede enfocar y el foco se ve
+                    // (marco naranja, ver fg_epg_cell_focus) para saber en
+                    // qué programa estás antes de pulsar OK.
+                    isFocusable = true
+                    foreground = ContextCompat.getDrawable(context, R.drawable.fg_epg_cell_focus)
+                    setOnFocusChangeListener { _, hasFocus -> if (hasFocus) onCellFocus(stream, cell) }
                 } else {
                     background = ContextCompat.getDrawable(context, R.drawable.bg_epg_cell_empty)
                 }

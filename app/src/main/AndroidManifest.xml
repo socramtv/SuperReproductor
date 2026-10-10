@@ -109,6 +109,18 @@
             </intent-filter>
         </receiver>
 
+        <!-- Widget de favoritos para la pantalla de inicio (ver widget/FavoritesWidgetProvider.kt) -->
+        <receiver
+            android:name=".widget.FavoritesWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/favorites_widget_info" />
+        </receiver>
+
         <activity
             android:name=".CrashActivity"
             android:exported="false" />
