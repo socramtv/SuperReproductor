@@ -219,4 +219,7 @@
     <string name="goal_no_matches">El servicio de marcadores no trae partidos de las competiciones seguidas ahora mismo</string>
     <string name="goal_match_not_found">No encuentro ese partido en la guía de tus canales</string>
     <string name="goal_match_channels">¿Dónde verlo? · %1$s</string>
+    <string name="match_live">En juego · %1$s</string>
+    <string name="match_final">Final</string>
+    <string name="match_upcoming">Hoy a las %1$s</string>
 </resources>

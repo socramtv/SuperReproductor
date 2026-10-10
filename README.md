@@ -1191,3 +1191,13 @@ declara `android.software.leanback` y `android.hardware.touchscreen`
 táctil); no son la causa de que no apareciera, pero es lo correcto
 declararlos en una app pensada para los dos tipos de dispositivo, y hace
 falta si algún día se publica en la Play Store para TV.
+
+## Escudos y datos de partidos en la guía
+
+En la guía (EPG), los programas de fútbol cuyo título contiene los dos equipos
+muestran el marcador en la celda (`⚽ 1-0 · 23'`, `⚽ 2-1 · final`) y, al abrir
+sus detalles, una tarjeta con los escudos, el resultado, el estado (en juego /
+final / hora de inicio), la competición y los goles y tarjetas rojas.
+Los datos salen de la API pública (no oficial) de ESPN, la misma de los avisos
+de goles, y se refrescan cada minuto mientras haya partidos en juego.
+Si el título del programa no lleva el nombre de ambos equipos, no se muestra.

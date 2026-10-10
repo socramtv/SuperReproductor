@@ -55,7 +55,9 @@ object MatchFeed {
         val state: String,
         val clock: String,
         val startMillis: Long,
-        val details: List<Detail>
+        val details: List<Detail>,
+        val homeLogo: String? = null,
+        val awayLogo: String? = null
     )
 
     data class Result(val matches: List<Match>, val failedLeagues: Int)
@@ -169,8 +171,28 @@ object MatchFeed {
             state = state,
             clock = clock,
             startMillis = parseDate(event.optString("date")),
-            details = details
+            details = details,
+            homeLogo = home.optJSONObject("team")?.optString("logo")?.takeIf { it.startsWith("http") },
+            awayLogo = away.optJSONObject("team")?.optString("logo")?.takeIf { it.startsWith("http") }
         )
+    }
+
+    private val STOP_WORDS = setOf("de", "del", "la", "el", "fc", "cf", "cd", "ud", "sd", "rcd", "club", "afc", "sc", "ac")
+
+    private fun words(text: String): List<String> =
+        java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+            .lowercase()
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.isNotEmpty() }
+
+    /** true si todas las palabras significativas del equipo ("Atlético de Madrid" -> atletico, madrid) aparecen en [title] (el de un programa de la guía). */
+    fun teamInTitle(team: String, title: String): Boolean {
+        val significant = words(team).filter { it !in STOP_WORDS }
+        if (significant.isEmpty()) return false
+        val titleWords = words(title).toSet()
+        val titleJoined = titleWords.joinToString(" ")
+        return significant.all { it in titleWords || titleJoined.contains(it) }
     }
 
     private fun parseDate(raw: String): Long {

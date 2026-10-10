@@ -49,7 +49,9 @@ class EpgGridAdapter(
     /** true si hay un recordatorio puesto para ese programa (se marca con ⏰ junto al horario). */
     private val isReminderSet: (Stream, EpgRepository.EpgEntry) -> Boolean = { _, _ -> false },
     /** Se llama cuando una celda con programa recibe el foco (mando de TV): ver EpgGridActivity.showFocusedProgramme. */
-    private val onCellFocus: (Stream, EpgGridMath.Cell) -> Unit = { _, _ -> }
+    private val onCellFocus: (Stream, EpgGridMath.Cell) -> Unit = { _, _ -> },
+    /** Marcador en directo de un partido de fútbol ("⚽ 1-0 · 23'"), o null si ese programa no es un partido con datos (ver sports/MatchCache). */
+    private val matchInfo: (EpgRepository.EpgEntry) -> String? = { null }
 ) : RecyclerView.Adapter<EpgGridAdapter.ViewHolder>() {
 
     var searchQuery: String = ""
@@ -144,7 +146,8 @@ class EpgGridAdapter(
                     }
                     val time = TextView(context).apply {
                         val bell = if (isReminderSet(stream, entry)) "⏰ " else ""
-                        text = bell + EpgRepository.formatRange(entry)
+                        val score = matchInfo(entry)?.let { "$it · " } ?: ""
+                        text = bell + score + EpgRepository.formatRange(entry)
                         textSize = 11f
                         maxLines = 1
                         ellipsize = TextUtils.TruncateAt.END

@@ -17,6 +17,8 @@ import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import com.example.superplayer.R
+import com.example.superplayer.sports.MatchCache
+import com.example.superplayer.sports.MatchFeed
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.databinding.ActivityEpgGridBinding
@@ -132,7 +134,10 @@ class EpgGridActivity : AppCompatActivity() {
             onChannelClick = { openPlayer(it) },
             onCellClick = { stream, cell -> showProgrammeDetails(stream, cell) },
             isReminderSet = { stream, entry -> ReminderManager.isSet(this, stream.id, entry.startMillis) },
-            onCellFocus = { stream, cell -> showFocusedProgramme(stream, cell) }
+            onCellFocus = { stream, cell -> showFocusedProgramme(stream, cell) },
+            matchInfo = { entry ->
+                MatchCache.find(entry.title, entry.startMillis)?.let { MatchCache.shortStatus(it) }
+            }
         )
         binding.channelsRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.channelsRecyclerView.adapter = adapter
@@ -151,6 +156,33 @@ class EpgGridActivity : AppCompatActivity() {
         }
 
         renderWindow()
+        refreshMatches()
+    }
+
+    // Marcadores y escudos de los partidos que salgan en la guía (ver sports/MatchCache): se piden al abrir
+    // y, mientras haya algún partido en juego, cada minuto con la pantalla abierta.
+    private val matchHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val matchRefreshRunnable = Runnable { refreshMatches() }
+
+    private fun refreshMatches() {
+        matchHandler.removeCallbacks(matchRefreshRunnable)
+        MatchCache.refresh {
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                adapter.notifyDataSetChanged()
+                if (MatchCache.hasLive()) matchHandler.postDelayed(matchRefreshRunnable, 60_000L)
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        matchHandler.removeCallbacksAndMessages(null)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (::adapter.isInitialized) refreshMatches()
     }
 
     /**
@@ -363,6 +395,8 @@ class EpgGridActivity : AppCompatActivity() {
             setPadding(sidePad, topPad, sidePad, 0)
         }
 
+        MatchCache.find(entry.title, entry.startMillis)?.let { addMatchCard(container, it, density) }
+
         if (!entry.iconUrl.isNullOrBlank()) {
             val posterHeightPx = (170 * density).toInt()
             val posterMarginPx = (12 * density).toInt()
@@ -420,6 +454,84 @@ class EpgGridActivity : AppCompatActivity() {
             }
         }
         builder.show()
+    }
+
+    /** Tarjeta de partido en los detalles de un programa de fútbol: escudos, marcador, estado, competición y goles/expulsiones. */
+    private fun addMatchCard(container: LinearLayout, m: MatchFeed.Match, density: Float) {
+        val crestPx = (56 * density).toInt()
+        val onBg = ContextCompat.getColor(this, R.color.on_background)
+        val muted = ContextCompat.getColor(this, R.color.on_surface_muted)
+
+        fun crest(url: String?) = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(crestPx, crestPx)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            load(url) {
+                placeholder(R.drawable.ic_placeholder)
+                error(R.drawable.ic_placeholder)
+            }
+        }
+        fun teamColumn(name: String, logo: String?) = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            addView(crest(logo))
+            addView(TextView(this@EpgGridActivity).apply {
+                text = name
+                textSize = 12f
+                gravity = android.view.Gravity.CENTER
+                maxLines = 2
+                setTextColor(onBg)
+            })
+        }
+
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        row.addView(teamColumn(m.home, m.homeLogo))
+        row.addView(TextView(this).apply {
+            text = if (m.state == "pre") "vs" else "${m.homeScore} - ${m.awayScore}"
+            textSize = 26f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = android.view.Gravity.CENTER
+            setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+            setTextColor(onBg)
+        })
+        row.addView(teamColumn(m.away, m.awayLogo))
+        container.addView(row)
+
+        val status = when (m.state) {
+            "in" -> getString(R.string.match_live, m.clock.ifBlank { "—" })
+            "post" -> getString(R.string.match_final)
+            else -> if (m.startMillis > 0) {
+                getString(R.string.match_upcoming, SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(m.startMillis)))
+            } else ""
+        }
+        container.addView(TextView(this).apply {
+            text = listOf(status, m.league).filter { it.isNotBlank() }.joinToString(" · ")
+            textSize = 13f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(muted)
+            setPadding(0, (6 * density).toInt(), 0, (8 * density).toInt())
+        })
+
+        val events = m.details.map { d ->
+            val icon = if (d.kind == MatchFeed.Kind.RED_CARD) "🟥" else "⚽"
+            val extra = when {
+                d.ownGoal -> " (en propia)"
+                d.penalty -> " (penalti)"
+                else -> ""
+            }
+            "$icon ${d.minute} ${d.player.ifBlank { d.team }}$extra".replace("  ", " ")
+        }
+        if (events.isNotEmpty()) {
+            container.addView(TextView(this).apply {
+                text = events.joinToString("\n")
+                textSize = 12f
+                setTextColor(onBg)
+                setPadding(0, 0, 0, (12 * density).toInt())
+            })
+        }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
