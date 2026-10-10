@@ -104,6 +104,10 @@ class MultiViewActivity : AppCompatActivity() {
         updateFrames()
         binding.nameA.text = streams[0]?.name
         binding.nameB.text = streams[1]?.name
+        // El aviso de colores solo hace falta con el mando de TV; en el móvil sobra.
+        if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)) {
+            binding.multiHint.visibility = android.view.View.GONE
+        }
         // Con el mando: el foco empieza en "cambiar canal" del primer recuadro.
         binding.changeA.requestFocus()
     }
@@ -194,6 +198,9 @@ class MultiViewActivity : AppCompatActivity() {
     private fun updateFrames() {
         binding.frameA.setBackgroundResource(frameFor(0))
         binding.frameB.setBackgroundResource(frameFor(1))
+        // El canal que no suena lleva el altavoz tachado (mute).
+        binding.audioA.setImageResource(if (audioPane == 0) R.drawable.ic_volume_up else R.drawable.ic_volume_off)
+        binding.audioB.setImageResource(if (audioPane == 1) R.drawable.ic_volume_up else R.drawable.ic_volume_off)
     }
 
     /** Naranja = el que suena; rojo = el que tiene el foco del mando; los dos a la vez = rojo por fuera y naranja por dentro. */
