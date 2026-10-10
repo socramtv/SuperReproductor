@@ -846,8 +846,9 @@ pueden probar desde fuera y se dan por buenos. Si te arrepientes, están en
 **🪟 Dos canales a la vez (multivista).** En el reproductor, botón **de las dos
 pantallas** (junto a Guía). Abre el canal que veías y, a su lado, el siguiente de
 la lista (en el móvil en vertical, uno encima del otro). Solo suena uno, el que
-tiene el marco de color; toca el otro para pasarle el sonido. El botón ⇅ de cada
-recuadro cambia su canal (entre los de la categoría, o tus favoritos si venías
+tiene el marco naranja; toca el otro (o pulsa su botón 🔊) para pasarle el sonido.
+Con el mando de TV, el recuadro sobre el que estás (el que vas a elegir) se marca
+en rojo. El botón ⇅ de cada recuadro cambia su canal (entre los de la categoría, o tus favoritos si venías
 de un canal suelto). Con la multivista abierta el reproductor normal se pausa y,
 al volver, sigue solo. No hay segundo plano en multivista.
 

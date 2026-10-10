@@ -45,6 +45,8 @@ class MultiViewActivity : AppCompatActivity() {
     private val streams = arrayOfNulls<Stream>(2)
     private val players = arrayOfNulls<ExoPlayer>(2)
     private var audioPane = 0
+    /** Recuadro cuyos botones tienen el foco del mando (-1 = ninguno). */
+    private var focusedPane = -1
     private var candidates: List<Stream> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,6 +86,17 @@ class MultiViewActivity : AppCompatActivity() {
 
         binding.paneA.setOnClickListener { setAudioPane(0) }
         binding.paneB.setOnClickListener { setAudioPane(1) }
+        binding.audioA.setOnClickListener { setAudioPane(0) }
+        binding.audioB.setOnClickListener { setAudioPane(1) }
+        // Recuadro con el foco del mando (aro rojo): el canal sobre el que vas a actuar.
+        for ((pane, buttons) in listOf(0 to listOf(binding.audioA, binding.changeA), 1 to listOf(binding.audioB, binding.changeB))) {
+            for (button in buttons) {
+                button.setOnFocusChangeListener { _, hasFocus ->
+                    if (hasFocus) focusedPane = pane else if (focusedPane == pane) focusedPane = -1
+                    updateFrames()
+                }
+            }
+        }
         binding.changeA.setOnClickListener { showPicker(0) }
         binding.changeB.setOnClickListener { showPicker(1) }
         binding.closeMulti.setOnClickListener { finish() }
@@ -91,6 +104,8 @@ class MultiViewActivity : AppCompatActivity() {
         updateFrames()
         binding.nameA.text = streams[0]?.name
         binding.nameB.text = streams[1]?.name
+        // Con el mando: el foco empieza en "cambiar canal" del primer recuadro.
+        binding.changeA.requestFocus()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -177,8 +192,20 @@ class MultiViewActivity : AppCompatActivity() {
     }
 
     private fun updateFrames() {
-        binding.frameA.setBackgroundResource(if (audioPane == 0) R.drawable.bg_multiview_active else R.drawable.bg_multiview_idle)
-        binding.frameB.setBackgroundResource(if (audioPane == 1) R.drawable.bg_multiview_active else R.drawable.bg_multiview_idle)
+        binding.frameA.setBackgroundResource(frameFor(0))
+        binding.frameB.setBackgroundResource(frameFor(1))
+    }
+
+    /** Naranja = el que suena; rojo = el que tiene el foco del mando; los dos a la vez = rojo por fuera y naranja por dentro. */
+    private fun frameFor(pane: Int): Int {
+        val hasAudio = pane == audioPane
+        val hasFocus = pane == focusedPane
+        return when {
+            hasFocus && hasAudio -> R.drawable.bg_multiview_focus_active
+            hasFocus -> R.drawable.bg_multiview_focus
+            hasAudio -> R.drawable.bg_multiview_active
+            else -> R.drawable.bg_multiview_idle
+        }
     }
 
     private fun showPicker(pane: Int) {

@@ -171,9 +171,10 @@
     <string name="channel_check_close">Cerrar</string>
     <string name="channel_check_hidden_toast">%1$d canales ocultos</string>
     <string name="action_multiview">Dos canales a la vez</string>
+    <string name="multiview_audio_here">Oír este canal</string>
     <string name="multiview_change">Cambiar canal</string>
     <string name="multiview_close">Cerrar multivista</string>
-    <string name="multiview_hint">Toca un canal para oír ese · ⇅ para cambiarlo</string>
+    <string name="multiview_hint">🔊 para oír ese canal · ⇅ para cambiarlo · rojo = el que vas a elegir · naranja = el que suena</string>
     <string name="multiview_pick_title">Elegir canal</string>
     <string name="multiview_no_channels">No hay otro canal con el que comparar. Abre un canal desde una categoría con varios canales, o marca favoritos</string>
     <string name="multiview_audio_on">🔊 Suena: %1$s</string>

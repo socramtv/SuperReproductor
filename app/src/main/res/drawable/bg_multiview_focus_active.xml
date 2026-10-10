@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recuadro que tiene a la vez el foco (rojo, por fuera) y el sonido (naranja, por dentro). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke android:width="4dp" android:color="#FFFF3B30" />
+        </shape>
+    </item>
+    <item android:top="6dp" android:bottom="6dp" android:left="6dp" android:right="6dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke android:width="3dp" android:color="@color/primary" />
+        </shape>
+    </item>
+</layer-list>
