@@ -16,6 +16,7 @@ import com.example.superplayer.R
 import com.example.superplayer.data.AppPrefs
 import com.example.superplayer.data.BackupManager
 import com.example.superplayer.data.EpgRepository
+import com.example.superplayer.data.ContinueWatching
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.data.PlaylistCache
 import com.example.superplayer.data.PlaylistRepository
@@ -315,6 +316,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateSlotButtonLabels()
         updateCategoryFilterButton()
+        // Al volver de ver algo: "Continuar viendo" y el orden de Favoritos pueden haber cambiado.
+        if (playlist.categories.isNotEmpty()) categoryAdapter.submit(buildCategoryListWithFavorites())
         if (binding.recyclerView.adapter === streamAdapter) {
             streamAdapter.notifyDataSetChanged()
         }
@@ -564,8 +567,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildCategoryListWithFavorites(): List<Category> {
         val favIds = favoritesStore.getAll()
-        val favStreams = playlist.categories.flatMap { it.streams }.filter { favIds.contains(it.id) }
+        val favStreams = favoritesStore.sortByOrder(
+            playlist.categories.flatMap { it.streams }.filter { favIds.contains(it.id) }
+        )
         val result = mutableListOf<Category>()
+        // "Continuar viendo": películas/vídeos empezados (de cualquier lista), los más recientes primero.
+        val continueStreams = ContinueWatching.getAll(this).map { it.stream }
+        if (continueStreams.isNotEmpty()) {
+            result.add(Category(getString(R.string.continue_category_name), continueStreams))
+        }
         if (favStreams.isNotEmpty()) {
             result.add(Category(getString(R.string.favorites_category_name), favStreams))
         }

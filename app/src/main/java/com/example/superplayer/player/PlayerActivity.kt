@@ -41,6 +41,7 @@ import androidx.media3.ui.TrackSelectionDialogBuilder
 import coil.load
 import com.example.superplayer.R
 import com.example.superplayer.data.AppPrefs
+import com.example.superplayer.data.ContinueWatching
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ActivityPlayerBinding
 import com.example.superplayer.model.Stream
@@ -578,6 +579,7 @@ class PlayerActivity : AppCompatActivity() {
         if (size <= 1 || currentIndex < 0) return
         val newIndex = ((currentIndex + direction) % size + size) % size
         val newStream = channelList[newIndex]
+        saveContinueWatching() // posición del canal/película que se deja
         currentIndex = newIndex
 
         cancelPendingReconnect()
@@ -815,6 +817,7 @@ class PlayerActivity : AppCompatActivity() {
         cancelPendingReconnect()
         cancelStuckControlsWatchdog()
         autoReconnectAttempts = 0
+        saveContinueWatching()
         val ctrl = controller
         if (ctrl != null) {
             if (isFinishing) {
@@ -1040,7 +1043,20 @@ class PlayerActivity : AppCompatActivity() {
         val ctrl = controller ?: return
         if (playbackStarted) return
         playbackStarted = true
-        ctrl.setMediaItem(item)
+        // "Continuar viendo": si es una película/vídeo que se dejó a medias,
+        // se reanuda donde se quedó (unos segundos antes, para situarse).
+        val resumeAt = currentStream?.let { ContinueWatching.positionFor(this, it.id) }
+        if (resumeAt != null) {
+            val start = (resumeAt - 5_000L).coerceAtLeast(0L)
+            ctrl.setMediaItem(item, start)
+            Toast.makeText(
+                this,
+                getString(R.string.continue_resuming, ContinueWatching.formatClock(start)),
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            ctrl.setMediaItem(item)
+        }
         ctrl.playWhenReady = true
         ctrl.prepare()
         startStuckControlsWatchdog()
@@ -1278,6 +1294,24 @@ class PlayerActivity : AppCompatActivity() {
         popup.show()
     }
 
+    /**
+     * "Continuar viendo": guarda dónde se queda una película/vídeo (no un
+     * canal en directo: esos son "dinámicos" o no tienen duración). Se
+     * llama al salir de la pantalla y al cambiar de canal. Si se vio casi
+     * entero o apenas se empezó, ContinueWatching.save lo quita de la lista.
+     */
+    private fun saveContinueWatching() {
+        val ctrl = controller ?: return
+        val stream = currentStream ?: return
+        if (isCastingRemote) return
+        if (ctrl.currentMediaItem?.mediaId != stream.id) return
+        if (ctrl.playbackState == Player.STATE_IDLE) return
+        if (ctrl.isCurrentMediaItemDynamic || ctrl.isCurrentMediaItemLive) return
+        val duration = ctrl.duration
+        if (duration == C.TIME_UNSET || duration < MIN_VOD_DURATION_MS) return
+        ContinueWatching.save(this, stream, ctrl.currentPosition, duration)
+    }
+
     /** Botón del temporizador de apagado: 30/60/90/120 minutos (o desactivarlo si ya hay uno en marcha). */
     private fun showSleepTimerDialog() {
         val options = ArrayList<Int>()
@@ -1354,6 +1388,8 @@ class PlayerActivity : AppCompatActivity() {
         // el límite de tamaño de Binder en playlists grandes).
         var pendingChannelList: List<Stream> = emptyList()
 
+        // Menos que esto no se considera película/vídeo "para continuar" (clips, avances...).
+        private const val MIN_VOD_DURATION_MS = 5 * 60_000L
         private val SLEEP_TIMER_MINUTES = listOf(30, 60, 90, 120)
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2

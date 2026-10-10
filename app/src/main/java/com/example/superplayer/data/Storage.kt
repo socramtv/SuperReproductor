@@ -1,6 +1,8 @@
 package com.example.superplayer.data
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 import com.example.superplayer.model.Stream
 import com.example.superplayer.model.streamFromJson
 import com.example.superplayer.model.toJson
@@ -28,17 +30,44 @@ class FavoritesStore(context: Context) {
     fun toggle(stream: Stream): Boolean {
         val current = HashSet(prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet())
         val editor = prefs.edit()
+        val order = ArrayList(getOrder())
         val nowFavorite = if (current.contains(stream.id)) {
             current.remove(stream.id)
+            order.remove(stream.id)
             editor.remove(jsonKey(stream.id))
             false
         } else {
             current.add(stream.id)
+            // Un favorito nuevo se pone al final del orden manual.
+            order.remove(stream.id)
+            order.add(stream.id)
             editor.putString(jsonKey(stream.id), stream.toJson())
             true
         }
-        editor.putStringSet(KEY_IDS, current).apply()
+        editor.putStringSet(KEY_IDS, current).putString(KEY_ORDER, JSONArray(order).toString()).apply()
         return nowFavorite
+    }
+
+    /** Orden manual de los favoritos (ids de canal), el que se elige en "Ordenar favoritos". Los favoritos que no salgan aquí van al final. */
+    fun getOrder(): List<String> {
+        val raw = prefs.getString(KEY_ORDER, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setOrder(ids: List<String>) {
+        prefs.edit().putString(KEY_ORDER, JSONArray(ids).toString()).apply()
+    }
+
+    /** Ordena [streams] según el orden manual de favoritos (estable: los que no tengan posición guardada mantienen su orden y van al final). */
+    fun sortByOrder(streams: List<Stream>): List<Stream> {
+        val position = HashMap<String, Int>()
+        getOrder().forEachIndexed { i, id -> position.putIfAbsent(id, i) }
+        return streams.sortedBy { position[it.id] ?: Int.MAX_VALUE }
     }
 
     fun getAll(): Set<String> = prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet()
@@ -46,7 +75,7 @@ class FavoritesStore(context: Context) {
     /** Los Stream completos de los favoritos que sí tienen datos guardados (ver refreshStoredStreams), para los accesos directos. */
     fun getAllStreams(): List<Stream> {
         val ids = prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet()
-        return ids.mapNotNull { id -> prefs.getString(jsonKey(id), null)?.let { streamFromJson(it) } }
+        return sortByOrder(ids.mapNotNull { id -> prefs.getString(jsonKey(id), null)?.let { streamFromJson(it) } })
     }
 
     /**
@@ -80,12 +109,16 @@ class FavoritesStore(context: Context) {
     fun addAll(streams: List<Stream>): Int {
         val current = HashSet(prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet())
         val editor = prefs.edit()
+        val order = ArrayList(getOrder())
         var added = 0
         for (stream in streams) {
-            if (current.add(stream.id)) added++
+            if (current.add(stream.id)) {
+                added++
+                if (stream.id !in order) order.add(stream.id)
+            }
             editor.putString(jsonKey(stream.id), stream.toJson())
         }
-        editor.putStringSet(KEY_IDS, current).apply()
+        editor.putStringSet(KEY_IDS, current).putString(KEY_ORDER, JSONArray(order).toString()).apply()
         return added
     }
 
@@ -93,6 +126,7 @@ class FavoritesStore(context: Context) {
 
     companion object {
         private const val KEY_IDS = "favorite_ids"
+        private const val KEY_ORDER = "favorite_order"
     }
 }
 
@@ -253,4 +287,91 @@ object PlaylistCache {
 
     private fun cacheFile(context: Context, slot: Int): File =
         File(context.applicationContext.filesDir, "remote_list_cache_$slot.txt")
+}
+
+
+/**
+ * "Continuar viendo": posición donde se dejó cada película/vídeo (no los
+ * canales en directo; ver PlayerActivity.saveContinueWatching). Se guardan
+ * los últimos [MAX_ENTRIES], los más recientes primero, con el Stream
+ * completo para poder reabrirlos desde cualquier lista.
+ */
+object ContinueWatching {
+    private const val PREFS_NAME = "continue_watching"
+    private const val KEY_ENTRIES = "entries"
+    private const val MAX_ENTRIES = 30
+
+    /** Menos de esto vistos = no se considera "empezado"; y si falta menos de esto para el final, se considera "terminado". */
+    private const val MIN_WATCHED_MS = 30_000L
+    private const val FINISHED_MARGIN_MS = 90_000L
+
+    data class Entry(val stream: Stream, val positionMs: Long, val durationMs: Long, val updatedAt: Long)
+
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun getAll(context: Context): List<Entry> {
+        val raw = prefs(context).getString(KEY_ENTRIES, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            val result = ArrayList<Entry>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val stream = streamFromJson(obj.getJSONObject("stream").toString()) ?: continue
+                result.add(Entry(stream, obj.getLong("pos"), obj.getLong("dur"), obj.optLong("at", 0L)))
+            }
+            result.sortedByDescending { it.updatedAt }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun positionFor(context: Context, streamId: String): Long? =
+        getAll(context).firstOrNull { it.stream.id == streamId }?.positionMs
+
+    /** Guarda (o actualiza) la posición; si se acaba de empezar o ya se vio casi entero, lo quita de la lista en vez de guardarlo. */
+    fun save(context: Context, stream: Stream, positionMs: Long, durationMs: Long) {
+        if (durationMs <= 0L) return
+        val finished = durationMs - positionMs < FINISHED_MARGIN_MS
+        if (positionMs < MIN_WATCHED_MS || finished) {
+            remove(context, stream.id)
+            return
+        }
+        val entries = getAll(context).filter { it.stream.id != stream.id }.toMutableList()
+        entries.add(0, Entry(stream, positionMs, durationMs, System.currentTimeMillis()))
+        write(context, entries.take(MAX_ENTRIES))
+    }
+
+    fun remove(context: Context, streamId: String) {
+        val entries = getAll(context)
+        if (entries.none { it.stream.id == streamId }) return
+        write(context, entries.filter { it.stream.id != streamId })
+    }
+
+    fun clear(context: Context) {
+        prefs(context).edit().remove(KEY_ENTRIES).apply()
+    }
+
+    /** "1:05:30" o "45:10". */
+    fun formatClock(millis: Long): String {
+        val totalSeconds = (millis / 1000L).coerceAtLeast(0L)
+        val h = totalSeconds / 3600
+        val m = (totalSeconds % 3600) / 60
+        val sec = totalSeconds % 60
+        return if (h > 0) String.format(java.util.Locale.getDefault(), "%d:%02d:%02d", h, m, sec)
+        else String.format(java.util.Locale.getDefault(), "%d:%02d", m, sec)
+    }
+
+    private fun write(context: Context, entries: List<Entry>) {
+        val arr = JSONArray()
+        for (e in entries) {
+            val obj = JSONObject()
+            obj.put("stream", JSONObject(e.stream.toJson()))
+            obj.put("pos", e.positionMs)
+            obj.put("dur", e.durationMs)
+            obj.put("at", e.updatedAt)
+            arr.put(obj)
+        }
+        prefs(context).edit().putString(KEY_ENTRIES, arr.toString()).apply()
+    }
 }

@@ -28,6 +28,14 @@ class SuperPlayerApp : Application() {
             else AppCompatDelegate.MODE_NIGHT_NO
         )
 
+        // Recordatorios de la guía EPG: se vuelven a programar por si el
+        // sistema perdió las alarmas (reinicio, "forzar detención"...).
+        try {
+            com.example.superplayer.reminder.ReminderManager.rescheduleAll(this)
+        } catch (e: Exception) {
+            // Nunca debe impedir que arranque la app.
+        }
+
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->

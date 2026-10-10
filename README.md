@@ -248,7 +248,34 @@ archivo JSON/M3U del propio dispositivo (no guarda ninguna URL): es la
 única forma de cargar un archivo local, ya que no hay ningún icono
 redundante para esto en la barra superior.
 
-### Copia de seguridad sin conexión
+### Continuar viendo, recordatorios de la guía y orden de favoritos
+
+**▶ Continuar viendo.** Al salir de una película o vídeo (no de un canal en
+directo) a mitad, la app recuerda dónde te quedaste. Arriba de la portada
+aparece la categoría **"▶ Continuar viendo"** con esos títulos (los más
+recientes primero) y, debajo de cada uno, "Visto 45:10 de 1:55:00". Al abrirlo
+sigue unos segundos antes del punto donde lo dejaste. Se guardan los últimos 30;
+si lo viste casi entero (o apenas lo empezaste) desaparece solo. Solo cuenta
+contenido con duración de 5 minutos o más. Menú de los tres puntos de esa
+categoría → **"Vaciar «Continuar viendo»"**.
+
+**⏰ Recordatorios de la guía EPG.** En la parrilla, toca un programa que
+todavía no ha empezado: en el diálogo sale **"⏰ Recordarme"**. La app avisa con
+una notificación **5 minutos antes** (o a la hora de inicio si falta menos);
+tocarla abre el canal. Los programas con recordatorio llevan ⏰ junto al horario;
+para quitarlo, vuelve a tocarlo → "Quitar recordatorio". En Android 13+ pide el
+permiso de notificaciones la primera vez. Si el móvil no permite alarmas
+exactas (Ajustes → Apps → Socram TV+ → "Alarmas y recordatorios"), el aviso
+puede llegar con unos minutos de retraso. Los recordatorios se mantienen al
+reiniciar el móvil.
+
+**Ordenar favoritos.** Dentro de la categoría **⭐ Favoritos**, menú de los
+tres puntos → **"Ordenar favoritos"**: arrastra una fila (pulsación larga) o usa
+▲ ▼. El orden se aplica a la categoría Favoritos y a los accesos directos del
+icono de la app, y entra en la copia de seguridad. Un favorito nuevo se añade
+al final.
+
+## Copia de seguridad sin conexión
 
 Cada uno de los cinco huecos guarda, además de la URL, una copia del
 **último contenido que se descargó con éxito** de ahí. Al tocar un hueco,

@@ -16,7 +16,9 @@ class StreamAdapter(
     private var items: List<Stream>,
     private val isFavorite: (Stream) -> Boolean,
     private val onClick: (Stream) -> Unit,
-    private val onToggleFavorite: (Stream) -> Unit
+    private val onToggleFavorite: (Stream) -> Unit,
+    /** Texto fijo a enseñar en vez de las líneas de guía (p. ej. "Visto 45:10 de 1:55:00" en "Continuar viendo"); null = lo de siempre. */
+    private val extraLine: (Stream) -> String? = { null }
 ) : RecyclerView.Adapter<StreamAdapter.ViewHolder>() {
 
     fun submit(newItems: List<Stream>) {
@@ -51,9 +53,17 @@ class StreamAdapter(
             val context = binding.root.context
             val schedule = EpgRepository.schedule(stream.tvgId)
 
-            bindEpgLine(binding.streamNowPlaying, R.string.epg_now_playing, schedule.now, context)
-            bindEpgLine(binding.streamNextPlaying, R.string.epg_next_playing, schedule.next, context)
-            bindEpgLine(binding.streamTonightPlaying, R.string.epg_tonight_playing, schedule.tonight, context)
+            val extra = extraLine(stream)
+            if (extra != null) {
+                binding.streamNowPlaying.text = extra
+                binding.streamNowPlaying.visibility = View.VISIBLE
+                binding.streamNextPlaying.visibility = View.GONE
+                binding.streamTonightPlaying.visibility = View.GONE
+            } else {
+                bindEpgLine(binding.streamNowPlaying, R.string.epg_now_playing, schedule.now, context)
+                bindEpgLine(binding.streamNextPlaying, R.string.epg_next_playing, schedule.next, context)
+                bindEpgLine(binding.streamTonightPlaying, R.string.epg_tonight_playing, schedule.tonight, context)
+            }
 
             binding.root.setOnClickListener { onClick(stream) }
             // Alternativa para el mando de TV al corazón de favorito (ver el

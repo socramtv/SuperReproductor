@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.superplayer.R
+import com.example.superplayer.data.ContinueWatching
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.databinding.ActivityStreamListBinding
 import com.example.superplayer.model.Stream
@@ -28,6 +29,8 @@ class StreamListActivity : AppCompatActivity() {
     private lateinit var favoritesStore: FavoritesStore
     private lateinit var adapter: StreamAdapter
     private var allStreams: List<Stream> = emptyList()
+    private var isFavoritesCategory = false
+    private var isContinueCategory = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,13 +43,26 @@ class StreamListActivity : AppCompatActivity() {
 
         favoritesStore = FavoritesStore(this)
         allStreams = pendingStreams
-        title = intent.getStringExtra(EXTRA_CATEGORY_NAME).orEmpty()
+        val categoryName = intent.getStringExtra(EXTRA_CATEGORY_NAME).orEmpty()
+        title = categoryName
+        isFavoritesCategory = categoryName == getString(R.string.favorites_category_name)
+        isContinueCategory = categoryName == getString(R.string.continue_category_name)
 
         adapter = StreamAdapter(
             items = allStreams,
             isFavorite = { favoritesStore.isFavorite(it.id) },
             onClick = { openPlayer(it) },
-            onToggleFavorite = { toggleFavorite(it) }
+            onToggleFavorite = { toggleFavorite(it) },
+            extraLine = { stream ->
+                if (!isContinueCategory) null
+                else ContinueWatching.getAll(this).firstOrNull { it.stream.id == stream.id }?.let {
+                    getString(
+                        R.string.continue_progress,
+                        ContinueWatching.formatClock(it.positionMs),
+                        ContinueWatching.formatClock(it.durationMs)
+                    )
+                }
+            }
         )
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
@@ -81,8 +97,29 @@ class StreamListActivity : AppCompatActivity() {
         ShortcutsHelper.refresh(this, favoritesStore.getAllStreams())
     }
 
+    /** "Ordenar favoritos": el orden manual se guarda y vale para la categoría Favoritos y para los accesos directos. */
+    private fun showOrderFavoritesDialog() {
+        val byId = allStreams.associateBy { it.id }
+        showReorderDialog(
+            activity = this,
+            titleRes = R.string.favorites_order_title,
+            items = allStreams.map { it.id },
+            labelOf = { byId[it]?.name ?: it },
+            onSave = { newIds ->
+                // Los favoritos de otras listas (no visibles aquí) conservan su sitio, detrás de estos.
+                val rest = favoritesStore.getOrder().filter { it !in newIds }
+                favoritesStore.setOrder(newIds + rest)
+                allStreams = favoritesStore.sortByOrder(allStreams)
+                adapter.submit(allStreams)
+                ShortcutsHelper.refresh(this, favoritesStore.getAllStreams())
+            }
+        )
+    }
+
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_search, menu)
+        menuInflater.inflate(R.menu.menu_stream_list, menu)
+        menu.findItem(R.id.action_order_favorites).isVisible = isFavoritesCategory
+        menu.findItem(R.id.action_clear_continue).isVisible = isContinueCategory
         val searchItem = menu.findItem(R.id.action_search)
         val searchView = searchItem.actionView as SearchView
         searchView.queryHint = getString(R.string.search_hint)
@@ -106,6 +143,18 @@ class StreamListActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
             finish()
+            return true
+        }
+        if (item.itemId == R.id.action_order_favorites) {
+            showOrderFavoritesDialog()
+            return true
+        }
+        if (item.itemId == R.id.action_clear_continue) {
+            ContinueWatching.clear(this)
+            Toast.makeText(this, R.string.continue_cleared, Toast.LENGTH_SHORT).show()
+            allStreams = emptyList()
+            adapter.submit(allStreams)
+            binding.emptyView.visibility = View.VISIBLE
             return true
         }
         return super.onOptionsItemSelected(item)

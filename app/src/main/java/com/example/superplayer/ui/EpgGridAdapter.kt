@@ -45,7 +45,9 @@ class EpgGridAdapter(
     private val onRowScrollAttached: (HorizontalScrollView) -> Unit,
     private val onRowScrollDetached: (HorizontalScrollView) -> Unit,
     private val onChannelClick: (Stream) -> Unit,
-    private val onCellClick: (EpgGridMath.Cell) -> Unit
+    private val onCellClick: (Stream, EpgGridMath.Cell) -> Unit,
+    /** true si hay un recordatorio puesto para ese programa (se marca con ⏰ junto al horario). */
+    private val isReminderSet: (Stream, EpgRepository.EpgEntry) -> Boolean = { _, _ -> false }
 ) : RecyclerView.Adapter<EpgGridAdapter.ViewHolder>() {
 
     var searchQuery: String = ""
@@ -106,7 +108,7 @@ class EpgGridAdapter(
             for (cell in cells) {
                 val left = EpgGridMath.xForTime(cell.startMillis, windowStart, density)
                 val right = EpgGridMath.xForTime(cell.stopMillis, windowStart, density)
-                container.addView(buildCellView(context, cell, (right - left).coerceAtLeast(1), query))
+                container.addView(buildCellView(context, stream, cell, (right - left).coerceAtLeast(1), query))
             }
         }
 
@@ -115,7 +117,7 @@ class EpgGridAdapter(
          * pequeño y apagado, su horario ("06:00–10:55"). Las celdas sin
          * datos de guía quedan vacías.
          */
-        private fun buildCellView(context: Context, cell: EpgGridMath.Cell, widthPx: Int, query: String): LinearLayout {
+        private fun buildCellView(context: Context, stream: Stream, cell: EpgGridMath.Cell, widthPx: Int, query: String): LinearLayout {
             val density = context.resources.displayMetrics.density
             return LinearLayout(context).apply {
                 layoutParams = LinearLayout.LayoutParams(widthPx, LinearLayout.LayoutParams.MATCH_PARENT)
@@ -139,7 +141,8 @@ class EpgGridAdapter(
                         )
                     }
                     val time = TextView(context).apply {
-                        text = EpgRepository.formatRange(entry)
+                        val bell = if (isReminderSet(stream, entry)) "⏰ " else ""
+                        text = bell + EpgRepository.formatRange(entry)
                         textSize = 11f
                         maxLines = 1
                         ellipsize = TextUtils.TruncateAt.END
@@ -159,7 +162,7 @@ class EpgGridAdapter(
                     // Solo las celdas CON programa abren el diálogo de
                     // detalles (ver EpgGridActivity.showProgrammeDetails):
                     // un hueco sin datos de guía no tiene nada que mostrar.
-                    setOnClickListener { onCellClick(cell) }
+                    setOnClickListener { onCellClick(stream, cell) }
                 } else {
                     background = ContextCompat.getDrawable(context, R.drawable.bg_epg_cell_empty)
                 }

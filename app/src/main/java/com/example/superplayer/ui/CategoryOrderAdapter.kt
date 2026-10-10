@@ -14,7 +14,9 @@ import com.example.superplayer.databinding.ItemCategoryOrderBinding
  */
 class CategoryOrderAdapter(
     val names: MutableList<String>,
-    private val hidden: Set<String>
+    private val hidden: Set<String>,
+    /** Texto que se enseña para cada elemento de [names] (por defecto, el propio valor; para favoritos, el nombre del canal). */
+    private val labelOf: (String) -> String = { it }
 ) : RecyclerView.Adapter<CategoryOrderAdapter.ViewHolder>() {
 
     fun move(from: Int, to: Int) {
@@ -37,8 +39,9 @@ class CategoryOrderAdapter(
 
         fun bind(name: String) {
             val context = binding.root.context
+            val label = labelOf(name)
             binding.orderName.text =
-                if (name in hidden) "$name ${context.getString(R.string.category_order_hidden_suffix)}" else name
+                if (name in hidden) "$label ${context.getString(R.string.category_order_hidden_suffix)}" else label
             binding.orderName.alpha = if (name in hidden) 0.5f else 1f
             binding.orderUp.setOnClickListener {
                 val pos = bindingAdapterPosition

@@ -21,6 +21,7 @@ import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.databinding.ActivityEpgGridBinding
 import com.example.superplayer.model.Stream
+import com.example.superplayer.reminder.ReminderManager
 import com.example.superplayer.player.PlayerActivity
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -77,6 +78,14 @@ class EpgGridActivity : AppCompatActivity() {
     private var onlyFavorites = false
     private var currentQuery = ""
     private var favoritesItem: MenuItem? = null
+
+    // Permiso de notificaciones (Android 13+) para poder ver los avisos de los recordatorios.
+    private val notificationPermissionLauncher =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                android.widget.Toast.makeText(this, R.string.reminder_no_permission, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
     private var dataStart: Long = 0L
     private var dataEnd: Long = 0L
     private var windowStart: Long = 0L
@@ -121,7 +130,8 @@ class EpgGridActivity : AppCompatActivity() {
             onRowScrollAttached = { registerSyncedScroll(it) },
             onRowScrollDetached = { unregisterSyncedScroll(it) },
             onChannelClick = { openPlayer(it) },
-            onCellClick = { showProgrammeDetails(it) }
+            onCellClick = { stream, cell -> showProgrammeDetails(stream, cell) },
+            isReminderSet = { stream, entry -> ReminderManager.isSet(this, stream.id, entry.startMillis) }
         )
         binding.channelsRecyclerView.layoutManager = LinearLayoutManager(this)
         binding.channelsRecyclerView.adapter = adapter
@@ -327,7 +337,7 @@ class EpgGridActivity : AppCompatActivity() {
      * <icon> para ese programa (ver EpgRepository.parseXmlTv)- su póster.
      * Las celdas vacías (sin programa) no llaman a esto.
      */
-    private fun showProgrammeDetails(cell: EpgGridMath.Cell) {
+    private fun showProgrammeDetails(stream: Stream, cell: EpgGridMath.Cell) {
         val entry = cell.entry ?: return
         val density = resources.displayMetrics.density
         val sidePad = (24 * density).toInt()
@@ -362,11 +372,39 @@ class EpgGridActivity : AppCompatActivity() {
             }
         )
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        val builder = androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle(entry.title)
             .setView(container)
             .setPositiveButton(android.R.string.ok, null)
-            .show()
+        // Recordatorio: solo para programas que todavía no han empezado.
+        if (entry.startMillis > System.currentTimeMillis()) {
+            if (ReminderManager.isSet(this, stream.id, entry.startMillis)) {
+                builder.setNeutralButton(R.string.reminder_remove_button) { _, _ ->
+                    ReminderManager.remove(this, stream.id, entry.startMillis)
+                    android.widget.Toast.makeText(this, R.string.reminder_removed_toast, android.widget.Toast.LENGTH_SHORT).show()
+                    adapter.notifyDataSetChanged()
+                }
+            } else {
+                builder.setNeutralButton(R.string.reminder_set_button) { _, _ ->
+                    if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                        ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) !=
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    if (ReminderManager.add(this, stream, entry)) {
+                        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(entry.startMillis))
+                        android.widget.Toast.makeText(
+                            this,
+                            getString(R.string.reminder_set_toast, ReminderManager.LEAD_MINUTES, time),
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                        adapter.notifyDataSetChanged()
+                    }
+                }
+            }
+        }
+        builder.show()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
