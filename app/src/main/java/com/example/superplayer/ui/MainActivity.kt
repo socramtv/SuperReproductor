@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.superplayer.R
 import com.example.superplayer.data.AppPrefs
 import com.example.superplayer.data.BackupManager
+import com.example.superplayer.data.ChannelOverrides
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.ContinueWatching
 import com.example.superplayer.data.FavoritesStore
@@ -34,6 +35,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var categoryAdapter: CategoryAdapter
     private lateinit var streamAdapter: StreamAdapter
     private var playlist: PlaylistData = PlaylistData(emptyList())
+    /** La lista tal cual se cargó; [playlist] es esta misma con los canales ocultos/renombrados aplicados (ver ChannelOverrides). */
+    private var rawPlaylist: PlaylistData = PlaylistData(emptyList())
+    private var appliedOverridesVersion = -1
 
     // Qué lista hay cargada ("slot_1".."slot_5", "file" o "sample"): el
     // filtro de categorías se guarda por lista (ver AppPrefs.getHiddenCategories).
@@ -93,7 +97,14 @@ class MainActivity : AppCompatActivity() {
             items = emptyList(),
             isFavorite = { favoritesStore.isFavorite(it.id) },
             onClick = { openPlayer(it) },
-            onToggleFavorite = { toggleFavorite(it) }
+            onToggleFavorite = { toggleFavorite(it) },
+            onLongClick = { stream ->
+                showChannelOptionsDialog(
+                    this, stream, favoritesStore.isFavorite(stream.id),
+                    onToggleFavorite = { toggleFavorite(stream) },
+                    onChanged = { refreshAfterChannelChange() }
+                )
+            }
         )
 
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
@@ -315,12 +326,29 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateSlotButtonLabels()
+        // Canales ocultados/renombrados desde una lista: se reaplican sobre la lista cargada.
+        reapplyChannelOverrides()
         updateCategoryFilterButton()
         // Al volver de ver algo: "Continuar viendo" y el orden de Favoritos pueden haber cambiado.
         if (playlist.categories.isNotEmpty()) categoryAdapter.submit(buildCategoryListWithFavorites())
         if (binding.recyclerView.adapter === streamAdapter) {
             streamAdapter.notifyDataSetChanged()
         }
+    }
+
+    private fun reapplyChannelOverrides() {
+        if (appliedOverridesVersion == ChannelOverrides.version) return
+        appliedOverridesVersion = ChannelOverrides.version
+        playlist = ChannelOverrides.apply(this, rawPlaylist)
+        searchIndexDirty = true
+    }
+
+    /** Tras ocultar/renombrar un canal desde los resultados de búsqueda: repinta categorías y resultados. */
+    private fun refreshAfterChannelChange() {
+        reapplyChannelOverrides()
+        updateCategoryFilterButton()
+        categoryAdapter.submit(buildCategoryListWithFavorites())
+        streamAdapter.notifyDataSetChanged()
     }
 
     private fun loadInitialPlaylist() {
@@ -375,7 +403,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setPlaylist(data: PlaylistData, listKey: String) {
+    private fun setPlaylist(rawData: PlaylistData, listKey: String) {
+        rawPlaylist = rawData
+        appliedOverridesVersion = ChannelOverrides.version
+        val data = ChannelOverrides.apply(this, rawData)
         playlist = data
         currentListKey = listKey
         searchIndexDirty = true
@@ -572,7 +603,9 @@ class MainActivity : AppCompatActivity() {
         )
         val result = mutableListOf<Category>()
         // "Continuar viendo": películas/vídeos empezados (de cualquier lista), los más recientes primero.
-        val continueStreams = ContinueWatching.getAll(this).map { it.stream }
+        val continueStreams = ContinueWatching.getAll(this)
+            .filter { !ChannelOverrides.isHidden(this, it.stream.id) }
+            .map { ChannelOverrides.renamed(this, it.stream) }
         if (continueStreams.isNotEmpty()) {
             result.add(Category(getString(R.string.continue_category_name), continueStreams))
         }

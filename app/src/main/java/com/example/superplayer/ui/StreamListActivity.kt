@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.superplayer.R
+import com.example.superplayer.data.ChannelOverrides
 import com.example.superplayer.data.ContinueWatching
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.databinding.ActivityStreamListBinding
@@ -53,6 +54,13 @@ class StreamListActivity : AppCompatActivity() {
             isFavorite = { favoritesStore.isFavorite(it.id) },
             onClick = { openPlayer(it) },
             onToggleFavorite = { toggleFavorite(it) },
+            onLongClick = { stream ->
+                showChannelOptionsDialog(
+                    this, stream, favoritesStore.isFavorite(stream.id),
+                    onToggleFavorite = { toggleFavorite(stream) },
+                    onChanged = { reloadAfterChannelChange() }
+                )
+            },
             extraLine = { stream ->
                 if (!isContinueCategory) null
                 else ContinueWatching.getAll(this).firstOrNull { it.stream.id == stream.id }?.let {
@@ -72,6 +80,15 @@ class StreamListActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         adapter.notifyDataSetChanged()
+    }
+
+    /** Tras ocultar/renombrar/comprobar canales: quita los ocultos y pone los nombres propios en esta lista. */
+    private fun reloadAfterChannelChange() {
+        allStreams = allStreams
+            .filter { !ChannelOverrides.isHidden(this, it.id) }
+            .map { ChannelOverrides.renamed(this, it) }
+        adapter.submit(allStreams)
+        binding.emptyView.visibility = if (allStreams.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun openPlayer(stream: Stream) {
@@ -120,6 +137,7 @@ class StreamListActivity : AppCompatActivity() {
         menuInflater.inflate(R.menu.menu_stream_list, menu)
         menu.findItem(R.id.action_order_favorites).isVisible = isFavoritesCategory
         menu.findItem(R.id.action_clear_continue).isVisible = isContinueCategory
+        menu.findItem(R.id.action_check_channels).isVisible = !isContinueCategory
         val searchItem = menu.findItem(R.id.action_search)
         val searchView = searchItem.actionView as SearchView
         searchView.queryHint = getString(R.string.search_hint)
@@ -143,6 +161,16 @@ class StreamListActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
             finish()
+            return true
+        }
+        if (item.itemId == R.id.action_check_channels) {
+            showChannelCheckDialog(this, allStreams) { reloadAfterChannelChange() }
+            return true
+        }
+        if (item.itemId == R.id.action_hidden_channels) {
+            showHiddenChannelsDialog(this) {
+                Toast.makeText(this, R.string.channel_hidden_restored, Toast.LENGTH_LONG).show()
+            }
             return true
         }
         if (item.itemId == R.id.action_order_favorites) {

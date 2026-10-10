@@ -823,10 +823,45 @@ todas las categorías de la lista cargada para cambiar su orden en la portada.
 - El orden solo afecta a la portada; dentro de una categoría los canales
   siguen en el orden de la lista.
 
+## Ocultar y renombrar canales, canales caídos, multivista y TV
+
+**🚫 Ocultar y ✏️ renombrar canales.** Mantén pulsado un canal en cualquier lista
+(o en los resultados de búsqueda): sale un menú con favorito, **Cambiar nombre**,
+**Volver al nombre original** y **Ocultar canal**. Es un ajuste tuyo, no toca la
+lista original: se guarda por la URL del canal, así que vale en todas las listas
+donde salga y sobrevive a las actualizaciones. Para volver a mostrar canales:
+menú ⋮ de cualquier categoría → **"Canales ocultos…"** → marca los que quieras
+y **"Mostrar los marcados"** (vuelve a la portada para verlos). Una categoría
+con todos sus canales ocultos desaparece de la portada.
+
+**🩺 Comprobar canales caídos.** Menú ⋮ de una categoría → **"Comprobar canales
+caídos"**. Prueba los canales de esa categoría (8 a la vez, con barra de
+progreso; solo lee los primeros bytes) y al terminar enseña los que no
+responden, todos marcados: desmarca los que quieras conservar y pulsa **"Ocultar
+los marcados"**. Ojo: algún servidor que exija algo especial puede salir como
+caído sin estarlo, por eso se puede desmarcar. Los canales con token no se
+pueden probar desde fuera y se dan por buenos. Si te arrepientes, están en
+"Canales ocultos…".
+
+**🪟 Dos canales a la vez (multivista).** En el reproductor, botón **de las dos
+pantallas** (junto a Guía). Abre el canal que veías y, a su lado, el siguiente de
+la lista (en el móvil en vertical, uno encima del otro). Solo suena uno, el que
+tiene el marco de color; toca el otro para pasarle el sonido. El botón ⇅ de cada
+recuadro cambia su canal (entre los de la categoría, o tus favoritos si venías
+de un canal suelto). Con la multivista abierta el reproductor normal se pausa y,
+al volver, sigue solo. No hay segundo plano en multivista.
+
+**📺 Continuar viendo en el inicio de Android TV.** En una TV con Android TV /
+Google TV, las películas y vídeos que dejaste a medias salen también en la fila
+**"Reproducir siguiente"** de la pantalla de inicio, con su barra de progreso;
+al elegir uno se abre y sigue por donde lo dejaste. La fila se mantiene sola al
+ver o terminar cosas. Solo funciona en dispositivos de TV que admitan esa fila
+(en algunos Fire TV antiguos puede no aparecer; la app sigue igual sin ella).
+
 ## Botones del reproductor
 
 Debajo de la barra de progreso, a la izquierda del engranaje de Media3 (el de
-velocidad), hay una fila con cinco botones:
+velocidad), hay una fila con varios botones:
 
 1. **Vídeo y audio** (un solo botón): menú con *Vídeo*, *Audio* (para elegir
    calidad/pista) y *Audio en segundo plano: sí/no*.
@@ -839,7 +874,8 @@ velocidad), hay una fila con cinco botones:
    pulsarlo otra vez ves los minutos que quedan y puedes desactivarlo o poner
    otro tiempo. Funciona también con radio. Si sales del reproductor con el
    botón Atrás, el temporizador se cancela.
-5. **Imagen en imagen** (ventana flotante).
+5. **Dos canales a la vez** (multivista, ver arriba).
+6. **Imagen en imagen** (ventana flotante).
 
 El botón de **Chromecast** se queda arriba a la derecha (algo separado del borde). Todos aparecen y
 desaparecen junto con los controles. En radio no salen formato ni imagen en

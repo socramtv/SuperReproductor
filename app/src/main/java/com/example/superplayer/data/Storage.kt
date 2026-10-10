@@ -350,6 +350,7 @@ object ContinueWatching {
 
     fun clear(context: Context) {
         prefs(context).edit().remove(KEY_ENTRIES).apply()
+        com.example.superplayer.tv.WatchNextSync.sync(context)
     }
 
     /** "1:05:30" o "45:10". */
@@ -373,5 +374,7 @@ object ContinueWatching {
             arr.put(obj)
         }
         prefs(context).edit().putString(KEY_ENTRIES, arr.toString()).apply()
+        // Inicio de Android TV: la fila "Continuar viendo" del sistema se mantiene al día (solo en TV).
+        com.example.superplayer.tv.WatchNextSync.sync(context)
     }
 }

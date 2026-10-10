@@ -21,4 +21,16 @@
         android:title="@string/continue_clear"
         app:showAsAction="never" />
 
+    <!-- Comprueba qué canales de esta categoría ya no responden (ver ChannelChecker) -->
+    <item
+        android:id="@+id/action_check_channels"
+        android:title="@string/channel_check_menu"
+        app:showAsAction="never" />
+
+    <!-- Canales que se ocultaron con la pulsación larga, para volver a mostrarlos -->
+    <item
+        android:id="@+id/action_hidden_channels"
+        android:title="@string/channel_hidden_menu"
+        app:showAsAction="never" />
+
 </menu>

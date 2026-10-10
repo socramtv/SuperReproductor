@@ -707,6 +707,7 @@ class PlayerActivity : AppCompatActivity() {
         binding.videoFormatButton.setOnClickListener { cycleVideoFormat() }
         binding.sleepTimerButton.setOnClickListener { showSleepTimerDialog() }
         binding.guideButton.setOnClickListener { toggleMiniGuide() }
+        binding.multiViewButton.setOnClickListener { openMultiView() }
         onBackPressedDispatcher.addCallback(this, miniGuideBackCallback)
         updateSleepTimerButton()
         moveActionButtonsIntoControlsBar()
@@ -785,8 +786,21 @@ class PlayerActivity : AppCompatActivity() {
         finish()
     }
 
+    private var launchingMultiView = false
+    private var resumeAfterMultiView = false
+
+    /** Botón "Dos canales a la vez": abre la multivista con el canal actual y la lista de canales de la categoría. */
+    private fun openMultiView() {
+        val stream = currentStream ?: return
+        MultiViewActivity.pendingFirst = stream
+        MultiViewActivity.pendingCandidates = channelList
+        launchingMultiView = true
+        startActivity(Intent(this, MultiViewActivity::class.java))
+    }
+
     override fun onStart() {
         super.onStart()
+        launchingMultiView = false
         if (currentStream == null) return // canal no válido, o ya redirigido a una app externa (ver onCreate)
         epgHandler.removeCallbacks(epgRefreshRunnable)
         epgHandler.postDelayed(epgRefreshRunnable, EPG_REFRESH_INTERVAL_MS)
@@ -841,7 +855,12 @@ class PlayerActivity : AppCompatActivity() {
         saveContinueWatching()
         val ctrl = controller
         if (ctrl != null) {
-            if (isFinishing) {
+            if (launchingMultiView) {
+                // Se abre la multivista (dos reproductores propios): este se pausa para que no suenen dos
+                // cosas a la vez, y se reanuda solo al volver (ver onControllerConnected).
+                ctrl.pause()
+                resumeAfterMultiView = true
+            } else if (isFinishing) {
                 // Salimos de verdad hacia la lista de canales: paramos del todo.
                 ctrl.stop()
                 ctrl.clearMediaItems()
@@ -1059,6 +1078,10 @@ class PlayerActivity : AppCompatActivity() {
         binding.playerView.player = mediaController
         mediaController.addListener(playerListener)
         maybeStartPlayback()
+        if (resumeAfterMultiView) {
+            resumeAfterMultiView = false
+            mediaController.play()
+        }
     }
 
     private fun maybeStartPlayback() {
@@ -1273,6 +1296,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.subtitlesButton,
             binding.videoFormatButton,
             binding.guideButton,
+            binding.multiViewButton,
             binding.sleepTimerButton,
             binding.pipButton
         )

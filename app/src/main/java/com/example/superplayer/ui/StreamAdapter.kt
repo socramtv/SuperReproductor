@@ -18,7 +18,9 @@ class StreamAdapter(
     private val onClick: (Stream) -> Unit,
     private val onToggleFavorite: (Stream) -> Unit,
     /** Texto fijo a enseñar en vez de las líneas de guía (p. ej. "Visto 45:10 de 1:55:00" en "Continuar viendo"); null = lo de siempre. */
-    private val extraLine: (Stream) -> String? = { null }
+    private val extraLine: (Stream) -> String? = { null },
+    /** Pulsación larga sobre un canal (menú: favorito, renombrar, ocultar); null = alternar favorito, como antes. */
+    private val onLongClick: ((Stream) -> Unit)? = null
 ) : RecyclerView.Adapter<StreamAdapter.ViewHolder>() {
 
     fun submit(newItems: List<Stream>) {
@@ -73,7 +75,8 @@ class StreamAdapter(
             // en móvil: solo se dispara con una pulsación larga de verdad, la
             // pulsación corta de siempre sigue abriendo el canal.
             binding.root.setOnLongClickListener {
-                onToggleFavorite(stream)
+                val handler = onLongClick
+                if (handler != null) handler(stream) else onToggleFavorite(stream)
                 true
             }
             binding.favoriteIcon.setOnClickListener { onToggleFavorite(stream) }

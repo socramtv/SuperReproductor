@@ -24,6 +24,8 @@
         Play Store para TV).
     -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
+    <!-- Fila "Continuar viendo" del inicio de Android TV (ver tv/WatchNextSync); si el sistema no la concede, solo no sale la fila -->
+    <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
@@ -93,6 +95,26 @@
             android:screenOrientation="userLandscape"
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true"
+            android:theme="@style/Theme.SuperReproductor.Player" />
+
+        <!--
+            Entrada de la fila "Continuar viendo" del inicio de Android TV
+            (ver tv/WatchNextSync): exportada porque la abre el inicio del
+            sistema, que es otra app; solo recibe un id y no hace nada más
+            que abrir el reproductor con un canal de "Continuar viendo".
+        -->
+        <activity
+            android:name=".tv.WatchNextActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SuperReproductor.Player"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <!-- Multivista: dos canales a la vez (ver MultiViewActivity) -->
+        <activity
+            android:name=".player.MultiViewActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:theme="@style/Theme.SuperReproductor.Player" />
 
         <!-- Aviso de un recordatorio de la guía EPG (lo dispara AlarmManager) -->

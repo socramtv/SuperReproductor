@@ -89,6 +89,9 @@ dependencies {
     implementation("com.google.android.gms:play-services-cast-framework:22.3.1")
     implementation("androidx.mediarouter:mediarouter:1.2.5")
 
+    // Fila "Continuar viendo" en el inicio de Android TV (Watch Next)
+    implementation("androidx.tvprovider:tvprovider:1.0.0")
+
     // Carga de iconos/miniaturas desde URL
     implementation("io.coil-kt:coil:2.6.0")
 }
