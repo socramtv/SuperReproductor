@@ -175,6 +175,7 @@
     <string name="multiview_audio_here">Oír este canal</string>
     <string name="multiview_all_channels">📋 Todos los canales</string>
     <string name="multiview_same_group">Esta categoría</string>
+    <string name="multiview_decoder_error">Este aparato no puede reproducir dos vídeos a la vez con «%1$s». Prueba con otro canal o con menos calidad</string>
     <string name="multiview_change">Cambiar canal</string>
     <string name="multiview_close">Cerrar multivista</string>
     <string name="multiview_hint">🔊 para oír ese canal · ⇅ para cambiarlo · rojo = el que vas a elegir · naranja = el que suena</string>

@@ -3,6 +3,8 @@ package com.example.superplayer.player
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ArrayAdapter
@@ -24,6 +26,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.superplayer.R
@@ -50,6 +53,8 @@ class MultiViewActivity : AppCompatActivity() {
     private val streams = arrayOfNulls<Stream>(2)
     private val players = arrayOfNulls<ExoPlayer>(2)
     private var audioPane = 0
+    private val handler = Handler(Looper.getMainLooper())
+    private val decoderRetries = IntArray(2)
     /** Recuadro cuyos botones tienen el foco del mando (-1 = ninguno). */
     private var focusedPane = -1
     private var candidates: List<Stream> = emptyList()
@@ -145,29 +150,70 @@ class MultiViewActivity : AppCompatActivity() {
         if (streams[0] == null) return
         val views = listOf<PlayerView>(binding.playerA, binding.playerB)
         for (i in 0..1) {
-            val player = ExoPlayer.Builder(this)
+            decoderRetries[i] = 0
+            // Dos vídeos a la vez exigen dos decodificadores: en algunos aparatos (Google TV...) solo hay
+            // uno de hardware libre. Con el respaldo activado, si el de hardware no se puede abrir se usa otro
+            // (incluido el de software); y con la resolución limitada (cada recuadro es pequeño) se gasta menos.
+            val renderers = DefaultRenderersFactory(this).setEnableDecoderFallback(true)
+            val player = ExoPlayer.Builder(this, renderers)
                 .setMediaSourceFactory(StreamMediaSourceFactory(this))
+                .build()
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setMaxVideoSize(1280, 720)
                 .build()
             players[i] = player
             views[i].player = player
             val index = i
             player.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    val name = streams[index]?.name ?: ""
-                    Toast.makeText(
-                        this@MultiViewActivity,
-                        getString(R.string.player_error, "$name: ${error.errorCodeName}"),
-                        Toast.LENGTH_LONG
-                    ).show()
+                    handlePlayerError(index, error)
                 }
             })
-            streams[i]?.let { startPane(i, it) }
         }
+        // El primero arranca ya y el segundo un momento después: así los decodificadores se abren uno tras otro.
+        streams[0]?.let { startPane(0, it) }
+        handler.postDelayed({
+            if (players[1] != null) streams[1]?.let { startPane(1, it) }
+        }, SECOND_PANE_DELAY_MS)
         applyAudio()
+    }
+
+    /**
+     * Error de un recuadro. Si es de decodificador (el aparato no puede abrir otro más), se reintenta
+     * bajando la resolución; si aun así falla, se avisa de que este aparato no da para dos vídeos a la vez.
+     */
+    private fun handlePlayerError(pane: Int, error: PlaybackException) {
+        val name = streams[pane]?.name ?: ""
+        val decoderError = error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES
+        val player = players[pane] ?: return
+        if (decoderError && decoderRetries[pane] < 2) {
+            decoderRetries[pane]++
+            val maxHeight = if (decoderRetries[pane] == 1) 540 else 360
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setMaxVideoSize(maxHeight * 16 / 9, maxHeight)
+                .build()
+            handler.postDelayed({
+                val p = players[pane] ?: return@postDelayed
+                p.prepare()
+                p.playWhenReady = true
+            }, 700L)
+            return
+        }
+        val message = if (decoderError) {
+            getString(R.string.multiview_decoder_error, name)
+        } else {
+            getString(R.string.player_error, "$name: ${error.errorCodeName}")
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     override fun onStop() {
         super.onStop()
+        handler.removeCallbacksAndMessages(null)
         for (i in 0..1) {
             players[i]?.release()
             players[i] = null
@@ -286,6 +332,7 @@ class MultiViewActivity : AppCompatActivity() {
             val chosen = shown.getOrNull(position) ?: return@setOnItemClickListener
             dialog.dismiss()
             streams[pane] = chosen
+            decoderRetries[pane] = 0
             if (pane == 0) binding.nameA.text = chosen.name else binding.nameB.text = chosen.name
             startPane(pane, chosen)
         }
@@ -362,6 +409,8 @@ class MultiViewActivity : AppCompatActivity() {
     companion object {
         /** El canal que se estaba viendo (va al primer recuadro) y los canales entre los que elegir. */
         var pendingFirst: Stream? = null
+        private const val SECOND_PANE_DELAY_MS = 1200L
+
         var pendingCandidates: List<Stream> = emptyList()
 
         /** Todas las categorías de la lista cargada (las pone MainActivity), para poder elegir cualquier canal. */

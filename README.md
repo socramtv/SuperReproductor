@@ -856,7 +856,7 @@ la lista (en el móvil en vertical, uno encima del otro). Solo suena uno, el que
 tiene el marco naranja; toca el otro (o pulsa su botón 🔊) para pasarle el sonido.
 Con el mando de TV, el recuadro sobre el que estás (el que vas a elegir) se marca
 en rojo. El botón ⇅ de cada recuadro cambia su canal: eliges grupo (todos los canales de la lista cargada, favoritos, la categoría de origen o cualquier categoría) y luego el canal, con buscador. Con la multivista abierta el reproductor normal se pausa y,
-al volver, sigue solo. No hay segundo plano en multivista.
+al volver, sigue solo. No hay segundo plano en multivista. Cada recuadro se limita a 720p y el segundo arranca un instante después del primero; si el aparato (algunas Google TV) no puede abrir un segundo decodificador de vídeo, la app reintenta con menos resolución y con el decodificador de software, y si aun así no puede lo avisa.
 
 **📺 Continuar viendo en el inicio de Android TV.** En una TV con Android TV /
 Google TV, las películas y vídeos que dejaste a medias salen también en la fila
