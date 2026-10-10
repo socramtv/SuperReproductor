@@ -885,6 +885,43 @@ Que el asistente la elija depende de cada aparato (en Google TV suele funcionar)
 Si el aparato no tiene reconocimiento de voz (algunos Fire TV), el micrófono avisa
 y se sigue usando la lupa.
 
+## Ahora en directo
+
+Menú ⋮ de la portada → **"📺 Ahora en directo"**. Un mosaico con tus
+**favoritos** y, en cada tarjeta, lo que emiten ahora mismo (programa, barra de
+cuánto lleva y el siguiente, de la guía EPG). Arriba hay una **vista previa en
+vivo y sin sonido** del canal seleccionado: toca una tarjeta (o enfócala con el
+mando) para verla; toca otra vez la tarjeta, o la propia vista previa, para
+abrir el canal entero. Solo hay una vista previa a la vez (varias a la vez no
+funcionan en muchas teles). Se actualiza solo cada medio minuto. Si no tienes
+favoritos, enseña los primeros canales de la lista cargada que tengan guía.
+
+## Avisos de goles y eventos
+
+Menú ⋮ de la portada → **"⚽ Avisos de goles…"**:
+
+- **Activar avisos** y **Mis equipos:** eliges equipos de los partidos de hoy
+  o escribes el nombre a mano (vale cualquiera: "Real Madrid", "Betis"...,
+  sin tildes ni mayúsculas).
+- La app recibe los marcadores de una **API pública de ESPN** (LaLiga,
+  LaLiga Hypermotion, Copa del Rey, Champions, Europa League, Conference, Premier,
+  Serie A, Bundesliga y Ligue 1) y lanza una notificación cuando: falta 15
+  minutos para que empiece, empieza, **hay gol** (con quién y minuto), un gol se
+  anula, hay **expulsión** y cuando termina.
+- Al **tocar el aviso** la app busca en la guía de tus canales cuál está
+  emitiendo ese partido y lo abre (si hay varios, te los enseña para elegir).
+  Hace falta que tus canales tengan guía EPG y que el programa lleve los
+  nombres de los equipos.
+- **Partidos de hoy (comprobar)** enseña lo que devuelve el servicio ahora
+  mismo (⭐ = tus equipos) y **Probar un aviso** lanza uno de ejemplo.
+- Ritmo: comprueba cada minuto mientras un partido tuyo está en juego, y si no
+  se despierta justo antes del siguiente (como mucho cada 30 min). Con el móvil
+  quieto y la pantalla apagada Android puede retrasar las alarmas, así que
+  puede llegar con algo de retraso. Necesita el permiso de notificaciones.
+- Limitaciones: la API de ESPN **no es oficial** (puede cambiar o caerse sin
+  aviso) y solo cubre fútbol. El nombre del equipo debe parecerse al que usa la
+  API (en inglés a veces: "Atletico Madrid", "Sevilla").
+
 ## Botones del reproductor
 
 Debajo de la barra de progreso, a la izquierda del engranaje de Media3 (el de

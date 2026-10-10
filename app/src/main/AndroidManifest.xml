@@ -77,6 +77,12 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- Ahora en directo: mosaico de favoritos con vista previa (ver NowLiveActivity) -->
+        <activity
+            android:name=".ui.NowLiveActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <activity
             android:name=".ui.EpgGridActivity"
             android:exported="false"
@@ -121,6 +127,11 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:theme="@style/Theme.SuperReproductor.Player" />
+
+        <!-- Avisos de goles y eventos: la alarma que hace cada vuelta de comprobación (ver sports/GoalAlerts) -->
+        <receiver
+            android:name=".sports.GoalAlertReceiver"
+            android:exported="false" />
 
         <!-- Aviso de un recordatorio de la guía EPG (lo dispara AlarmManager) -->
         <receiver

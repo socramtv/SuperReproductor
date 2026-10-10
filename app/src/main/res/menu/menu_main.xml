@@ -40,6 +40,18 @@
 
     <!-- Copia de seguridad (ver BackupManager): en el menú de los tres
          puntos para no recargar la barra. -->
+    <!-- Mosaico de favoritos con lo que emiten ahora (ver NowLiveActivity) -->
+    <item
+        android:id="@+id/action_now_live"
+        android:title="@string/action_now_live"
+        app:showAsAction="never" />
+
+    <!-- Avisos de goles y eventos de tus equipos (ver sports/GoalAlerts) -->
+    <item
+        android:id="@+id/action_goal_alerts"
+        android:title="@string/action_goal_alerts"
+        app:showAsAction="never" />
+
     <item
         android:id="@+id/action_backup_export"
         android:title="@string/action_backup_export"

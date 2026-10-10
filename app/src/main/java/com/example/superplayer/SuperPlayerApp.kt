@@ -36,6 +36,13 @@ class SuperPlayerApp : Application() {
             // Nunca debe impedir que arranque la app.
         }
 
+        // Avisos de goles: si están activados, se asegura de que haya una alarma pendiente.
+        try {
+            com.example.superplayer.sports.GoalAlerts.ensureScheduled(this)
+        } catch (e: Exception) {
+            // Nunca debe impedir que arranque la app.
+        }
+
         // Fila "Continuar viendo" del inicio de Android TV al día (solo hace algo en TV).
         try {
             com.example.superplayer.tv.WatchNextSync.sync(this)

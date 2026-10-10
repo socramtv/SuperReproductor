@@ -127,6 +127,7 @@ class MainActivity : AppCompatActivity() {
         setupListSlotButtons()
         loadInitialPlaylist()
         handleAssistantIntent(intent)
+        handleMatchIntent(intent)
         updateSlotButtonLabels()
         autoRefreshLists()
     }
@@ -838,8 +839,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Orden de voz del asistente ("Ok Google, pon La 1 en Socram TV"): llega como MEDIA_PLAY_FROM_SEARCH. */
-    private fun handleAssistantIntent(intent: Intent?) {
-        if (intent?.action != android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) return
+    private fun handleAssistantIntent(maybeIntent: Intent?) {
+        val intent = maybeIntent ?: return
+        if (intent.action != android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) return
         val query = intent.getStringExtra(android.app.SearchManager.QUERY)
         intent.action = null // para no repetirla al girar la pantalla
         if (!query.isNullOrBlank()) binding.root.post { handleVoiceQuery(query) }
@@ -849,10 +851,65 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleAssistantIntent(intent)
+        handleMatchIntent(intent)
+    }
+
+    /** Toque en un aviso de gol/partido (ver sports/GoalAlerts): busca en la guía qué canal lo emite ahora. */
+    private fun handleMatchIntent(maybeIntent: Intent?) {
+        val intent = maybeIntent ?: return
+        val home = intent.getStringExtra(com.example.superplayer.sports.GoalAlerts.EXTRA_HOME) ?: return
+        val away = intent.getStringExtra(com.example.superplayer.sports.GoalAlerts.EXTRA_AWAY) ?: return
+        intent.removeExtra(com.example.superplayer.sports.GoalAlerts.EXTRA_HOME)
+        intent.removeExtra(com.example.superplayer.sports.GoalAlerts.EXTRA_AWAY)
+        binding.root.post { openMatchChannel(home, away, 0) }
+    }
+
+    private fun openMatchChannel(home: String, away: String, attempt: Int) {
+        // La guía se carga en segundo plano al abrir la app: si aún no está, se espera un poco.
+        if (EpgRepository.dataRange() == null && attempt < 6) {
+            binding.root.postDelayed({ openMatchChannel(home, away, attempt + 1) }, 2_500L)
+            return
+        }
+        whenSearchIndexReady {
+            val pool = (searchIndex?.map { it.stream } ?: playlist.categories.flatMap { it.streams }).distinctBy { it.id }
+            val strong = ArrayList<Stream>()
+            val weak = ArrayList<Stream>()
+            for (st in pool) {
+                val title = EpgRepository.schedule(st.tvgId).now?.title ?: continue
+                val hasHome = com.example.superplayer.sports.GoalAlerts.matchesTeam(listOf(home), title)
+                val hasAway = com.example.superplayer.sports.GoalAlerts.matchesTeam(listOf(away), title)
+                if (hasHome && hasAway) strong.add(st) else if (hasHome || hasAway) weak.add(st)
+            }
+            val found = if (strong.isNotEmpty()) strong else weak
+            when {
+                found.isEmpty() -> Toast.makeText(this, R.string.goal_match_not_found, Toast.LENGTH_LONG).show()
+                found.size == 1 -> {
+                    PlayerActivity.pendingStream = found[0]
+                    PlayerActivity.pendingChannelList = found
+                    startActivity(Intent(this, PlayerActivity::class.java))
+                }
+                else -> androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.goal_match_channels, "$home - $away"))
+                    .setItems(found.map { it.name }.toTypedArray()) { _, which ->
+                        PlayerActivity.pendingStream = found[which]
+                        PlayerActivity.pendingChannelList = found
+                        startActivity(Intent(this, PlayerActivity::class.java))
+                    }
+                    .show()
+            }
+        }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_goal_alerts -> {
+                showGoalAlertsDialog(this)
+                true
+            }
+            R.id.action_now_live -> {
+                startActivity(Intent(this, NowLiveActivity::class.java))
+                true
+            }
             R.id.action_voice -> {
                 startVoiceSearch()
                 true

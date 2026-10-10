@@ -219,6 +219,9 @@ class ReminderReceiver : BroadcastReceiver() {
 /** Tras reiniciar el móvil se pierden las alarmas: se vuelven a programar. */
 class ReminderBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) ReminderManager.rescheduleAll(context)
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            ReminderManager.rescheduleAll(context)
+            com.example.superplayer.sports.GoalAlerts.ensureScheduled(context)
+        }
     }
 }

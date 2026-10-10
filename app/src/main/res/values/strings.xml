@@ -187,4 +187,36 @@
     <string name="voice_unavailable">Este aparato no tiene reconocimiento de voz</string>
     <string name="voice_opening">Abriendo %1$s</string>
     <string name="voice_not_found">No he encontrado «%1$s» en tus listas</string>
+    <string name="action_now_live">📺 Ahora en directo</string>
+    <string name="nowlive_title">Ahora en directo</string>
+    <string name="nowlive_hint">Toca un canal para ver su vista previa (sin sonido). Toca otra vez para abrirlo</string>
+    <string name="nowlive_empty">Marca canales como favoritos (⭐) para verlos aquí con lo que emiten ahora</string>
+    <string name="nowlive_preview_error">No se pudo cargar la vista previa de este canal</string>
+    <string name="action_goal_alerts">⚽ Avisos de goles…</string>
+    <string name="goal_channel_name">Avisos de goles y partidos</string>
+    <string name="goal_title">⚽ Avisos de goles: %1$s</string>
+    <string name="goal_state_on">activados</string>
+    <string name="goal_state_off">desactivados</string>
+    <string name="goal_enable">🔔 Activar avisos</string>
+    <string name="goal_disable">🔕 Desactivar avisos</string>
+    <string name="goal_my_teams">👥 Mis equipos (%1$d)…</string>
+    <string name="goal_today">📅 Partidos de hoy (comprobar)</string>
+    <string name="goal_today_count">Partidos de hoy (%1$d) · ⭐ = tus equipos</string>
+    <string name="goal_test">📣 Probar un aviso</string>
+    <string name="goal_pick_first">Elige al menos un equipo para recibir avisos</string>
+    <string name="goal_enabled_toast">Avisos activados. Llegarán cuando empiece un partido de tus equipos, haya gol, expulsión o final</string>
+    <string name="goal_disabled_toast">Avisos desactivados</string>
+    <string name="goal_teams_title">Mis equipos (desmarca para quitar)</string>
+    <string name="goal_no_teams">Todavía no sigues ningún equipo</string>
+    <string name="goal_save">Guardar</string>
+    <string name="goal_add">Añadir equipo…</string>
+    <string name="goal_add_from_today">Elegir de los partidos de hoy</string>
+    <string name="goal_add_typed">Escribir el nombre</string>
+    <string name="goal_type_hint">Ej.: Real Madrid, Sevilla, Betis…</string>
+    <string name="goal_searching">Buscando partidos…</string>
+    <string name="goal_no_data">Ahora mismo no hay partidos en el servicio de marcadores. Escribe el nombre del equipo a mano</string>
+    <string name="goal_no_connection">No se pudo conectar con el servicio de marcadores. Revisa la conexión; si es así siempre, puede que el servicio haya cambiado</string>
+    <string name="goal_no_matches">El servicio de marcadores no trae partidos de las competiciones seguidas ahora mismo</string>
+    <string name="goal_match_not_found">No encuentro ese partido en la guía de tus canales</string>
+    <string name="goal_match_channels">¿Dónde verlo? · %1$s</string>
 </resources>
