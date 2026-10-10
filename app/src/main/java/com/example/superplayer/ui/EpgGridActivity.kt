@@ -453,6 +453,10 @@ class EpgGridActivity : AppCompatActivity() {
                 }
             }
         }
+        // Aviso por programa: cada vez que la guía traiga algo con este título.
+        builder.setNegativeButton(R.string.program_alert_button) { _, _ ->
+            showAddProgramAlertDialog(this, entry.title.trim(), allChannels)
+        }
         builder.show()
     }
 

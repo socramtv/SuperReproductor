@@ -222,4 +222,59 @@
     <string name="match_live">En juego · %1$s</string>
     <string name="match_final">Final</string>
     <string name="match_upcoming">Hoy a las %1$s</string>
+
+    <!-- Perfiles -->
+    <string name="action_profiles">Perfiles…</string>
+    <string name="action_profiles_current">Perfil: %1$s…</string>
+    <string name="profiles_title">Perfiles</string>
+    <string name="profile_new_item">➕ Nuevo perfil…</string>
+    <string name="profile_manage_item">✏️ Renombrar o borrar perfiles…</string>
+    <string name="profile_new_title">Nuevo perfil</string>
+    <string name="profile_name_hint">Nombre (p. ej. Peques)</string>
+    <string name="profile_create">Crear</string>
+    <string name="profile_switched">Perfil: %1$s</string>
+    <string name="profile_manage_title">Gestionar perfiles</string>
+    <string name="profile_rename">Cambiar nombre</string>
+    <string name="profile_delete">Borrar perfil</string>
+    <string name="profile_deleted">Perfil borrado</string>
+    <string name="profile_cannot_delete">No se puede borrar el perfil Principal ni el que estás usando</string>
+    <string name="profile_delete_message">Se borran sus favoritos, canales ocultos y renombrados, «Continuar viendo» y categorías. No se puede deshacer.</string>
+
+    <!-- Avisos por programa -->
+    <string name="action_program_alerts">Avisos por programa…</string>
+    <string name="program_alerts_title">Avisos por programa</string>
+    <string name="program_alert_add_item">➕ Añadir aviso…</string>
+    <string name="program_alert_add_title">Avisarme de un programa</string>
+    <string name="program_alert_add_message">Escribe el título o parte de él. Cada vez que la guía traiga un programa que lo contenga, te aviso 5 minutos antes.</string>
+    <string name="program_alert_hint">p. ej. El Hormiguero, Champions…</string>
+    <string name="program_alert_save">Avisarme</string>
+    <string name="program_alert_button">🔔 Avisar siempre</string>
+    <string name="program_alert_exists">Ya tenías ese aviso</string>
+    <string name="program_alert_saved_toast">Aviso «%1$s» guardado. Programados ahora: %2$d</string>
+    <string name="program_alert_remove_message">¿Quitar este aviso? Los recordatorios que ya estén programados se mantienen.</string>
+    <string name="program_alert_remove">Quitar</string>
+    <string name="program_alert_removed">Aviso quitado</string>
+
+    <!-- Pausa en directo -->
+    <string name="timeshift_menu_item">Pausa en directo…</string>
+    <string name="timeshift_title">Pausa en directo</string>
+    <string name="timeshift_off">Desactivada</string>
+    <string name="timeshift_minutes">Guardar los últimos %1$d minutos</string>
+    <string name="timeshift_message">Vuelve a abrir el canal: desde ese momento se guarda el directo y podrás pausar y retroceder (con los controles abiertos).</string>
+    <string name="timeshift_live">🔴 EN DIRECTO</string>
+    <string name="timeshift_behind">⏪ %1$s por detrás del directo</string>
+    <string name="timeshift_back_5m">⏪ 5 min</string>
+    <string name="timeshift_back_30s">⏪ 30 s</string>
+    <string name="timeshift_fwd_30s">30 s ⏩</string>
+    <string name="timeshift_go_live">🔴 Directo</string>
+
+    <!-- Widget completo -->
+    <string name="app_widget_title">Socram TV+</string>
+    <string name="app_widget_title_profile">Socram TV+ · %1$s</string>
+    <string name="app_widget_description">Favoritos, continuar viendo y partidos, con lista desplazable</string>
+    <string name="widget_tab_favorites">⭐</string>
+    <string name="widget_tab_continue">▶</string>
+    <string name="widget_tab_matches">⚽</string>
+    <string name="widget_home_empty_continue">No tienes nada a medias</string>
+    <string name="widget_home_empty_matches">No hay partidos ahora mismo (o sin conexión). Toca ⟳</string>
 </resources>

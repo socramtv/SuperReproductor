@@ -99,6 +99,10 @@ object BackupManager {
             )
         }
         root.put("continueWatching", cont)
+
+        // Avisos por programa y pausa en directo.
+        root.put("programAlerts", JSONArray(com.example.superplayer.reminder.ProgramAlerts.getAll(context)))
+        root.put("timeShiftMinutes", AppPrefs.getTimeShiftMinutes(context))
         return root.toString(2)
     }
 
@@ -210,6 +214,15 @@ object BackupManager {
                 }
             }
             newContinue = ContinueWatching.importAll(context, list)
+        }
+
+        root.optJSONArray("programAlerts")?.let { arr ->
+            val list = ArrayList<String>()
+            for (i in 0 until arr.length()) list.add(arr.optString(i))
+            com.example.superplayer.reminder.ProgramAlerts.importAll(context, list)
+        }
+        if (root.has("timeShiftMinutes")) {
+            AppPrefs.setTimeShiftMinutes(context, root.optInt("timeShiftMinutes", 0))
         }
 
         return ImportResult(newFavorites, urlCount, filterCount, darkChanged, newHidden, newNames, newReminders, newContinue)

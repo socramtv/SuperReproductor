@@ -41,6 +41,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import coil.load
 import com.example.superplayer.R
+import com.example.superplayer.ui.showTimeShiftDialog
 import com.example.superplayer.data.AppPrefs
 import com.example.superplayer.data.ContinueWatching
 import com.example.superplayer.data.EpgRepository
@@ -154,6 +155,23 @@ class PlayerActivity : AppCompatActivity() {
 
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
+
+    // -----------------------------------------------------------------
+    // Pausa en directo (ver TimeShiftSession): mientras timeShiftActive, el
+    // reproductor ve el buffer local en vez del canal; tsItemStartTime es el
+    // instante de contenido en que empezó el MediaItem actual (con él y la
+    // posición del reproductor se sabe cuánto va por detrás del directo).
+    // -----------------------------------------------------------------
+    private var timeShift: TimeShiftSession? = null
+    private var timeShiftActive = false
+    private var tsItemStartTime = 0L
+    private val tsHandler = Handler(Looper.getMainLooper())
+    private val tsUiRunnable = object : Runnable {
+        override fun run() {
+            updateTimeShiftUi()
+            tsHandler.postDelayed(this, 1000L)
+        }
+    }
 
     // Título dinámico ICY/ID3 (si el propio stream lo trae); se guarda aparte
     // del de EPG porque, cuando hay uno, siempre gana sobre el de la guía.
@@ -567,6 +585,7 @@ class PlayerActivity : AppCompatActivity() {
         // verdad se ve en el Chromecast).
         binding.pipButton.visibility = if (isCurrentStreamRadio || isTvDevice || isCastingRemote) View.GONE else visibility
         binding.videoNowPlayingBar.visibility = if (isCurrentStreamRadio || isCastingRemote) View.GONE else visibility
+        binding.timeShiftBar.visibility = if (timeShiftActive && !isCastingRemote) visibility else View.GONE
     }
 
     /**
@@ -605,6 +624,7 @@ class PlayerActivity : AppCompatActivity() {
             error(R.drawable.ic_radio)
         }
         refreshNowPlayingDisplay()
+        stopTimeShift()
         resolveAndPlay(newStream)
     }
 
@@ -644,6 +664,17 @@ class PlayerActivity : AppCompatActivity() {
         // (no cambian de canal): se deja pasar todo tal cual.
         if (binding.miniGuidePanel.visibility == View.VISIBLE) {
             return super.dispatchKeyEvent(event)
+        }
+        // Pausa en directo: las teclas de rebobinar / avanzar del mando mueven 30 s por el buffer.
+        if (timeShiftActive && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+                timeShiftSeek(-30_000L)
+                return true
+            }
+            if (event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+                timeShiftSeek(30_000L)
+                return true
+            }
         }
         val isDpadLeftRight = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
             event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
@@ -708,6 +739,10 @@ class PlayerActivity : AppCompatActivity() {
         binding.sleepTimerButton.setOnClickListener { showSleepTimerDialog() }
         binding.guideButton.setOnClickListener { toggleMiniGuide() }
         binding.multiViewButton.setOnClickListener { openMultiView() }
+        binding.tsBack5.setOnClickListener { timeShiftSeek(-5 * 60_000L) }
+        binding.tsBack30.setOnClickListener { timeShiftSeek(-30_000L) }
+        binding.tsFwd30.setOnClickListener { timeShiftSeek(30_000L) }
+        binding.tsLive.setOnClickListener { timeShiftGoLive() }
         onBackPressedDispatcher.addCallback(this, miniGuideBackCallback)
         updateSleepTimerButton()
         moveActionButtonsIntoControlsBar()
@@ -849,6 +884,7 @@ class PlayerActivity : AppCompatActivity() {
         unregisterCastSessionListener()
         SleepTimer.activityListener = null
         epgHandler.removeCallbacks(epgRefreshRunnable)
+        tsHandler.removeCallbacks(tsUiRunnable)
         cancelPendingReconnect()
         cancelStuckControlsWatchdog()
         autoReconnectAttempts = 0
@@ -865,6 +901,7 @@ class PlayerActivity : AppCompatActivity() {
                 ctrl.stop()
                 ctrl.clearMediaItems()
                 playbackStarted = false
+                stopTimeShift()
                 SleepTimer.cancel()
             } else if (!isCurrentStreamRadio && !isCastingRemote) {
                 if (AppPrefs.isBackgroundAudio(this) && !isInPictureInPictureMode) {
@@ -898,6 +935,8 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        tsHandler.removeCallbacks(tsUiRunnable)
+        if (isFinishing) stopTimeShift()
         pendingStream = null
         pendingChannelList = emptyList()
     }
@@ -980,6 +1019,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.castButton.visibility = View.GONE
             binding.pipButton.visibility = View.GONE
             binding.videoNowPlayingBar.visibility = View.GONE
+            binding.timeShiftBar.visibility = View.GONE
         } else {
             // Al volver a pantalla completa se restauran los controles
             // nativos y se muestran los propios otra vez a través del mismo
@@ -1045,6 +1085,10 @@ class PlayerActivity : AppCompatActivity() {
     private fun onCastSessionChanged(session: CastSession?) {
         isCastingRemote = session?.isConnected == true
         castDeviceName = session?.castDevice?.friendlyName
+        if (isCastingRemote && timeShiftActive) {
+            // El Chromecast no puede ver el buffer local del móvil: se envía el canal normal.
+            restartCurrentChannel()
+        }
         updateNowPlayingOverlayVisibility()
         refreshNowPlayingDisplay()
         applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
@@ -1078,6 +1122,10 @@ class PlayerActivity : AppCompatActivity() {
         binding.playerView.player = mediaController
         mediaController.addListener(playerListener)
         maybeStartPlayback()
+        if (timeShiftActive) {
+            tsHandler.removeCallbacks(tsUiRunnable)
+            tsHandler.post(tsUiRunnable)
+        }
         if (resumeAfterMultiView) {
             resumeAfterMultiView = false
             mediaController.play()
@@ -1154,9 +1202,121 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun onStreamResolved(stream: Stream) {
+        val minutes = AppPrefs.getTimeShiftMinutes(this)
+        timeShiftActive = false
+        binding.timeShiftBar.visibility = View.GONE
+        tsHandler.removeCallbacks(tsUiRunnable)
+        if (minutes > 0 && !isCastingRemote && TimeShiftSession.isEligible(stream)) {
+            // Se empieza a guardar el directo y se reproduce desde ese buffer en cuanto hay algo
+            // (si no se puede -formato raro, sin espacio...- se reproduce el canal normal).
+            val session = TimeShiftSession.create(applicationContext, stream, minutes)
+            timeShift = session
+            session.start(
+                onReady = { s -> tsHandler.post { onTimeShiftReady(stream, s) } },
+                onFail = { s -> tsHandler.post { onTimeShiftFailed(stream, s) } }
+            )
+            return
+        }
+        stopTimeShift()
+        queueMediaItem(stream, null)
+    }
+
+    private fun onTimeShiftReady(stream: Stream, session: TimeShiftSession) {
+        if (timeShift !== session || session.isStopped() || isFinishing || isDestroyed) return
+        if (currentStream?.id != stream.id) return
+        timeShiftActive = true
+        tsItemStartTime = session.timeAtOffset(0L)
+        pendingMediaItem = buildMediaItem(stream, session.uri(0L), true)
+        maybeStartPlayback()
+        tsHandler.removeCallbacks(tsUiRunnable)
+        tsHandler.post(tsUiRunnable)
+        applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
+    }
+
+    private fun onTimeShiftFailed(stream: Stream, session: TimeShiftSession) {
+        if (timeShift !== session) return
+        timeShift = null
+        timeShiftActive = false
+        if (isFinishing || isDestroyed || currentStream?.id != stream.id) return
+        queueMediaItem(stream, null)
+    }
+
+    private fun stopTimeShift() {
+        timeShift = null
+        timeShiftActive = false
+        tsHandler.removeCallbacks(tsUiRunnable)
+        TimeShiftSession.stopCurrent()
+        binding.timeShiftBar.visibility = View.GONE
+    }
+
+    /** Vuelve a abrir el canal actual desde cero (p. ej. tras cambiar el ajuste de pausa en directo). */
+    private fun restartCurrentChannel() {
+        val stream = currentStream ?: return
+        cancelPendingReconnect()
+        stopTimeShift()
+        playbackStarted = false
+        pendingMediaItem = null
+        resolveAndPlay(stream)
+    }
+
+    /** Empieza a ver el buffer desde [offset] (retroceder, adelantar o volver al directo). */
+    private fun playTimeShiftFrom(offset: Long) {
+        val ts = timeShift ?: return
+        val ctrl = controller ?: return
+        val stream = currentStream ?: return
+        tsItemStartTime = ts.timeAtOffset(offset)
+        ctrl.setMediaItem(buildMediaItem(stream, ts.uri(offset), true))
+        ctrl.prepare()
+        binding.playerView.showController()
+        updateTimeShiftUi()
+    }
+
+    private fun timeShiftSeek(deltaMs: Long) {
+        val ts = timeShift ?: return
+        val ctrl = controller ?: return
+        if (!timeShiftActive) return
+        val target = tsItemStartTime + ctrl.currentPosition + deltaMs
+        if (deltaMs > 0 && target >= ts.liveTimeMs() - ts.liveSlackMs) {
+            playTimeShiftFrom(ts.liveOffset())
+            return
+        }
+        playTimeShiftFrom(ts.offsetAtTime(target.coerceAtLeast(ts.oldestTimeMs())))
+    }
+
+    private fun timeShiftGoLive() {
+        val ts = timeShift ?: return
+        if (!timeShiftActive) return
+        playTimeShiftFrom(ts.liveOffset())
+    }
+
+    private fun updateTimeShiftUi() {
+        val ts = timeShift ?: return
+        val ctrl = controller ?: return
+        if (!timeShiftActive) return
+        val lag = ts.liveTimeMs() - (tsItemStartTime + ctrl.currentPosition)
+        val behind = (lag - ts.liveSlackMs / 2).coerceAtLeast(0L)
+        binding.timeShiftStatus.text = if (lag <= ts.liveSlackMs) {
+            getString(R.string.timeshift_live)
+        } else {
+            getString(R.string.timeshift_behind, ContinueWatching.formatClock(behind))
+        }
+    }
+
+    private fun queueMediaItem(stream: Stream, proxyUri: String?) {
+        pendingMediaItem = buildMediaItem(stream, proxyUri ?: stream.url, proxyUri != null)
+        maybeStartPlayback()
+    }
+
+    /**
+     * El MediaItem de [stream] con la [uri] dada. Si [proxied], la uri es la
+     * del buffer local (TS sin cabeceras ni tipo propios: ya son cosa del
+     * descargador, ver TimeShiftSession).
+     */
+    private fun buildMediaItem(stream: Stream, uri: String, proxied: Boolean): MediaItem {
+        val playStream = if (proxied) stream.copy(type = "", headers = emptyMap()) else stream
         val metadataBuilder = MediaMetadata.Builder()
             .setTitle(stream.name)
-            .setExtras(StreamMediaExtras.build(stream))
+            .setExtras(StreamMediaExtras.build(playStream))
 
         // Logo del canal en la notificación / pantalla de bloqueo: sin esto,
         // el MediaMetadata no lleva ninguna imagen y el sistema pinta el
@@ -1172,14 +1332,12 @@ class PlayerActivity : AppCompatActivity() {
         }
         val metadata = metadataBuilder.build()
 
-        pendingMediaItem = MediaItem.Builder()
+        return MediaItem.Builder()
             .setMediaId(stream.id)
-            .setUri(stream.url)
-            .setMimeType(guessMimeTypeForCast(stream))
+            .setUri(uri)
+            .setMimeType(if (proxied) MimeTypes.VIDEO_MP2T else guessMimeTypeForCast(stream))
             .setMediaMetadata(metadata)
             .build()
-
-        maybeStartPlayback()
     }
 
     /**
@@ -1322,7 +1480,12 @@ class PlayerActivity : AppCompatActivity() {
         popup.menu.add(0, MENU_ID_BG_AUDIO, 2, getString(
             if (AppPrefs.isBackgroundAudio(this)) R.string.background_audio_on else R.string.background_audio_off
         ))
+        popup.menu.add(0, MENU_ID_TIMESHIFT, 3, getString(R.string.timeshift_menu_item))
         popup.setOnMenuItemClickListener { item ->
+            if (item.itemId == MENU_ID_TIMESHIFT) {
+                showTimeShiftDialog(this) { restartCurrentChannel() }
+                return@setOnMenuItemClickListener true
+            }
             if (item.itemId == MENU_ID_BG_AUDIO) {
                 val enabled = !AppPrefs.isBackgroundAudio(this)
                 AppPrefs.setBackgroundAudio(this, enabled)
@@ -1494,6 +1657,7 @@ class PlayerActivity : AppCompatActivity() {
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
         private const val MENU_ID_BG_AUDIO = 5
+        private const val MENU_ID_TIMESHIFT = 6
         private const val EPG_REFRESH_INTERVAL_MS = 60_000L
 
         // Ancho de las zonas laterales de toque (izquierda/derecha), como

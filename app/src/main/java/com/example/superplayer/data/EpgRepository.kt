@@ -47,6 +47,7 @@ object EpgRepository {
 
     @Volatile private var loadedUrl: String? = null
     @Volatile private var loading = false
+    private val loadedCallbacks = ArrayList<() -> Unit>()
     @Volatile private var byChannel: Map<String, List<Programme>> = emptyMap()
 
     /**
@@ -55,15 +56,30 @@ object EpgRepository {
      * cada vez que se carga una lista sin problema: si es la misma URL de
      * siempre, no vuelve a descargar nada.
      */
-    fun load(epgUrl: String?) {
+    fun load(epgUrl: String?, onLoaded: (() -> Unit)? = null) {
         val url = epgUrl?.trim()
-        if (url == null || url.isEmpty() || url == loadedUrl || loading) return
+        if (url == null || url.isEmpty()) return
+        // Ya cargada: [onLoaded] se llama enseguida (en un hilo aparte).
+        if (url == loadedUrl) {
+            if (onLoaded != null) Thread { onLoaded() }.start()
+            return
+        }
+        if (onLoaded != null) synchronized(loadedCallbacks) { loadedCallbacks.add(onLoaded) }
+        if (loading) return
         loading = true
         Thread {
             try {
                 val parsed = fetchAndParse(url)
                 byChannel = parsed
                 loadedUrl = url
+                val callbacks = synchronized(loadedCallbacks) {
+                    val copy = ArrayList(loadedCallbacks)
+                    loadedCallbacks.clear()
+                    copy
+                }
+                for (callback in callbacks) {
+                    try { callback() } catch (e: Exception) { }
+                }
             } catch (e: Exception) {
                 // Sin EPG para esta URL; el resto de la app sigue igual.
             } finally {

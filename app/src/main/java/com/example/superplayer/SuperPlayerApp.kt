@@ -50,6 +50,13 @@ class SuperPlayerApp : Application() {
             // Nunca debe impedir que arranque la app.
         }
 
+        // Restos del buffer de pausa en directo si la app se cerró a la fuerza.
+        try {
+            com.example.superplayer.player.TimeShiftSession.cleanupLeftovers(this)
+        } catch (e: Exception) {
+            // Nunca debe impedir que arranque la app.
+        }
+
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->

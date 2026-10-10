@@ -159,6 +159,31 @@
                 android:resource="@xml/favorites_widget_info" />
         </receiver>
 
+        <!-- Widget completo con pestañas y lista (ver widget/HomeWidgetProvider.kt) -->
+        <receiver
+            android:name=".widget.HomeWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.HomeWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!-- Pantalla invisible a la que apuntan las filas del widget (ver widget/WidgetClickActivity.kt) -->
+        <activity
+            android:name=".widget.WidgetClickActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SuperReproductor.Player"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
         <activity
             android:name=".CrashActivity"
             android:exported="false" />

@@ -434,11 +434,15 @@ class MainActivity : AppCompatActivity() {
         binding.emptyView.visibility = if (data.categories.isEmpty()) View.VISIBLE else View.GONE
         // Sin bloquear nada: si esta lista trae guía EPG (o ya la teníamos
         // cargada de antes), se descarga/parsea sola en segundo plano.
-        EpgRepository.load(data.epgUrl)
+        val allStreams = data.categories.flatMap { it.streams }
+        // Avisos por programa: en cuanto la guía está cargada, se buscan los programas que encajan.
+        val appCtx = applicationContext
+        EpgRepository.load(data.epgUrl) {
+            try { com.example.superplayer.reminder.ProgramAlerts.scan(appCtx, allStreams) } catch (e: Exception) { }
+        }
         // Por si algún favorito cambió de logo/url desde la última vez, o se
         // marcó antes de que existiera esto (ver FavoritesStore); barato,
         // así que no pasa nada por hacerlo en cada carga de lista.
-        val allStreams = data.categories.flatMap { it.streams }
         favoritesStore.refreshStoredStreams(allStreams)
         refreshShortcuts()
     }
@@ -686,6 +690,8 @@ class MainActivity : AppCompatActivity() {
             }
         })
         updateThemeMenuItem(menu.findItem(R.id.action_theme_toggle))
+        menu.findItem(R.id.action_profiles)?.title =
+            getString(R.string.action_profiles_current, com.example.superplayer.data.Profiles.active(this).name)
         return true
     }
 
@@ -906,6 +912,18 @@ class MainActivity : AppCompatActivity() {
                 showGoalAlertsDialog(this)
                 true
             }
+            R.id.action_profiles -> {
+                showProfilesDialog(this) { restartAfterProfileChange() }
+                true
+            }
+            R.id.action_program_alerts -> {
+                showProgramAlertsDialog(this, playlist.categories.flatMap { it.streams })
+                true
+            }
+            R.id.action_timeshift -> {
+                showTimeShiftDialog(this) { }
+                true
+            }
             R.id.action_now_live -> {
                 startActivity(Intent(this, NowLiveActivity::class.java))
                 true
@@ -953,6 +971,17 @@ class MainActivity : AppCompatActivity() {
      * recreate() ni refrescar nada más aquí: al volver a crearse,
      * onCreateOptionsMenu ya calcula el icono/texto para el nuevo modo.
      */
+    /** Tras cambiar de perfil: se actualizan las cosas de fuera de la app y se reinicia la portada con los datos del perfil nuevo. */
+    private fun restartAfterProfileChange() {
+        try { com.example.superplayer.tv.WatchNextSync.sync(this) } catch (e: Exception) { }
+        try { com.example.superplayer.widget.FavoritesWidgetProvider.refreshAll(this) } catch (e: Exception) { }
+        try { com.example.superplayer.widget.HomeWidgetProvider.refreshAll(this) } catch (e: Exception) { }
+        val intent = Intent(this, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        startActivity(intent)
+        finish()
+    }
+
     private fun exportBackupTo(uri: Uri) {
         try {
             val text = BackupManager.export(this)

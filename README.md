@@ -1201,3 +1201,39 @@ final / hora de inicio), la competición y los goles y tarjetas rojas.
 Los datos salen de la API pública (no oficial) de ESPN, la misma de los avisos
 de goles, y se refrescan cada minuto mientras haya partidos en juego.
 Si el título del programa no lleva el nombre de ambos equipos, no se muestra.
+
+## Pausa en directo (retroceder el directo)
+
+Menú ⋮ de la portada → **"Pausa en directo…"** (o, dentro del reproductor, el botón de *Vídeo y audio* → "Pausa en directo…"):
+eliges cuántos minutos guardar (10, 30 o 60; por defecto **desactivada**). Al abrir un canal, un hilo descarga el
+directo a un buffer en disco (carpeta de caché, se borra al salir) y el reproductor lo ve a través de un mini servidor
+local (`127.0.0.1`). Con los controles abiertos aparece una barra con lo que vas por detrás del directo y los botones
+**⏪ 5 min, ⏪ 30 s, 30 s ⏩ y 🔴 Directo**; el play/pausa de siempre pausa el directo y el buffer sigue creciendo. En el mando,
+las teclas de rebobinar/avanzar mueven 30 s.
+
+- Funciona con streams TS directos y con HLS cuyos segmentos sean TS (el caso normal). No se usa con DRM, canales con token,
+  DASH, vídeos/películas, HLS cifrado o con segmentos fMP4, ni con radios: en esos casos el canal se reproduce normal.
+- Solo se puede retroceder hasta el momento en que abriste el canal (o hasta N minutos atrás). Cambiar de canal vacía el buffer.
+- Con Chromecast se envía el canal normal (el buffer es local del móvil).
+- Código: `player/TimeShiftSession.kt` (buffer + servidor + descarga), integración en `PlayerActivity`.
+
+## Avisos por programa
+
+Menú ⋮ → **"Avisos por programa…"**, o desde los detalles de un programa de la guía → **"🔔 Avisar siempre"**. Guardas un título o
+parte de él ("El Hormiguero", "Champions", "Real Madrid"); cada vez que se carga la guía, los programas de los próximos 7
+días que lo contengan reciben un recordatorio normal (aviso 5 minutos antes, al tocarlo abre el canal). Sin distinguir
+mayúsculas ni tildes; un mismo programa en varios canales avisa una sola vez. Código: `reminder/ProgramAlerts.kt`.
+
+## Perfiles
+
+Menú ⋮ → **"Perfil: …"**: crear, cambiar, renombrar y borrar perfiles. Cada perfil tiene sus **favoritos (y su orden), canales
+ocultos y renombrados, «Continuar viendo» y filtros/orden de categorías**. Las listas, el tema, los recordatorios, los avisos
+de goles y los avisos por programa son comunes. El perfil «Principal» usa los datos de siempre (no se pierde nada). El widget, los
+accesos directos y la fila «Continuar viendo» de la TV siguen al perfil activo. Código: `data/Profiles.kt`.
+
+## Widget completo
+
+Además del widget sencillo de favoritos, hay uno nuevo **"Socram TV+"** (4x4, redimensionable) con lista desplazable y
+pestañas: **⭐ Favoritos** (con lo que echan ahora y barra de progreso, si la guía está cargada), **▶ Continuar viendo** (por dónde
+vas) y **⚽ Partidos** (marcadores de hoy; tocar uno busca su canal). Botón ⟳ para refrescar; tocar el título abre la app.
+Código: `widget/HomeWidgetProvider.kt`, `HomeWidgetService.kt`, `WidgetClickActivity.kt`.

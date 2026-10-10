@@ -20,8 +20,11 @@ import java.io.File
  * lista cargada de la que sacarlo por id.
  */
 class FavoritesStore(context: Context) {
-    private val prefs = context.applicationContext
-        .getSharedPreferences("favorites", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+
+    // Siempre el perfil activo en este momento (ver Profiles).
+    private val prefs: android.content.SharedPreferences
+        get() = Profiles.prefs(appContext, "favorites")
 
     fun isFavorite(streamId: String): Boolean =
         prefs.getStringSet(KEY_IDS, emptySet())?.contains(streamId) == true
@@ -159,10 +162,10 @@ object AppPrefs {
      * local, "sample" para la lista de ejemplo.
      */
     fun getHiddenCategories(context: Context, listKey: String): Set<String> =
-        HashSet(prefs(context).getStringSet("hidden_cats_$listKey", emptySet()) ?: emptySet())
+        HashSet(profilePrefs(context).getStringSet("hidden_cats_$listKey", emptySet()) ?: emptySet())
 
     fun setHiddenCategories(context: Context, listKey: String, hidden: Set<String>) {
-        prefs(context).edit().putStringSet("hidden_cats_$listKey", HashSet(hidden)).apply()
+        profilePrefs(context).edit().putStringSet("hidden_cats_$listKey", HashSet(hidden)).apply()
     }
 
     /**
@@ -172,7 +175,7 @@ object AppPrefs {
      * orden (nuevas en la lista remota) salen al final.
      */
     fun getCategoryOrder(context: Context, listKey: String): List<String> {
-        val raw = prefs(context).getString("cat_order_$listKey", null) ?: return emptyList()
+        val raw = profilePrefs(context).getString("cat_order_$listKey", null) ?: return emptyList()
         return try {
             val arr = org.json.JSONArray(raw)
             List(arr.length()) { arr.getString(it) }
@@ -182,7 +185,7 @@ object AppPrefs {
     }
 
     fun setCategoryOrder(context: Context, listKey: String, order: List<String>) {
-        val editor = prefs(context).edit()
+        val editor = profilePrefs(context).edit()
         if (order.isEmpty()) editor.remove("cat_order_$listKey")
         else editor.putString("cat_order_$listKey", org.json.JSONArray(order).toString())
         editor.apply()
@@ -191,7 +194,7 @@ object AppPrefs {
     /** Todos los órdenes guardados, por clave de lista (para la copia de seguridad). */
     fun getAllCategoryOrders(context: Context): Map<String, List<String>> {
         val result = HashMap<String, List<String>>()
-        for (key in prefs(context).all.keys) {
+        for (key in profilePrefs(context).all.keys) {
             if (key.startsWith("cat_order_")) {
                 val listKey = key.removePrefix("cat_order_")
                 val order = getCategoryOrder(context, listKey)
@@ -223,7 +226,7 @@ object AppPrefs {
     /** Todos los filtros de categorías guardados, por clave de lista (para la copia de seguridad, ver BackupManager). */
     fun getAllHiddenCategories(context: Context): Map<String, Set<String>> {
         val result = HashMap<String, Set<String>>()
-        for ((key, value) in prefs(context).all) {
+        for ((key, value) in profilePrefs(context).all) {
             if (key.startsWith("hidden_cats_") && value is Set<*>) {
                 result[key.removePrefix("hidden_cats_")] = value.filterIsInstance<String>().toSet()
             }
@@ -246,6 +249,16 @@ object AppPrefs {
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    /** Lo que es de cada perfil dentro de los ajustes (filtros y orden de categorías): ver Profiles. */
+    private fun profilePrefs(context: Context) = Profiles.prefs(context, PREFS_NAME)
+
+    /** Pausa en directo: minutos de memoria (0 = desactivada). Ver player/TimeShiftSession. */
+    fun getTimeShiftMinutes(context: Context): Int = prefs(context).getInt("timeshift_minutes", 0)
+
+    fun setTimeShiftMinutes(context: Context, minutes: Int) {
+        prefs(context).edit().putInt("timeshift_minutes", minutes).apply()
+    }
 }
 
 /**
@@ -307,8 +320,7 @@ object ContinueWatching {
 
     data class Entry(val stream: Stream, val positionMs: Long, val durationMs: Long, val updatedAt: Long)
 
-    private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = Profiles.prefs(context, PREFS_NAME)
 
     fun getAll(context: Context): List<Entry> {
         val raw = prefs(context).getString(KEY_ENTRIES, null) ?: return emptyList()
@@ -391,5 +403,11 @@ object ContinueWatching {
         prefs(context).edit().putString(KEY_ENTRIES, arr.toString()).apply()
         // Inicio de Android TV: la fila "Continuar viendo" del sistema se mantiene al día (solo en TV).
         com.example.superplayer.tv.WatchNextSync.sync(context)
+        // Widget completo, si está en la pestaña "Continuar".
+        try {
+            if (com.example.superplayer.widget.HomeWidgetProvider.getMode(context) ==
+                com.example.superplayer.widget.HomeWidgetProvider.MODE_CONTINUE
+            ) com.example.superplayer.widget.HomeWidgetProvider.refreshAll(context)
+        } catch (e: Exception) { }
     }
 }

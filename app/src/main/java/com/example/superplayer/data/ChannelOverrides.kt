@@ -25,8 +25,7 @@ object ChannelOverrides {
     var version: Int = 0
         private set
 
-    private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs(context: Context) = Profiles.prefs(context, PREFS_NAME)
 
     private fun readMap(context: Context, key: String): LinkedHashMap<String, String> {
         val result = LinkedHashMap<String, String>()

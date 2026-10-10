@@ -71,5 +71,12 @@ object ShortcutsHelper {
         } catch (e: Exception) {
             // Sin widget colocado o fallo del launcher: no pasa nada.
         }
+        try {
+            if (com.example.superplayer.widget.HomeWidgetProvider.getMode(context) ==
+                com.example.superplayer.widget.HomeWidgetProvider.MODE_FAVORITES
+            ) com.example.superplayer.widget.HomeWidgetProvider.refreshAll(context)
+        } catch (e: Exception) {
+            // Idem.
+        }
     }
 }

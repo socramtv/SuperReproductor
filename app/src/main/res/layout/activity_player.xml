@@ -192,6 +192,56 @@
     </LinearLayout>
 
     <!--
+        Pausa en directo (ver TimeShiftSession / PlayerActivity): cuánto va
+        por detrás del directo y botones para retroceder, adelantar y volver
+        al directo. Solo se ve con los controles y si el canal usa el buffer.
+    -->
+    <LinearLayout
+        android:id="@+id/timeShiftBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="128dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#99000000"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/timeShiftStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/player_text"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/tsBack5"
+            style="@style/TimeShiftButton"
+            android:text="@string/timeshift_back_5m" />
+
+        <TextView
+            android:id="@+id/tsBack30"
+            style="@style/TimeShiftButton"
+            android:text="@string/timeshift_back_30s" />
+
+        <TextView
+            android:id="@+id/tsFwd30"
+            style="@style/TimeShiftButton"
+            android:text="@string/timeshift_fwd_30s" />
+
+        <TextView
+            android:id="@+id/tsLive"
+            style="@style/TimeShiftButton"
+            android:text="@string/timeshift_go_live" />
+
+    </LinearLayout>
+
+    <!--
         "Qué se está viendo" para canales de VÍDEO (la radio ya tiene su
         propio overlay permanente arriba, este no se usa en ese caso): un
         toque en la pantalla saca los controles normales de reproducción

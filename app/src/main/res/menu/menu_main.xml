@@ -46,6 +46,24 @@
         android:title="@string/action_now_live"
         app:showAsAction="never" />
 
+    <!-- Perfiles (ver data/Profiles); el título lleva el perfil activo (lo pone MainActivity) -->
+    <item
+        android:id="@+id/action_profiles"
+        android:title="@string/action_profiles"
+        app:showAsAction="never" />
+
+    <!-- Avisos cuando la guía trae un programa o serie (ver reminder/ProgramAlerts) -->
+    <item
+        android:id="@+id/action_program_alerts"
+        android:title="@string/action_program_alerts"
+        app:showAsAction="never" />
+
+    <!-- Pausa en directo: cuántos minutos se guardan (ver player/TimeShiftSession) -->
+    <item
+        android:id="@+id/action_timeshift"
+        android:title="@string/timeshift_menu_item"
+        app:showAsAction="never" />
+
     <!-- Avisos de goles y eventos de tus equipos (ver sports/GoalAlerts) -->
     <item
         android:id="@+id/action_goal_alerts"
