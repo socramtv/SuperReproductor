@@ -172,6 +172,8 @@
     <string name="channel_check_hidden_toast">%1$d canales ocultos</string>
     <string name="action_multiview">Dos canales a la vez</string>
     <string name="multiview_audio_here">Oír este canal</string>
+    <string name="multiview_all_channels">📋 Todos los canales</string>
+    <string name="multiview_same_group">Esta categoría</string>
     <string name="multiview_change">Cambiar canal</string>
     <string name="multiview_close">Cerrar multivista</string>
     <string name="multiview_hint">🔊 para oír ese canal · ⇅ para cambiarlo · rojo = el que vas a elegir · naranja = el que suena</string>

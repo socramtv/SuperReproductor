@@ -5,7 +5,12 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.ArrayAdapter
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ListView
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AlertDialog
@@ -215,17 +220,76 @@ class MultiViewActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Elegir canal para un recuadro: primero el grupo (todos los canales de la
+     * lista cargada, favoritos, la categoría de origen o cualquier categoría)
+     * y luego el canal, con buscador.
+     */
     private fun showPicker(pane: Int) {
-        val names = candidates.map { it.name }.toTypedArray()
+        val groups = ArrayList<Pair<String, List<Stream>>>()
+        val all = pickerCategories.flatMap { it.streams }.distinctBy { it.id }
+        if (all.isNotEmpty()) groups.add(getString(R.string.multiview_all_channels) to all)
+        val favs = FavoritesStore(this).getAllStreams()
+        if (favs.isNotEmpty()) groups.add(getString(R.string.favorites_category_name) to favs)
+        if (candidates.size > 1) groups.add(getString(R.string.multiview_same_group) to candidates)
+        for (category in pickerCategories) {
+            if (category.streams.isNotEmpty()) groups.add(category.name to category.streams)
+        }
+        if (groups.size == 1) {
+            showChannelPicker(pane, groups[0].first, groups[0].second)
+            return
+        }
         AlertDialog.Builder(this)
             .setTitle(R.string.multiview_pick_title)
-            .setItems(names) { _, which ->
-                val chosen = candidates[which]
-                streams[pane] = chosen
-                if (pane == 0) binding.nameA.text = chosen.name else binding.nameB.text = chosen.name
-                startPane(pane, chosen)
+            .setItems(groups.map { it.first }.toTypedArray()) { _, which ->
+                showChannelPicker(pane, groups[which].first, groups[which].second)
             }
             .show()
+    }
+
+    private fun showChannelPicker(pane: Int, title: String, source: List<Stream>) {
+        val input = EditText(this)
+        input.hint = getString(R.string.search_hint)
+        input.isSingleLine = true
+        var shown: List<Stream> = source
+        val labels = ArrayList<String>(source.map { it.name })
+        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, labels)
+        val list = ListView(this)
+        list.adapter = adapter
+        list.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            (resources.displayMetrics.heightPixels * 0.5f).toInt()
+        )
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val query = s?.toString().orEmpty().trim()
+                shown = if (query.isEmpty()) source else source.filter { it.name.contains(query, ignoreCase = true) }
+                labels.clear()
+                labels.addAll(shown.map { it.name })
+                adapter.notifyDataSetChanged()
+            }
+        })
+        val container = LinearLayout(this)
+        container.orientation = LinearLayout.VERTICAL
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        container.setPadding(pad, 0, pad, 0)
+        container.addView(input)
+        container.addView(list)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(container)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        list.setOnItemClickListener { _, _, position, _ ->
+            val chosen = shown.getOrNull(position) ?: return@setOnItemClickListener
+            dialog.dismiss()
+            streams[pane] = chosen
+            if (pane == 0) binding.nameA.text = chosen.name else binding.nameB.text = chosen.name
+            startPane(pane, chosen)
+        }
+        dialog.show()
     }
 
     /** Pone [stream] a reproducir en el recuadro [pane] (resolviendo antes su token, si lo tiene). */
@@ -299,5 +363,8 @@ class MultiViewActivity : AppCompatActivity() {
         /** El canal que se estaba viendo (va al primer recuadro) y los canales entre los que elegir. */
         var pendingFirst: Stream? = null
         var pendingCandidates: List<Stream> = emptyList()
+
+        /** Todas las categorías de la lista cargada (las pone MainActivity), para poder elegir cualquier canal. */
+        var pickerCategories: List<com.example.superplayer.model.Category> = emptyList()
     }
 }

@@ -340,6 +340,7 @@ class MainActivity : AppCompatActivity() {
         if (appliedOverridesVersion == ChannelOverrides.version) return
         appliedOverridesVersion = ChannelOverrides.version
         playlist = ChannelOverrides.apply(this, rawPlaylist)
+        com.example.superplayer.player.MultiViewActivity.pickerCategories = playlist.categories
         searchIndexDirty = true
     }
 
@@ -408,6 +409,7 @@ class MainActivity : AppCompatActivity() {
         appliedOverridesVersion = ChannelOverrides.version
         val data = ChannelOverrides.apply(this, rawData)
         playlist = data
+        com.example.superplayer.player.MultiViewActivity.pickerCategories = data.categories
         currentListKey = listKey
         searchIndexDirty = true
         binding.recyclerView.adapter = categoryAdapter
