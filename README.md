@@ -865,6 +865,26 @@ al elegir uno se abre y sigue por donde lo dejaste. La fila se mantiene sola al
 ver o terminar cosas. Solo funciona en dispositivos de TV que admitan esa fila
 (en algunos Fire TV antiguos puede no aparecer; la app sigue igual sin ella).
 
+## Búsqueda por voz
+
+En la portada, el **micrófono** de la barra (junto a la lupa) abre el
+reconocedor de voz del aparato. Entiende órdenes como **"pon La 1"**, **"abre
+Eurosport"**, **"quiero ver Teledeporte"** o **"busca fútbol"**. Busca en
+**todas las listas** (la cargada y las copias guardadas de los 5 huecos), sin
+distinguir mayúsculas ni tildes, y con todas las palabras en cualquier orden:
+
+- Si hay un canal claro (se llama exactamente así, o es el único que empieza o
+  coincide), **lo abre directamente**.
+- Si hay varios, o dices "busca…", enseña los resultados en la búsqueda para
+  que elijas.
+- Si no hay ninguno, te avisa de que no lo ha encontrado.
+
+También responde al **asistente de voz** del sistema ("Ok Google, pon La 1 en
+Socram TV"): la app declara que sabe atender esas órdenes (MEDIA_PLAY_FROM_SEARCH).
+Que el asistente la elija depende de cada aparato (en Google TV suele funcionar).
+Si el aparato no tiene reconocimiento de voz (algunos Fire TV), el micrófono avisa
+y se sigue usando la lupa.
+
 ## Botones del reproductor
 
 Debajo de la barra de progreso, a la izquierda del engranaje de Media3 (el de

@@ -182,4 +182,9 @@
     <string name="multiview_pick_title">Elegir canal</string>
     <string name="multiview_no_channels">No hay otro canal con el que comparar. Abre un canal desde una categoría con varios canales, o marca favoritos</string>
     <string name="multiview_audio_on">🔊 Suena: %1$s</string>
+    <string name="action_voice">Búsqueda por voz</string>
+    <string name="voice_prompt">Di un canal: «pon La 1», «busca fútbol»…</string>
+    <string name="voice_unavailable">Este aparato no tiene reconocimiento de voz</string>
+    <string name="voice_opening">Abriendo %1$s</string>
+    <string name="voice_not_found">No he encontrado «%1$s» en tus listas</string>
 </resources>

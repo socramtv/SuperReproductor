@@ -9,6 +9,14 @@
         app:showAsAction="collapseActionView|ifRoom"
         app:actionViewClass="androidx.appcompat.widget.SearchView" />
 
+    <!-- Búsqueda global por voz (ver MainActivity.startVoiceSearch) -->
+    <item
+        android:id="@+id/action_voice"
+        android:title="@string/action_voice"
+        android:icon="@android:drawable/ic_btn_speak_now"
+        app:iconTint="@color/on_background"
+        app:showAsAction="ifRoom" />
+
     <item
         android:id="@+id/action_epg_grid"
         android:title="@string/action_epg_grid"

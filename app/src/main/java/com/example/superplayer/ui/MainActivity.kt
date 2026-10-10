@@ -60,6 +60,20 @@ class MainActivity : AppCompatActivity() {
     private var lastQuery: String = ""
     @Volatile private var autoRefreshing = false
 
+    // Búsqueda por voz (ver startVoiceSearch): el reconocedor de voz del sistema devuelve el texto.
+    private val voiceLauncher =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val spoken = result.data
+                    ?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)
+                    ?.firstOrNull()
+                if (!spoken.isNullOrBlank()) handleVoiceQuery(spoken)
+            }
+        }
+    private var searchMenuItem: MenuItem? = null
+    private var searchViewRef: SearchView? = null
+    private val indexReadyCallbacks = ArrayList<() -> Unit>()
+
     private val openDocumentLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) loadFromUri(uri)
@@ -112,6 +126,7 @@ class MainActivity : AppCompatActivity() {
 
         setupListSlotButtons()
         loadInitialPlaylist()
+        handleAssistantIntent(intent)
         updateSlotButtonLabels()
         autoRefreshLists()
     }
@@ -647,6 +662,8 @@ class MainActivity : AppCompatActivity() {
         menuInflater.inflate(R.menu.menu_main, menu)
         val searchItem = menu.findItem(R.id.action_search)
         val searchView = searchItem.actionView as SearchView
+        searchMenuItem = searchItem
+        searchViewRef = searchView
         searchView.queryHint = getString(R.string.search_hint)
         styleSearchView(this, searchView)
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
@@ -723,12 +740,123 @@ class MainActivity : AppCompatActivity() {
                 searchIndex = entries
                 // Si mientras tanto se cargó otra lista, queda pendiente para la próxima.
                 if (lastQuery.isNotBlank()) applySearch(lastQuery)
+                val callbacks = ArrayList(indexReadyCallbacks)
+                indexReadyCallbacks.clear()
+                callbacks.forEach { it() }
             }
         }.start()
     }
 
+
+    // -----------------------------------------------------------------
+    // Búsqueda global por voz: botón del micrófono en la barra (o la orden
+    // que llega del asistente de voz, ver onNewIntent). Entiende "pon La 1",
+    // "abre Eurosport", "busca fútbol"...: busca en TODAS las listas (la
+    // cargada y las copias de los 5 huecos); si hay un canal claro lo abre
+    // directamente, si no enseña los resultados en la búsqueda.
+    // -----------------------------------------------------------------
+
+    private fun startVoiceSearch() {
+        val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag())
+            putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, getString(R.string.voice_prompt))
+        }
+        try {
+            voiceLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.voice_unavailable, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Quita las palabras de orden del principio ("pon", "abre", "busca"...) y dice si era solo una búsqueda. */
+    private fun parseVoiceCommand(spoken: String): Pair<String, Boolean> {
+        var text = normalizeForSearch(spoken).trim()
+        var searchOnly = false
+        val prefixes = listOf(
+            "quiero ver", "quiero", "ponme", "pon me", "poner", "pon", "reproduce", "reproducir",
+            "abre", "abrir", "ver", "cambia a", "cambiar a", "busca", "buscar", "el canal", "canal"
+        )
+        var changed = true
+        while (changed) {
+            changed = false
+            for (prefix in prefixes) {
+                if (text == prefix) continue
+                if (text.startsWith("$prefix ")) {
+                    if (prefix == "busca" || prefix == "buscar") searchOnly = true
+                    text = text.removePrefix(prefix).trim()
+                    changed = true
+                    break
+                }
+            }
+        }
+        return text to searchOnly
+    }
+
+    private fun handleVoiceQuery(spoken: String) {
+        val (query, searchOnly) = parseVoiceCommand(spoken)
+        if (query.isBlank()) return
+        whenSearchIndexReady {
+            val pool = searchIndex?.map { it.stream } ?: playlist.categories.flatMap { it.streams }
+            val words = query.split(' ').filter { it.isNotEmpty() }
+            val matches = pool.filter { st -> normalizeForSearch(st.name).let { n -> words.all { w -> n.contains(w) } } }
+            // Un canal "claro": el que se llama exactamente así; si no, el único que empieza así; si no, el único que coincide.
+            val exact = matches.filter { normalizeForSearch(it.name) == query }
+            val starting = matches.filter { normalizeForSearch(it.name).startsWith(query) }
+            val clear: Stream? = when {
+                exact.isNotEmpty() -> exact.first()
+                starting.size == 1 -> starting.first()
+                matches.size == 1 -> matches.first()
+                else -> null
+            }
+            if (clear != null && !searchOnly) {
+                Toast.makeText(this, getString(R.string.voice_opening, clear.name), Toast.LENGTH_SHORT).show()
+                PlayerActivity.pendingStream = clear
+                PlayerActivity.pendingChannelList = matches
+                startActivity(Intent(this, PlayerActivity::class.java))
+            } else {
+                if (matches.isEmpty()) {
+                    Toast.makeText(this, getString(R.string.voice_not_found, query), Toast.LENGTH_LONG).show()
+                }
+                searchMenuItem?.expandActionView()
+                searchViewRef?.setQuery(query, true)
+            }
+        }
+    }
+
+    /** Ejecuta [callback] cuando el índice de búsqueda global esté listo (lo construye si hace falta). */
+    private fun whenSearchIndexReady(callback: () -> Unit) {
+        if (!searchIndexDirty && !searchIndexBuilding && searchIndex != null) {
+            callback()
+            return
+        }
+        indexReadyCallbacks.add(callback)
+        refreshSearchIndexIfNeeded()
+    }
+
+    /** Orden de voz del asistente ("Ok Google, pon La 1 en Socram TV"): llega como MEDIA_PLAY_FROM_SEARCH. */
+    private fun handleAssistantIntent(intent: Intent?) {
+        if (intent?.action != android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) return
+        val query = intent.getStringExtra(android.app.SearchManager.QUERY)
+        intent.action = null // para no repetirla al girar la pantalla
+        if (!query.isNullOrBlank()) binding.root.post { handleVoiceQuery(query) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAssistantIntent(intent)
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_voice -> {
+                startVoiceSearch()
+                true
+            }
             R.id.action_epg_grid -> {
                 openEpgGrid()
                 true
