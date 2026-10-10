@@ -72,6 +72,22 @@ object ChannelOverrides {
         writeMap(context, KEY_HIDDEN, map)
     }
 
+    /** Nombres propios: id -> nombre. */
+    fun getNames(context: Context): Map<String, String> = readMap(context, KEY_NAMES)
+
+    /** Copia de seguridad: suma estos ocultos y nombres a los que ya hay (los nombres de la copia pisan). Devuelve (ocultos nuevos, nombres nuevos). */
+    fun merge(context: Context, hidden: Map<String, String>, names: Map<String, String>): Pair<Int, Int> {
+        val h = readMap(context, KEY_HIDDEN)
+        val n = readMap(context, KEY_NAMES)
+        val newHidden = hidden.keys.count { it !in h }
+        val newNames = names.keys.count { it !in n }
+        h.putAll(hidden)
+        n.putAll(names)
+        if (hidden.isNotEmpty()) writeMap(context, KEY_HIDDEN, h)
+        if (names.isNotEmpty()) writeMap(context, KEY_NAMES, n)
+        return newHidden to newNames
+    }
+
     fun hasCustomName(context: Context, streamId: String): Boolean = readMap(context, KEY_NAMES).containsKey(streamId)
 
     /** Pone un nombre propio; un nombre vacío quita el cambio y vuelve al original. */

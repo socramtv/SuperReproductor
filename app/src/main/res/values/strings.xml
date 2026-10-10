@@ -86,6 +86,7 @@
     <string name="backup_export_ok">Copia guardada</string>
     <string name="backup_export_error">No se pudo guardar la copia: %1$s</string>
     <string name="backup_import_ok">Copia importada: %1$d favoritos nuevos, %2$d URLs de listas, %3$d filtros</string>
+    <string name="backup_import_ok_full">Copia importada: %1$d favoritos nuevos, %2$d URLs de listas, %3$d filtros, %4$d canales ocultos, %5$d renombrados, %6$d recordatorios, %7$d en «Continuar viendo»</string>
     <string name="backup_import_error">No se pudo importar: %1$s</string>
     <string name="category_order_button">Ordenar ↕️</string>
     <string name="category_order_title">Ordenar categorías</string>

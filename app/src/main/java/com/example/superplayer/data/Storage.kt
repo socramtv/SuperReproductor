@@ -326,6 +326,21 @@ object ContinueWatching {
         }
     }
 
+    /** Copia de seguridad: suma estas entradas (si un título está en las dos, gana la más reciente). Devuelve cuántas eran nuevas. */
+    fun importAll(context: Context, incoming: List<Entry>): Int {
+        if (incoming.isEmpty()) return 0
+        val byId = LinkedHashMap<String, Entry>()
+        for (e in getAll(context)) byId[e.stream.id] = e
+        var added = 0
+        for (e in incoming) {
+            val existing = byId[e.stream.id]
+            if (existing == null) added++
+            if (existing == null || e.updatedAt > existing.updatedAt) byId[e.stream.id] = e
+        }
+        write(context, byId.values.sortedByDescending { it.updatedAt }.take(MAX_ENTRIES))
+        return added
+    }
+
     fun positionFor(context: Context, streamId: String): Long? =
         getAll(context).firstOrNull { it.stream.id == streamId }?.positionMs
 

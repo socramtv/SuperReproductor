@@ -98,6 +98,22 @@ object ReminderManager {
         write(context, list.filter { it !== target })
     }
 
+    /** Copia de seguridad: suma estos recordatorios a los que ya hay (solo los de programas que aún no han empezado) y programa sus alarmas. Devuelve cuántos eran nuevos. */
+    fun importAll(context: Context, incoming: List<Reminder>): Int {
+        val now = System.currentTimeMillis()
+        val current = getAll(context).toMutableList()
+        var added = 0
+        for (r in incoming) {
+            if (r.startMillis <= now) continue
+            if (current.any { it.streamId == r.streamId && it.startMillis == r.startMillis }) continue
+            current.add(r)
+            schedule(context, r)
+            added++
+        }
+        if (added > 0) write(context, current)
+        return added
+    }
+
     /** Vuelve a programar todas las alarmas (tras reiniciar o al abrir la app) y descarta los programas que ya pasaron. */
     fun rescheduleAll(context: Context) {
         val now = System.currentTimeMillis()

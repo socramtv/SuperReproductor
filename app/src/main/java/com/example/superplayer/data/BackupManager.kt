@@ -2,6 +2,7 @@ package com.example.superplayer.data
 
 import android.content.Context
 import com.example.superplayer.model.Stream
+import com.example.superplayer.reminder.ReminderManager
 import com.example.superplayer.model.streamFromJson
 import com.example.superplayer.model.toJson
 import org.json.JSONArray
@@ -9,9 +10,11 @@ import org.json.JSONObject
 
 /**
  * Copia de seguridad en un archivo JSON (ver README, "Copia de seguridad"):
- * favoritos (con los datos completos de cada canal), las URLs de los 5
- * huecos de lista, el filtro y el orden de categorías de cada lista y
- * el modo claro/oscuro. No incluye las listas descargadas ni la guía: se vuelven a
+ * favoritos (con los datos completos de cada canal y su orden), las URLs de los 5
+ * huecos de lista, el filtro y el orden de categorías de cada lista, el modo
+ * claro/oscuro, los canales ocultos y renombrados, los recordatorios de la
+ * guía, "Continuar viendo" y los ajustes del reproductor (audio en segundo
+ * plano y formato de pantalla). No incluye las listas descargadas ni la guía: se vuelven a
  * bajar solas de sus URLs.
  *
  * Al importar, los favoritos se SUMAN a los que ya haya (nunca se borra
@@ -23,7 +26,16 @@ object BackupManager {
     private const val FORMAT_VERSION = 1
     private const val APP_ID = "socram-tv-backup"
 
-    data class ImportResult(val newFavorites: Int, val listUrls: Int, val filters: Int, val darkModeChanged: Boolean)
+    data class ImportResult(
+        val newFavorites: Int,
+        val listUrls: Int,
+        val filters: Int,
+        val darkModeChanged: Boolean,
+        val hiddenChannels: Int = 0,
+        val renamedChannels: Int = 0,
+        val reminders: Int = 0,
+        val continueItems: Int = 0
+    )
 
     fun export(context: Context): String {
         val root = JSONObject()
@@ -55,6 +67,38 @@ object BackupManager {
         root.put("categoryOrder", orders)
 
         root.put("darkMode", AppPrefs.isDarkMode(context))
+        root.put("backgroundAudio", AppPrefs.isBackgroundAudio(context))
+        root.put("videoFormat", AppPrefs.getVideoFormat(context))
+
+        // Canales ocultos y con nombre propio (ver ChannelOverrides).
+        val hiddenCh = JSONObject()
+        for ((id, name) in ChannelOverrides.getHidden(context)) hiddenCh.put(id, name)
+        root.put("hiddenChannels", hiddenCh)
+        val namesCh = JSONObject()
+        for ((id, name) in ChannelOverrides.getNames(context)) namesCh.put(id, name)
+        root.put("channelNames", namesCh)
+
+        // Recordatorios de la guía (los ya pasados no se guardan).
+        val now = System.currentTimeMillis()
+        val reminders = JSONArray()
+        for (r in ReminderManager.getAll(context)) {
+            if (r.startMillis <= now) continue
+            reminders.put(
+                JSONObject().put("stream", r.streamJson).put("id", r.streamId)
+                    .put("channel", r.channelName).put("title", r.title).put("start", r.startMillis)
+            )
+        }
+        root.put("reminders", reminders)
+
+        // Continuar viendo.
+        val cont = JSONArray()
+        for (e in ContinueWatching.getAll(context)) {
+            cont.put(
+                JSONObject().put("stream", JSONObject(e.stream.toJson()))
+                    .put("pos", e.positionMs).put("dur", e.durationMs).put("at", e.updatedAt)
+            )
+        }
+        root.put("continueWatching", cont)
         return root.toString(2)
     }
 
@@ -118,6 +162,56 @@ object BackupManager {
             darkChanged = dark != AppPrefs.isDarkMode(context)
             if (darkChanged) AppPrefs.setDarkMode(context, dark)
         }
-        return ImportResult(newFavorites, urlCount, filterCount, darkChanged)
+
+        if (root.has("backgroundAudio")) AppPrefs.setBackgroundAudio(context, root.optBoolean("backgroundAudio", true))
+        if (root.has("videoFormat")) AppPrefs.setVideoFormat(context, root.optInt("videoFormat", 0))
+
+        val hiddenMap = LinkedHashMap<String, String>()
+        root.optJSONObject("hiddenChannels")?.let { o ->
+            val keys = o.keys()
+            while (keys.hasNext()) { val k = keys.next(); hiddenMap[k] = o.optString(k) }
+        }
+        val namesMap = LinkedHashMap<String, String>()
+        root.optJSONObject("channelNames")?.let { o ->
+            val keys = o.keys()
+            while (keys.hasNext()) { val k = keys.next(); namesMap[k] = o.optString(k) }
+        }
+        val (newHidden, newNames) = ChannelOverrides.merge(context, hiddenMap, namesMap)
+
+        var newReminders = 0
+        root.optJSONArray("reminders")?.let { arr ->
+            val list = ArrayList<ReminderManager.Reminder>()
+            for (i in 0 until arr.length()) {
+                try {
+                    val o = arr.getJSONObject(i)
+                    list.add(
+                        ReminderManager.Reminder(
+                            o.getString("stream"), o.getString("id"), o.getString("channel"),
+                            o.getString("title"), o.getLong("start")
+                        )
+                    )
+                } catch (e: Exception) {
+                    // Entrada dañada: se salta.
+                }
+            }
+            newReminders = ReminderManager.importAll(context, list)
+        }
+
+        var newContinue = 0
+        root.optJSONArray("continueWatching")?.let { arr ->
+            val list = ArrayList<ContinueWatching.Entry>()
+            for (i in 0 until arr.length()) {
+                try {
+                    val o = arr.getJSONObject(i)
+                    val stream = streamFromJson(o.getJSONObject("stream").toString()) ?: continue
+                    list.add(ContinueWatching.Entry(stream, o.getLong("pos"), o.getLong("dur"), o.optLong("at", 0L)))
+                } catch (e: Exception) {
+                    // Entrada dañada: se salta.
+                }
+            }
+            newContinue = ContinueWatching.importAll(context, list)
+        }
+
+        return ImportResult(newFavorites, urlCount, filterCount, darkChanged, newHidden, newNames, newReminders, newContinue)
     }
 }

@@ -784,13 +784,18 @@ class MainActivity : AppCompatActivity() {
             val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
                 ?: throw IllegalStateException("no se pudo abrir el archivo")
             val result = BackupManager.restore(this, text)
-            // Refresca lo que se ve: categorías (filtros), favoritos y accesos directos.
+            // Refresca lo que se ve: categorías (filtros), canales ocultos/renombrados, favoritos y accesos directos.
+            reapplyChannelOverrides()
             categoryAdapter.submit(buildCategoryListWithFavorites())
             updateCategoryFilterButton()
             refreshShortcuts()
             Toast.makeText(
                 this,
-                getString(R.string.backup_import_ok, result.newFavorites, result.listUrls, result.filters),
+                getString(
+                    R.string.backup_import_ok_full,
+                    result.newFavorites, result.listUrls, result.filters,
+                    result.hiddenChannels, result.renamedChannels, result.reminders, result.continueItems
+                ),
                 Toast.LENGTH_LONG
             ).show()
             if (result.darkModeChanged) {

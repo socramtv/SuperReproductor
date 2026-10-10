@@ -792,12 +792,19 @@ En el menú de los tres puntos de la portada:
 
 - **Exportar copia de seguridad:** guarda un archivo `socram-tv-copia.json`
   donde elijas (el propio sistema te deja escoger la carpeta, sin permisos
-  extra) con tus favoritos, las URLs de los 5 huecos de lista, el filtro y
-  el orden de categorías de cada lista y el modo claro/oscuro.
+  extra) con **todo lo tuyo**: favoritos (con su orden), las URLs de los 5
+  huecos de lista, el filtro y el orden de categorías de cada lista, el modo
+  claro/oscuro, los **canales ocultos y renombrados**, los **recordatorios**
+  de la guía (los que aún no han pasado), **«Continuar viendo»** y los ajustes
+  del reproductor (audio en segundo plano y formato de pantalla).
 - **Importar copia de seguridad:** elige ese archivo. Los favoritos se
-  **suman** a los que ya tengas (no se borra ninguno); las URLs, los
-  filtros y el modo claro/oscuro se sustituyen por los de la copia. Al
-  terminar sale un aviso con cuántos favoritos nuevos, URLs y filtros entraron.
+  **suman** a los que ya tengas (no se borra ninguno), igual que los canales
+  ocultos, los nombres propios, los recordatorios (que se vuelven a programar
+  solos) y «Continuar viendo» (si un título está en los dos sitios, gana el más
+  reciente); las URLs, los filtros, el modo claro/oscuro y los ajustes del
+  reproductor se sustituyen por los de la copia. Al terminar sale un aviso con
+  lo que entró de cada cosa. Las copias hechas con versiones anteriores
+  siguen funcionando (simplemente no traen esas partes).
 - No incluye las listas descargadas ni la guía de programación: se vuelven a
   bajar solas de sus URLs al abrir cada hueco. El archivo cargado con
   "Cargar archivo" tampoco se guarda (hay que volver a elegirlo).
