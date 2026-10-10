@@ -282,7 +282,7 @@ de abajo, entre formato de pantalla y el reloj) abre un panel a la derecha con l
 canales de la lista que estás viendo: logo, nombre, el programa de **ahora** con
 una barrita de lo que lleva, y el **siguiente** con su hora. El canal actual sale
 resaltado. Tocar uno cambia a él sin salir del reproductor; Atrás o el mismo
-botón cierran el panel. En la TV, el botón **GUÍA** del mando lo abre y cierra, y
+botón cierran el panel. En la TV, el botón **GUÍA** del mando (o el de las **tres rayas ☰** del mando de Fire TV) lo abre y cierra, y
 con el panel abierto las flechas mueven el foco por la lista (arriba/abajo) y OK
 elige. Si el canal no tiene guía, sale "Sin datos de guía". Solo aparece cuando
 hay más de un canal en la lista.

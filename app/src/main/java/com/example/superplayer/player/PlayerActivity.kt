@@ -634,8 +634,9 @@ class PlayerActivity : AppCompatActivity() {
     // -----------------------------------------------------------------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Tecla GUÍA del mando: abre/cierra la mini-guía.
-        if (event.keyCode == KeyEvent.KEYCODE_GUIDE && channelList.size > 1) {
+        // Tecla GUÍA del mando, o MENÚ (el botón de las tres rayas del mando
+        // de Fire TV): abre/cierra la mini-guía.
+        if ((event.keyCode == KeyEvent.KEYCODE_GUIDE || event.keyCode == KeyEvent.KEYCODE_MENU) && channelList.size > 1) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) toggleMiniGuide()
             return true
         }
