@@ -80,6 +80,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var suppressExit = false
     private var pendingScroll = -1
     private var searchView: SearchView? = null
+    private var menuRef: Menu? = null
     private val searchDebounce = Runnable { runSearchNow() }
     private val attachLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) sendAttachment(uri)
@@ -263,6 +264,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_telegram_account, menu)
+        menuRef = menu
         val item = menu.findItem(R.id.action_tgacc_search)
         searchItem = item
         val sv = item?.actionView as? SearchView
@@ -279,9 +281,9 @@ class TelegramAccountActivity : AppCompatActivity() {
 
             override fun onQueryTextChange(newText: String?): Boolean {
                 searchQuery = newText.orEmpty().trim()
-                if (searchMode == 0 && currentChat == null) {
+                if (searching) {
                     binding.root.removeCallbacks(searchDebounce)
-                    binding.root.postDelayed(searchDebounce, 400)
+                    binding.root.postDelayed(searchDebounce, if (searchMode == 0 && currentChat == null) 400L else 700L)
                 }
                 return true
             }
@@ -302,6 +304,11 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
         })
         return true
+    }
+
+    /** Muestra/oculta los botones del menú sin reconstruirlo (reconstruirlo cerraría la búsqueda). */
+    private fun updateMenuItems() {
+        menuRef?.let { onPrepareOptionsMenu(it) }
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
@@ -369,6 +376,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 chats = list
+                if (searching) return@runOnUiThread
                 currentChat = null
                 renderChats()
             }
@@ -599,7 +607,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         updateSearchHint()
         showMessage(getString(if (currentChat != null || searchMode == 1) R.string.tgacc_search_prompt_messages else R.string.tgacc_search_prompt_names))
         updateBack()
-        invalidateOptionsMenu()
+        updateMenuItems()
     }
 
     private fun exitSearchUi() {
