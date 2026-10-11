@@ -135,7 +135,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     override fun loadChats(onDone: (List<TgChat>) -> Unit) {
         send(TdApi.GetChats(TdApi.ChatListMain(), 200)) { result ->
             if (result is TdApi.Chats) {
-                val list = result.chatIds.mapNotNull { id ->
+                val list = result.chatIds.toList().mapNotNull { id ->
                     val chat = chats[id] ?: return@mapNotNull null
                     TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L)
                 }
