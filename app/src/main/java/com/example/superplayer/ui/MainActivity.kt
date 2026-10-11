@@ -960,6 +960,10 @@ class MainActivity : AppCompatActivity() {
                 showRemoteControlDialog(this)
                 true
             }
+            R.id.action_telegram -> {
+                startActivity(Intent(this, TelegramActivity::class.java))
+                true
+            }
             R.id.action_profiles -> {
                 showProfilesDialog(this) { restartAfterProfileChange() }
                 true

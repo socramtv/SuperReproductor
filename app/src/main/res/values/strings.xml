@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Acestream+</string>
+    <string name="list_slot_2">Lista 2</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -341,4 +341,28 @@
     <string name="cine_trailer_error">No se pudo abrir el tráiler</string>
     <string name="cine_all_categories">Todas las categorías</string>
     <string name="cine_load_error">No se pudo cargar la lista de Cine.</string>
+    <string name="action_telegram">✈️ Telegram…</string>
+    <string name="tg_title">Telegram</string>
+    <string name="tg_menu_token">Bot de Telegram…</string>
+    <string name="tg_menu_clear">Borrar mensajes guardados</string>
+    <string name="tg_clear_confirm">¿Borrar todos los mensajes guardados de Telegram en este dispositivo?</string>
+    <string name="tg_token_title">Bot de Telegram</string>
+    <string name="tg_token_hint">Token del bot (123456:ABC…)</string>
+    <string name="tg_token_help">Crea un bot con @BotFather en Telegram y pega aquí su token. Después añade el bot a tu grupo, o como administrador a tu canal: la app irá recogiendo sus mensajes nuevos.</string>
+    <string name="tg_checking">Comprobando…</string>
+    <string name="tg_token_bad">Token no válido o sin conexión</string>
+    <string name="tg_token_ok">Conectado como %1$s</string>
+    <string name="tg_empty">Aún no hay mensajes. Añade el bot a un canal (como administrador) o a un grupo y escribe o publica algo: saldrá aquí.</string>
+    <string name="tg_empty_no_token">Pulsa ⋮ → Bot de Telegram… y pega el token de tu bot.</string>
+    <string name="tg_chat_sub">%1$d mensajes · último %2$s</string>
+    <string name="tg_links_count">%1$d enlaces</string>
+    <string name="tg_open_playlist">📋 Abrir lista de canales</string>
+    <string name="tg_play_file">▶ Reproducir</string>
+    <string name="tg_nothing_to_play">Este mensaje no tiene nada que reproducir</string>
+    <string name="tg_too_big">Telegram solo deja a los bots descargar archivos de hasta 20 MB; este es más grande</string>
+    <string name="tg_loading">Cargando…</string>
+    <string name="tg_file_error">No se pudo obtener el archivo (%1$s)</string>
+    <string name="tg_playlist_empty">la lista no tiene canales</string>
+    <string name="tg_playlist_error">no se pudo leer la lista</string>
+    <string name="tg_playlist_title">Lista (%1$d canales)</string>
 </resources>

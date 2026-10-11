@@ -1266,3 +1266,9 @@ Lo encontrado (y lo no encontrado, 7 días) se guarda en el móvil. Código: `da
 En el reproductor, arriba a la izquierda, sale el marcador (y minuto) de los partidos **en juego** de los equipos que sigues en "Avisos de goles",
 aunque estés viendo otro canal. Se actualiza cada minuto (datos de ESPN, como los avisos) y se activa/desactiva en el botón *Vídeo y audio* →
 "Marcador flotante". Si no sigues ningún equipo no sale nada.
+
+
+## Telegram (con un bot)
+
+Menú ⋮ → **"✈️ Telegram…"**. Crea un bot con @BotFather, pega su token en ⋮ → "Bot de Telegram…" y añade el bot a tu grupo, o como **administrador** a tu canal. Mientras la pantalla está abierta, la app recoge los mensajes nuevos (se guardan en el móvil) y los muestra por chat: vídeos y audios se reproducen, un archivo .m3u/.json se abre como lista de canales, y los enlaces de los mensajes (m3u8, mp4…) se reproducen al tocarlos.
+Límites de la API de bots de Telegram: no se puede leer el historial anterior a añadir el bot ni grupos privados donde no esté el bot, y los archivos solo se pueden descargar hasta 20 MB (los enlaces no tienen límite). Código: `telegram/TelegramBot.kt`, `ui/TelegramActivity.kt`.

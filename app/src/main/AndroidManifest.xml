@@ -92,6 +92,12 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- Telegram con un bot (ver TelegramActivity) -->
+        <activity
+            android:name=".ui.TelegramActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <!-- Cine: carátulas y sinopsis (ver CineActivity) -->
         <activity
             android:name=".ui.CineActivity"
