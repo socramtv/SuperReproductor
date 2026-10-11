@@ -339,4 +339,5 @@
     <string name="cine_cast">Reparto</string>
     <string name="cine_trailer">▶ Ver tráiler</string>
     <string name="cine_trailer_error">No se pudo abrir el tráiler</string>
+    <string name="cine_all_categories">Todas las categorías</string>
 </resources>

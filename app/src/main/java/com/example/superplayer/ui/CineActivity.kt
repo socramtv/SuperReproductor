@@ -43,6 +43,7 @@ class CineActivity : AppCompatActivity() {
     private var allMovies: List<Stream> = emptyList()
     private var query = ""
     private var posterHeight = 0
+    private var selectedCategory = 0 // 0 = todas
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,53 +73,9 @@ class CineActivity : AppCompatActivity() {
                 applyFilter()
             }
         })
-        binding.cineCategoriesButton.setOnClickListener { showCategoryChooser() }
+        setupCategorySpinner()
 
         reload()
-        if (AppPrefs.getTmdbKey(this).isBlank()) {
-            android.widget.Toast.makeText(this, R.string.cine_tmdb_key_missing, android.widget.Toast.LENGTH_LONG).show()
-        }
-    }
-
-    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_cine, menu)
-        return true
-    }
-
-    private fun showTmdbKeyDialog() {
-        val input = android.widget.EditText(this).apply {
-            setText(AppPrefs.getTmdbKey(this@CineActivity))
-            hint = getString(R.string.cine_tmdb_key_hint)
-            setSingleLine(true)
-        }
-        val pad = (20 * resources.displayMetrics.density).toInt()
-        val box = LinearLayout(this).apply {
-            setPadding(pad, pad / 2, pad, 0)
-            addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.cine_tmdb_key_title)
-            .setView(box)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val key = input.text.toString().trim()
-                AppPrefs.setTmdbKey(this, key)
-                adapter.notifyDataSetChanged()
-                if (key.isNotEmpty()) {
-                    Thread {
-                        val code = MovieInfo.checkTmdbKey(key)
-                        runOnUiThread {
-                            val msg = when (code) {
-                                200 -> R.string.cine_tmdb_key_ok
-                                401 -> R.string.cine_tmdb_key_bad
-                                else -> R.string.cine_tmdb_key_unknown
-                            }
-                            android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_LONG).show()
-                        }
-                    }.start()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -126,24 +83,14 @@ class CineActivity : AppCompatActivity() {
             finish()
             return true
         }
-        if (item.itemId == R.id.action_tmdb_key) {
-            showTmdbKeyDialog()
-            return true
-        }
         return super.onOptionsItemSelected(item)
     }
 
     private fun looksLikeMovies(name: String): Boolean = MOVIE_NAME.containsMatchIn(name)
 
-    /** Categorías elegidas a mano; si no hay elección, las que parecen de cine por su nombre. */
-    private fun chosenCategories(): List<Category> {
-        val chosen = AppPrefs.getCineCategories(this)
-        return if (chosen != null) categories.filter { it.name in chosen }
-        else categories
-    }
-
     private fun reload() {
-        allMovies = chosenCategories()
+        val list = if (selectedCategory == 0) categories else listOfNotNull(categories.getOrNull(selectedCategory - 1))
+        allMovies = list
             .flatMap { it.streams }
             .distinctBy { it.id }
             .sortedBy { MovieInfo.cleanTitle(it.name).first.lowercase(Locale.ROOT) }
@@ -160,20 +107,40 @@ class CineActivity : AppCompatActivity() {
         binding.emptyView.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
     }
 
-    private fun showCategoryChooser() {
-        val names = categories.map { it.name }
-        if (names.isEmpty()) return
-        val current = AppPrefs.getCineCategories(this) ?: chosenCategories().map { it.name }.toSet()
-        val checked = BooleanArray(names.size) { names[it] in current }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.cine_categories_title)
-            .setMultiChoiceItems(names.toTypedArray(), checked) { _, which, isChecked -> checked[which] = isChecked }
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                AppPrefs.setCineCategories(this, names.filterIndexed { i, _ -> checked[i] }.toSet())
-                reload()
+    private fun setupCategorySpinner() {
+        val names = ArrayList<String>()
+        names.add(getString(R.string.cine_all_categories))
+        categories.forEach { names.add("${it.name} (${it.streams.size})") }
+        val textColor = ContextCompat.getColor(this, R.color.on_background)
+        val adapter = object : android.widget.ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, names) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = super.getView(position, convertView, parent) as TextView
+                v.setTextColor(textColor)
+                return v
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = super.getDropDownView(position, convertView, parent) as TextView
+                v.setTextColor(textColor)
+                v.setPadding(32, 28, 32, 28)
+                return v
+            }
+        }
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.cineCategorySpinner.adapter = adapter
+        binding.cineCategorySpinner.setPopupBackgroundDrawable(
+            android.graphics.drawable.ColorDrawable(ContextCompat.getColor(this, R.color.surface_dark))
+        )
+        binding.cineCategorySpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (position != selectedCategory) {
+                    selectedCategory = position
+                    reload()
+                }
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
     }
 
     private fun showDetails(stream: Stream) {

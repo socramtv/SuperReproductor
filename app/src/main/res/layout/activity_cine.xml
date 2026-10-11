@@ -35,13 +35,15 @@
             android:textColor="@color/on_background"
             android:textColorHint="@color/on_surface_muted" />
 
-        <Button
-            android:id="@+id/cineCategoriesButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="@string/cine_categories_button" />
     </LinearLayout>
+
+    <Spinner
+        android:id="@+id/cineCategorySpinner"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginHorizontal="8dp"
+        android:background="@drawable/bg_cine_card"
+        android:paddingHorizontal="8dp" />
 
     <FrameLayout
         android:layout_width="match_parent"
