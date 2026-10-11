@@ -340,4 +340,5 @@
     <string name="cine_trailer">▶ Ver tráiler</string>
     <string name="cine_trailer_error">No se pudo abrir el tráiler</string>
     <string name="cine_all_categories">Todas las categorías</string>
+    <string name="cine_load_error">No se pudo cargar la lista de Cine.</string>
 </resources>

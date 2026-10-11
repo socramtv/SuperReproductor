@@ -1240,7 +1240,7 @@ Código: `widget/HomeWidgetProvider.kt`, `HomeWidgetService.kt`, `WidgetClickAct
 
 ## Cine (carátulas y sinopsis)
 
-Menú ⋮ → **"🎬 Cine…"**: parrilla de carátulas de las películas de tus listas, con buscador. Al tocar una sale su ficha (carátula
+Botón **"Cine 🍿"** de la pantalla principal (abre directamente la parrilla, sin tocar la lista que estés viendo): parrilla de carátulas de las películas de tus listas, con buscador. Al tocar una sale su ficha (carátula
 grande, año, género y sinopsis) con **▶ Ver** y favorito. Las categorías de cine se detectan por el nombre (película, cine, movie, film,
 vod, estreno) y se eligen a mano con el botón **Categorías**. Carátula y sinopsis salen de la búsqueda de películas de iTunes (en
 español de España) y, si no aparece, de TVMaze (series); sin clave de API. Si no se encuentra nada se usa el logo de la propia lista.

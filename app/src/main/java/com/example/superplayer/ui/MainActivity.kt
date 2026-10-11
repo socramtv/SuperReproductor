@@ -34,6 +34,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var favoritesStore: FavoritesStore
     private lateinit var categoryAdapter: CategoryAdapter
     private lateinit var streamAdapter: StreamAdapter
+    private val CINE_SLOT = 3
+
     private var playlist: PlaylistData = PlaylistData(emptyList())
     /** La lista tal cual se cargó; [playlist] es esta misma con los canales ocultos/renombrados aplicados (ver ChannelOverrides). */
     private var rawPlaylist: PlaylistData = PlaylistData(emptyList())
@@ -207,6 +209,8 @@ class MainActivity : AppCompatActivity() {
                 val savedUrl = AppPrefs.getListUrl(this, slot)
                 if (savedUrl.isNullOrBlank()) {
                     promptForListUrl(slot, label)
+                } else if (slot == CINE_SLOT) {
+                    openCineFromSlot(slot, savedUrl)
                 } else {
                     loadFromRemoteUrl(slot, savedUrl, preferCache = true)
                 }
@@ -224,6 +228,40 @@ class MainActivity : AppCompatActivity() {
         binding.loadFileButton.setOnClickListener {
             openDocumentLauncher.launch(arrayOf("*/*"))
         }
+    }
+
+    /** El botón "Cine 🍿" abre directamente la pantalla de carátulas con las categorías de su lista (sin cambiar la lista que se esté viendo). */
+    private fun openCineFromSlot(slot: Int, url: String) {
+        if (PlaylistCache.lastSavedAt(this, slot) == null) {
+            Toast.makeText(this, R.string.loading_list, Toast.LENGTH_SHORT).show()
+        }
+        Thread {
+            var data: PlaylistData? = null
+            val cachedRaw = PlaylistCache.load(this, slot)
+            if (cachedRaw != null) {
+                data = try { PlaylistRepository.parse(cachedRaw) } catch (e: Exception) { null }
+            }
+            if (data == null) {
+                data = try {
+                    val raw = PlaylistRepository.downloadRaw(url)
+                    val parsed = PlaylistRepository.parse(raw)
+                    PlaylistCache.save(this, slot, raw)
+                    parsed
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            val result = data
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (isFinishing || isDestroyed) return@post
+                if (result == null) {
+                    Toast.makeText(this, R.string.cine_load_error, Toast.LENGTH_LONG).show()
+                } else {
+                    CineActivity.categories = ChannelOverrides.apply(this, result).categories
+                    startActivity(Intent(this, CineActivity::class.java))
+                }
+            }
+        }.start()
     }
 
     private fun promptForListUrl(slot: Int, label: String) {
@@ -920,11 +958,6 @@ class MainActivity : AppCompatActivity() {
             }
             R.id.action_remote_settings -> {
                 showRemoteControlDialog(this)
-                true
-            }
-            R.id.action_cine -> {
-                CineActivity.categories = playlist.categories
-                startActivity(Intent(this, CineActivity::class.java))
                 true
             }
             R.id.action_profiles -> {

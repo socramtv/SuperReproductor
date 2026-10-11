@@ -58,10 +58,6 @@
         app:showAsAction="never" />
 
     <!-- Cine: carátulas y sinopsis de las películas (ver ui/CineActivity) -->
-    <item
-        android:id="@+id/action_cine"
-        android:title="@string/action_cine"
-        app:showAsAction="never" />
 
     <!-- Perfiles (ver data/Profiles); el título lleva el perfil activo (lo pone MainActivity) -->
     <item
