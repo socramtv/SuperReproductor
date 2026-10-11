@@ -10,9 +10,13 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.widget.SearchView
+import coil.load
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -50,6 +54,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val subtitle: String,
         val star: Boolean? = null,
         val onStar: (() -> Unit)? = null,
+        val onLong: (() -> Unit)? = null,
         val onClick: () -> Unit
     )
 
@@ -64,16 +69,29 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var lastBatchFull = false
     private var downloadDialog: AlertDialog? = null
     private var searchResults: List<TgMessage>? = null
-    private var searchChatMatches: List<TgChat> = emptyList()
     private var searchQuery = ""
-    private var searchAllChats = true
+    private var searching = false
+    /** Búsqueda global: 0 = por nombre (chats, canales, bots), 1 = en mensajes. */
+    private var searchMode = 0
+    private var searchChatResults: List<TgChat> = emptyList()
+    private var replyTo: TgMessage? = null
+    private var scrollToEnd = true
+    private var searchItem: MenuItem? = null
+    private var suppressExit = false
+    private var pendingScroll = -1
+    private var searchView: SearchView? = null
+    private val searchDebounce = Runnable { runSearchNow() }
+    private val attachLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) sendAttachment(uri)
+    }
     /** Pestaña de la lista de chats: 0 favoritos, 1 todos, 2 canales, 3 grupos, 4 bots, 5 personas. */
     private var chatFilter = 1
     private val reloadRunnable = Runnable {
         val c = currentChat
-        if (c != null && searchResults == null && !isFinishing && !isDestroyed) {
+        if (c != null && !searching && !isFinishing && !isDestroyed) {
             messages.clear()
             lastBatchFull = false
+            scrollToEnd = true
             loadMore()
         }
     }
@@ -106,6 +124,9 @@ class TelegramAccountActivity : AppCompatActivity() {
             insets
         }
         binding.tgSend.setOnClickListener { sendTyped() }
+        binding.tgAttach.setOnClickListener { attachLauncher.launch("*/*") }
+        binding.tgReplyLabel.setOnClickListener { setReply(null) }
+        setupSearchTabs()
 
         val b = TelegramAccountFactory.create(this)
         backend = b
@@ -139,7 +160,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
             override fun onNewMessage(chatId: Long) {
                 runOnUiThread {
-                    if (!isFinishing && !isDestroyed && currentChat?.id == chatId && searchResults == null) scheduleReload(600)
+                    if (!isFinishing && !isDestroyed && currentChat?.id == chatId && !searching) scheduleReload(600)
                 }
             }
 
@@ -242,15 +263,54 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_telegram_account, menu)
+        val item = menu.findItem(R.id.action_tgacc_search)
+        searchItem = item
+        val sv = item?.actionView as? SearchView
+        searchView = sv
+        sv?.maxWidth = Int.MAX_VALUE
+        sv?.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                searchQuery = query.orEmpty().trim()
+                binding.root.removeCallbacks(searchDebounce)
+                runSearchNow()
+                sv.clearFocus()
+                return true
+            }
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                searchQuery = newText.orEmpty().trim()
+                if (searchMode == 0 && currentChat == null) {
+                    binding.root.removeCallbacks(searchDebounce)
+                    binding.root.postDelayed(searchDebounce, 400)
+                }
+                return true
+            }
+        })
+        item?.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
+            override fun onMenuItemActionExpand(item: MenuItem): Boolean {
+                if (state != TgAuthState.READY) return false
+                searching = true
+                enterSearchUi()
+                return true
+            }
+
+            override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
+                if (suppressExit) return true
+                searching = false
+                exitSearchUi()
+                return true
+            }
+        })
         return true
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val chat = currentChat
-        val inChat = chat != null && searchResults == null
+        val inChat = chat != null && !searching
         menu.findItem(R.id.action_tgacc_fav)?.isVisible = inChat
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_kbd)?.isVisible = inChat && chat?.kind == "bot"
+        menu.findItem(R.id.action_tgacc_join)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group")
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -275,8 +335,13 @@ class TelegramAccountActivity : AppCompatActivity() {
                 showBotKeyboard()
                 return true
             }
-            R.id.action_tgacc_search -> {
-                showSearchDialog()
+            R.id.action_tgacc_join -> {
+                val chat = currentChat ?: return true
+                backend?.joinChat(chat.id) { ok ->
+                    runOnUiThread {
+                        Toast.makeText(this, if (ok) R.string.tgacc_joined else R.string.tgacc_join_error, Toast.LENGTH_SHORT).show()
+                    }
+                }
                 return true
             }
             R.id.action_tgacc_api -> {
@@ -318,18 +383,12 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun updateBack() {
-        backCallback.isEnabled = searchResults != null || currentChat != null
+        backCallback.isEnabled = searching || currentChat != null
     }
 
     private fun goBack() {
-        if (searchResults != null) {
-            searchResults = null
-            if (currentChat != null) {
-                title = currentChat?.title
-                renderMessages()
-            } else {
-                renderChats()
-            }
+        if (searching) {
+            searchItem?.collapseActionView()
         } else if (currentChat != null) {
             closeChat()
         } else {
@@ -350,7 +409,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
                 if (chatFilter != tab.position) {
                     chatFilter = tab.position
-                    if (currentChat == null && searchResults == null) renderChats()
+                    if (currentChat == null && !searching) renderChats()
                 }
             }
 
@@ -369,6 +428,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         searchResults = null
         binding.inputBar.visibility = View.GONE
         binding.tgTabs.visibility = View.VISIBLE
+        binding.tgSearchTabs.visibility = View.GONE
         updateBack()
         invalidateOptionsMenu()
         val favs = TelegramAccountPrefs.favoriteChats(this)
@@ -384,7 +444,9 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
         }
         val rows = shown.map { chat ->
-            val sub = kindLabel(chat.kind) + (if (chat.lastDate > 0) " · " + df.format(Date(chat.lastDate * 1000L)) else "")
+            val sub = kindLabel(chat.kind) +
+                (if (chat.unread > 0) " · " + getString(R.string.tgacc_unread, chat.unread) else "") +
+                (if (chat.lastDate > 0) " · " + df.format(Date(chat.lastDate * 1000L)) else "")
             Row(chat.title, sub, chat.id in favs, {
                 val nowFav = TelegramAccountPrefs.toggleFavorite(this, chat.id)
                 Toast.makeText(this, if (nowFav) R.string.tgacc_fav_added else R.string.tgacc_fav_removed, Toast.LENGTH_SHORT).show()
@@ -397,9 +459,18 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun openChat(chat: TgChat) {
+        if (searching) {
+            suppressExit = true
+            searchItem?.collapseActionView()
+            suppressExit = false
+            searching = false
+        }
+        binding.tgSearchTabs.visibility = View.GONE
         currentChat = chat
         messages.clear()
         lastBatchFull = false
+        scrollToEnd = true
+        setReply(null)
         title = chat.title
         searchResults = null
         binding.inputBar.visibility = View.VISIBLE
@@ -425,43 +496,60 @@ class TelegramAccountActivity : AppCompatActivity() {
         backend?.loadHistory(chat.id, chat.title, from) { batch ->
             runOnUiThread {
                 if (isFinishing || isDestroyed || currentChat?.id != chat.id) return@runOnUiThread
+                if (from != 0L) pendingScroll = batch.size
                 messages.addAll(batch)
                 lastBatchFull = batch.size >= 5
-                renderMessages()
+                if (!searching) renderMessages()
             }
         }
     }
 
     private fun renderMessages() {
         binding.inputBar.visibility = View.VISIBLE
+        binding.tgSearchTabs.visibility = View.GONE
         updateBack()
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val rows = ArrayList<Row>()
-        messages.forEach { m ->
-            rows.add(Row(messageTitle(m), messageSubtitle(m, df)) { onMessageClick(m) })
-        }
         if (lastBatchFull) {
             rows.add(Row(getString(R.string.tgacc_load_more), "") { loadMore() })
+        }
+        // Como en Telegram: lo más antiguo arriba y lo más nuevo abajo.
+        messages.reversed().forEach { m ->
+            rows.add(Row(messageTitle(m), messageSubtitle(m, df), null, null, { onMessageLong(m) }) { onMessageClick(m) })
         }
         adapter.submit(rows)
         binding.emptyView.text = getString(R.string.tg_empty_chat)
         binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+        val last = rows.size - 1
+        if (scrollToEnd && last >= 0) {
+            binding.recyclerView.post { binding.recyclerView.scrollToPosition(last) }
+        } else if (pendingScroll > 0 && last >= 0) {
+            val target = pendingScroll.coerceAtMost(last)
+            binding.recyclerView.post { binding.recyclerView.scrollToPosition(target) }
+        }
+        scrollToEnd = false
+        pendingScroll = -1
     }
 
     private fun kindIcon(m: TgMessage) = when (m.kind) {
         "video", "animation" -> "🎬"
         "audio", "voice" -> "🎵"
         "document" -> "📄"
+        "photo" -> "🖼"
+        "other" -> ""
         else -> "💬"
     }
 
     private fun messageTitle(m: TgMessage): String {
         val base = m.fileName ?: m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: m.links.firstOrNull() ?: "(sin texto)"
-        return kindIcon(m) + " " + base
+        val icon = kindIcon(m)
+        return if (icon.isEmpty()) base else "$icon $base"
     }
 
     private fun messageSubtitle(m: TgMessage, df: DateFormat): String {
         val parts = ArrayList<String>()
+        val who = if (m.outgoing) getString(R.string.tgacc_me) else m.sender
+        if (who.isNotEmpty()) parts.add(who)
         parts.add(df.format(Date(m.date * 1000L)))
         if (m.size > 0) parts.add(String.format(java.util.Locale.US, "%.1f MB", m.size / 1048576.0))
         if (m.links.isNotEmpty()) parts.add(getString(R.string.tg_links_count, m.links.size))
@@ -475,48 +563,106 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun normalize(text: String): String =
         java.text.Normalizer.normalize(text.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
 
-    private fun showSearchDialog() {
-        if (state != TgAuthState.READY) return
-        val inChat = currentChat != null && searchResults == null
-        askText(
-            if (inChat) R.string.tgacc_search_title_chat else R.string.tgacc_search_title_all,
-            R.string.tgacc_search_hint, InputType.TYPE_CLASS_TEXT
-        ) { q -> runSearch(q.trim(), if (inChat) currentChat else null) }
+    private fun setupSearchTabs() {
+        binding.tgSearchTabs.addTab(binding.tgSearchTabs.newTab().setText(R.string.tgacc_search_tab_names), true)
+        binding.tgSearchTabs.addTab(binding.tgSearchTabs.newTab().setText(R.string.tgacc_search_tab_messages), false)
+        binding.tgSearchTabs.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
+                if (searchMode != tab.position) {
+                    searchMode = tab.position
+                    if (searching) {
+                        updateSearchHint()
+                        runSearchNow()
+                    }
+                }
+            }
+
+            override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab) {}
+            override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab) {}
+        })
     }
 
-    private fun runSearch(query: String, chat: TgChat?) {
+    private fun updateSearchHint() {
+        val inChat = currentChat != null
+        searchView?.queryHint = getString(
+            if (inChat || searchMode == 1) R.string.tgacc_search_hint_messages else R.string.tgacc_search_hint_names
+        )
+    }
+
+    private fun enterSearchUi() {
+        searchResults = null
+        searchChatResults = emptyList()
+        searchQuery = ""
+        binding.inputBar.visibility = View.GONE
+        binding.tgTabs.visibility = View.GONE
+        binding.tgSearchTabs.visibility = if (currentChat == null) View.VISIBLE else View.GONE
+        updateSearchHint()
+        showMessage(getString(if (currentChat != null || searchMode == 1) R.string.tgacc_search_prompt_messages else R.string.tgacc_search_prompt_names))
+        updateBack()
+        invalidateOptionsMenu()
+    }
+
+    private fun exitSearchUi() {
+        binding.root.removeCallbacks(searchDebounce)
+        binding.tgSearchTabs.visibility = View.GONE
+        searchResults = null
+        searchChatResults = emptyList()
+        if (currentChat != null) {
+            title = currentChat?.title
+            renderMessages()
+        } else {
+            renderChats()
+        }
+        updateBack()
+        invalidateOptionsMenu()
+    }
+
+    private fun runSearchNow() {
         val b = backend ?: return
-        if (query.isEmpty()) return
-        Toast.makeText(this, R.string.tgacc_searching, Toast.LENGTH_SHORT).show()
-        b.searchMessages(query, chat?.id ?: 0L) { list ->
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                searchQuery = query
-                searchAllChats = chat == null
-                searchChatMatches = if (chat == null) {
-                    val n = normalize(query)
-                    chats.filter { normalize(it.title).contains(n) }
-                } else emptyList()
-                searchResults = list
-                renderSearch()
+        if (!searching) return
+        val q = searchQuery.trim()
+        if (q.isEmpty()) {
+            showMessage(getString(if (currentChat != null || searchMode == 1) R.string.tgacc_search_prompt_messages else R.string.tgacc_search_prompt_names))
+            return
+        }
+        val chat = currentChat
+        if (chat == null && searchMode == 0) {
+            b.searchChats(q) { list ->
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || !searching || searchQuery.trim() != q || searchMode != 0 || currentChat != null) return@runOnUiThread
+                    searchChatResults = list
+                    searchResults = null
+                    renderSearch()
+                }
+            }
+        } else {
+            b.searchMessages(q, chat?.id ?: 0L) { list ->
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || !searching || searchQuery.trim() != q) return@runOnUiThread
+                    searchChatResults = emptyList()
+                    searchResults = list
+                    renderSearch()
+                }
             }
         }
     }
 
     private fun renderSearch() {
-        val results = searchResults ?: return
         title = getString(R.string.tgacc_search_results, searchQuery)
-        binding.inputBar.visibility = View.GONE
-        binding.tgTabs.visibility = View.GONE
-        updateBack()
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+        val favs = TelegramAccountPrefs.favoriteChats(this)
         val rows = ArrayList<Row>()
-        searchChatMatches.forEach { chat ->
-            rows.add(Row("📂 " + chat.title, kindLabel(chat.kind)) { openChat(chat) })
+        searchChatResults.forEach { chat ->
+            val sub = kindLabel(chat.kind) + (if (chat.unread > 0) " · " + getString(R.string.tgacc_unread, chat.unread) else "")
+            rows.add(Row(chat.title, sub, chat.id in favs, {
+                TelegramAccountPrefs.toggleFavorite(this, chat.id)
+                renderSearch()
+            }) { openChat(chat) })
         }
-        results.forEach { m ->
-            val prefix = if (searchAllChats && m.chatTitle.isNotEmpty()) m.chatTitle + " · " else ""
-            rows.add(Row(messageTitle(m), prefix + messageSubtitle(m, df)) { onMessageClick(m) })
+        val global = currentChat == null
+        searchResults?.forEach { m ->
+            val prefix = if (global && m.chatTitle.isNotEmpty()) m.chatTitle + " · " else ""
+            rows.add(Row(messageTitle(m), prefix + messageSubtitle(m, df), null, null, { onMessageLong(m) }) { onMessageClick(m) })
         }
         adapter.submit(rows)
         binding.emptyView.text = getString(R.string.tgacc_search_none)
@@ -528,17 +674,123 @@ class TelegramAccountActivity : AppCompatActivity() {
         val text = binding.tgInput.text.toString().trim()
         if (text.isEmpty()) return
         binding.tgSend.isEnabled = false
-        backend?.sendText(chat.id, text) { ok ->
+        val reply = replyTo?.messageId ?: 0L
+        backend?.sendText(chat.id, text, reply) { ok ->
             runOnUiThread {
                 binding.tgSend.isEnabled = true
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (ok) {
                     binding.tgInput.setText("")
-                    if (currentChat?.id == chat.id && searchResults == null) openChat(chat)
+                    setReply(null)
+                    scrollToEnd = true
+                    if (currentChat?.id == chat.id && !searching) scheduleReload(300)
                 } else {
                     Toast.makeText(this, R.string.tgacc_send_error, Toast.LENGTH_LONG).show()
                 }
             }
+        }
+    }
+
+    private fun setReply(m: TgMessage?) {
+        replyTo = m
+        if (m == null) {
+            binding.tgReplyLabel.visibility = View.GONE
+        } else {
+            val who = if (m.outgoing) getString(R.string.tgacc_me) else m.sender.ifEmpty { m.chatTitle }
+            binding.tgReplyLabel.text = getString(R.string.tgacc_reply_to, who)
+            binding.tgReplyLabel.visibility = View.VISIBLE
+        }
+    }
+
+    private fun onMessageLong(m: TgMessage) {
+        val labels = ArrayList<String>()
+        val actions = ArrayList<() -> Unit>()
+        if (currentChat != null && !searching) {
+            labels.add(getString(R.string.tgacc_act_reply))
+            actions.add { setReply(m) }
+        }
+        if (m.text.isNotBlank()) {
+            labels.add(getString(R.string.tgacc_act_copy))
+            actions.add {
+                val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("telegram", m.text))
+                Toast.makeText(this, R.string.tgacc_copied, Toast.LENGTH_SHORT).show()
+            }
+        }
+        if (m.outgoing) {
+            labels.add(getString(R.string.tgacc_act_delete))
+            actions.add {
+                backend?.deleteMessage(m.chatId, m.messageId) { ok ->
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        Toast.makeText(this, if (ok) R.string.tgacc_deleted else R.string.tgacc_delete_error, Toast.LENGTH_SHORT).show()
+                        if (ok && !searching) scheduleReload(300)
+                    }
+                }
+            }
+        }
+        if (actions.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
+            .show()
+    }
+
+    private fun sendAttachment(uri: Uri) {
+        val chat = currentChat ?: return
+        val caption = binding.tgInput.text.toString().trim()
+        val reply = replyTo
+        Thread {
+            var path: String? = null
+            var isImage = false
+            try {
+                var name = "archivo"
+                contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (i >= 0 && c.moveToFirst()) name = c.getString(i) ?: name
+                }
+                isImage = (contentResolver.getType(uri) ?: "").startsWith("image/")
+                val dir = File(cacheDir, "tg_upload").apply { mkdirs() }
+                val out = File(dir, System.currentTimeMillis().toString() + "_" + name.replace('/', '_'))
+                contentResolver.openInputStream(uri)?.use { input -> out.outputStream().use { input.copyTo(it) } }
+                path = out.absolutePath
+            } catch (e: Exception) {
+                path = null
+            }
+            val file = path
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (file == null) {
+                    Toast.makeText(this, R.string.tgacc_attach_error, Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                backend?.sendFile(chat.id, file, isImage, caption) { ok ->
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        if (ok) {
+                            binding.tgInput.setText("")
+                            if (reply != null) setReply(null)
+                            scrollToEnd = true
+                            if (currentChat?.id == chat.id && !searching) scheduleReload(600)
+                        } else {
+                            Toast.makeText(this, R.string.tgacc_attach_error, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun viewPhoto(m: TgMessage) {
+        download(m) { path ->
+            val img = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                adjustViewBounds = true
+            }
+            img.load(File(path))
+            AlertDialog.Builder(this)
+                .setView(img)
+                .setPositiveButton(R.string.channel_check_close, null)
+                .show()
         }
     }
 
@@ -638,7 +890,10 @@ class TelegramAccountActivity : AppCompatActivity() {
             actions.add { showButtons(m) }
         }
         if (m.fileId != null) {
-            if (looksLikePlaylist(m)) {
+            if (m.kind == "photo") {
+                labels.add(getString(R.string.tgacc_view_photo))
+                actions.add { viewPhoto(m) }
+            } else if (looksLikePlaylist(m)) {
                 labels.add(getString(R.string.tg_open_playlist))
                 actions.add { openPlaylist(m) }
             } else if (m.kind != "document" || looksLikeMedia(m)) {
@@ -655,7 +910,14 @@ class TelegramAccountActivity : AppCompatActivity() {
             actions.add { playUrl(link, m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: link) }
         }
         when {
-            actions.isEmpty() -> Toast.makeText(this, R.string.tg_nothing_to_play, Toast.LENGTH_SHORT).show()
+            actions.isEmpty() -> if (m.text.isNotBlank()) {
+                AlertDialog.Builder(this)
+                    .setMessage(m.text)
+                    .setPositiveButton(R.string.channel_check_close, null)
+                    .show()
+            } else {
+                Toast.makeText(this, R.string.tg_nothing_to_play, Toast.LENGTH_SHORT).show()
+            }
             actions.size == 1 -> actions[0]()
             else -> AlertDialog.Builder(this)
                 .setTitle(messageTitle(m))
@@ -795,6 +1057,13 @@ class TelegramAccountActivity : AppCompatActivity() {
             holder.b.tgSubtitle.text = row.subtitle
             holder.b.tgSubtitle.visibility = if (row.subtitle.isEmpty()) View.GONE else View.VISIBLE
             holder.b.root.setOnClickListener { row.onClick() }
+            val long = row.onLong
+            if (long != null) {
+                holder.b.root.setOnLongClickListener { long(); true }
+            } else {
+                holder.b.root.setOnLongClickListener(null)
+                holder.b.root.isLongClickable = false
+            }
             val star = row.star
             if (star == null) {
                 holder.b.tgStar.visibility = View.GONE

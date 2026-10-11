@@ -19,6 +19,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     private var state = TgAuthState.STARTING
     private val chats = ConcurrentHashMap<Long, TdApi.Chat>()
     private val botIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    private val userNames = ConcurrentHashMap<Long, String>()
 
     private class Download(val onProgress: (Long, Long) -> Unit, val onDone: (String?) -> Unit)
     private val downloads = ConcurrentHashMap<Int, Download>()
@@ -57,7 +58,10 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         when (obj) {
             is TdApi.UpdateAuthorizationState -> handleAuth(obj.authorizationState)
             is TdApi.UpdateNewChat -> chats[obj.chat.id] = obj.chat
-            is TdApi.UpdateUser -> if (obj.user.type is TdApi.UserTypeBot) botIds.add(obj.user.id)
+            is TdApi.UpdateUser -> {
+                if (obj.user.type is TdApi.UserTypeBot) botIds.add(obj.user.id)
+                userNames[obj.user.id] = (obj.user.firstName + " " + obj.user.lastName).trim()
+            }
             is TdApi.UpdateNewMessage -> listener?.onNewMessage(obj.message.chatId)
             is TdApi.UpdateFile -> {
                 val file = obj.file
@@ -141,7 +145,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             if (result is TdApi.Chats) {
                 val list = result.chatIds.toList().mapNotNull { id ->
                     val chat = chats[id] ?: return@mapNotNull null
-                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L, (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L)
+                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L, (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount)
                 }
                 onDone(list)
             } else {
@@ -185,10 +189,22 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             is TdApi.MessageDocument -> {
                 kind = "document"; file = c.document.document; name = c.document.fileName; mime = c.document.mimeType; text = c.caption.text
             }
-            else -> return null
+            is TdApi.MessagePhoto -> {
+                kind = "photo"; file = c.photo.sizes.lastOrNull()?.photo; name = null; mime = "image/jpeg"; text = c.caption.text
+            }
+            is TdApi.MessageSticker -> { kind = "other"; text = "🏷 Sticker " + c.sticker.emoji }
+            is TdApi.MessagePoll -> { kind = "other"; text = "📊 Encuesta" }
+            is TdApi.MessageLocation -> { kind = "other"; text = "📍 Ubicación" }
+            is TdApi.MessageContact -> { kind = "other"; text = "👤 Contacto" }
+            else -> { kind = "other"; text = "(mensaje no compatible con esta app)" }
         }
         val links = linkRegex.findAll(text).map { it.value.trimEnd('.', ',', ')', ']', ';', '!') }.distinct().toList()
         if (kind == "none" && text.isEmpty()) return null
+        val senderName = when (val sid = m.senderId) {
+            is TdApi.MessageSenderUser -> userNames[sid.userId] ?: ""
+            is TdApi.MessageSenderChat -> chats[sid.chatId]?.title ?: ""
+            else -> ""
+        }
         val buttons = ArrayList<TgButton>()
         when (val rm = m.replyMarkup) {
             is TdApi.ReplyMarkupInlineKeyboard -> for (row in rm.rows) for (b in row) {
@@ -206,7 +222,8 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         return TgMessage(
             m.chatId, chatTitle, chatKind, m.id, m.date.toLong(), text, kind,
             file?.id?.toString(), name?.ifEmpty { null }, mime?.ifEmpty { null },
-            file?.let { if (it.size > 0) it.size else it.expectedSize } ?: 0L, links, buttons
+            file?.let { if (it.size > 0) it.size else it.expectedSize } ?: 0L, links, buttons,
+            m.isOutgoing, senderName
         )
     }
 
@@ -256,13 +273,82 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         }
     }
 
-    override fun sendText(chatId: Long, text: String, onDone: (Boolean) -> Unit) {
+    override fun sendText(chatId: Long, text: String, replyTo: Long, onDone: (Boolean) -> Unit) {
         val content = TdApi.InputMessageText()
         content.text = TdApi.FormattedText(text, arrayOf<TdApi.TextEntity>())
         val request = TdApi.SendMessage()
         request.chatId = chatId
         request.inputMessageContent = content
+        if (replyTo != 0L) {
+            val r = TdApi.InputMessageReplyToMessage()
+            r.messageId = replyTo
+            request.replyTo = r
+        }
         send(request) { result -> onDone(result is TdApi.Message) }
+    }
+
+    override fun sendFile(chatId: Long, path: String, asPhoto: Boolean, caption: String, onDone: (Boolean) -> Unit) {
+        val file = TdApi.InputFileLocal(path)
+        val cap = TdApi.FormattedText(caption, arrayOf<TdApi.TextEntity>())
+        val content: TdApi.InputMessageContent
+        if (asPhoto) {
+            val c = TdApi.InputMessagePhoto()
+            c.photo = file
+            c.caption = cap
+            content = c
+        } else {
+            val c = TdApi.InputMessageDocument()
+            c.document = file
+            c.caption = cap
+            content = c
+        }
+        val request = TdApi.SendMessage()
+        request.chatId = chatId
+        request.inputMessageContent = content
+        send(request) { result -> onDone(result is TdApi.Message) }
+    }
+
+    override fun deleteMessage(chatId: Long, messageId: Long, onDone: (Boolean) -> Unit) {
+        send(TdApi.DeleteMessages(chatId, longArrayOf(messageId), true)) { result -> onDone(result is TdApi.Ok) }
+    }
+
+    override fun joinChat(chatId: Long, onDone: (Boolean) -> Unit) {
+        send(TdApi.JoinChat(chatId)) { result -> onDone(result is TdApi.Ok) }
+    }
+
+    override fun searchChats(query: String, onDone: (List<TgChat>) -> Unit) {
+        val ids = java.util.LinkedHashSet<Long>()
+        val remaining = java.util.concurrent.atomic.AtomicInteger(2)
+        fun finish() {
+            if (remaining.decrementAndGet() != 0) return
+            val missing = ids.filter { chats[it] == null }
+            val finalize = {
+                onDone(ids.mapNotNull { id ->
+                    val chat = chats[id] ?: return@mapNotNull null
+                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L,
+                        (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount)
+                })
+            }
+            if (missing.isEmpty()) {
+                finalize()
+            } else {
+                val pending = java.util.concurrent.atomic.AtomicInteger(missing.size)
+                for (id in missing) {
+                    send(TdApi.GetChat(id)) { r ->
+                        if (r is TdApi.Chat) chats[id] = r
+                        if (pending.decrementAndGet() == 0) finalize()
+                    }
+                }
+            }
+        }
+        send(TdApi.SearchChats(query, 30)) { r ->
+            if (r is TdApi.Chats) synchronized(ids) { r.chatIds.forEach { ids.add(it) } }
+            finish()
+        }
+        send(TdApi.SearchPublicChats(query)) { r ->
+            if (r is TdApi.Chats) synchronized(ids) { r.chatIds.forEach { ids.add(it) } }
+            finish()
+        }
     }
 
     override fun loadBotCommands(userId: Long, onDone: (List<Pair<String, String>>) -> Unit) {

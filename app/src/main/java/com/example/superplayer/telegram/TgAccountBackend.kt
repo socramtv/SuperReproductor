@@ -5,7 +5,7 @@ import android.content.Context
 enum class TgAuthState { STARTING, WAIT_PHONE, WAIT_CODE, WAIT_PASSWORD, READY, CLOSED }
 
 /** [kind]: channel, group, bot o private. [userId]: el del otro usuario en chats privados y bots (0 si no aplica). */
-data class TgChat(val id: Long, val title: String, val kind: String, val lastDate: Long, val userId: Long = 0L)
+data class TgChat(val id: Long, val title: String, val kind: String, val lastDate: Long, val userId: Long = 0L, val unread: Int = 0)
 
 /**
  * Telegram con la cuenta del usuario (TDLib). Esta interfaz no depende de
@@ -35,7 +35,13 @@ interface TgAccountBackend {
     /** Busca mensajes: en un chat ([chatId] != 0) o en todos los chats (0). */
     fun searchMessages(query: String, chatId: Long, onDone: (List<TgMessage>) -> Unit)
     /** Envía un mensaje de texto al chat; [onDone] con true si salió bien. */
-    fun sendText(chatId: Long, text: String, onDone: (Boolean) -> Unit)
+    fun sendText(chatId: Long, text: String, replyTo: Long = 0L, onDone: (Boolean) -> Unit)
+    /** Envía un archivo local como foto o documento, con texto opcional. */
+    fun sendFile(chatId: Long, path: String, asPhoto: Boolean, caption: String, onDone: (Boolean) -> Unit)
+    fun deleteMessage(chatId: Long, messageId: Long, onDone: (Boolean) -> Unit)
+    fun joinChat(chatId: Long, onDone: (Boolean) -> Unit)
+    /** Busca chats, canales, grupos y bots por nombre: los tuyos y los públicos. */
+    fun searchChats(query: String, onDone: (List<TgChat>) -> Unit)
     /**
      * Lee bytes de un archivo sin descargarlo entero (reproducción directa): espera, hasta unos
      * segundos, a que TDLib tenga el trozo que empieza en [pos]. Devuelve null si no llega.
@@ -52,8 +58,17 @@ object TelegramAccountPrefs {
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences("telegram_account", Context.MODE_PRIVATE)
 
-    fun apiId(context: Context): Int = prefs(context).getInt("api_id", 0)
-    fun apiHash(context: Context): String = prefs(context).getString("api_hash", "").orEmpty()
+    /**
+     * Si rellenas estas dos constantes con TUS credenciales de my.telegram.org, la app no las
+     * pedirá nunca (ojo: si el repositorio es público, quedarían visibles). Vacías = se piden en
+     * la app una vez y se guardan en el móvil (se conservan al actualizar la app).
+     */
+    private const val DEFAULT_API_ID = 0
+    private const val DEFAULT_API_HASH = ""
+
+    fun apiId(context: Context): Int = prefs(context).getInt("api_id", 0).takeIf { it != 0 } ?: DEFAULT_API_ID
+    fun apiHash(context: Context): String =
+        prefs(context).getString("api_hash", "").orEmpty().ifBlank { DEFAULT_API_HASH }
 
     fun setApi(context: Context, id: Int, hash: String) {
         prefs(context).edit().putInt("api_id", id).putString("api_hash", hash.trim()).apply()

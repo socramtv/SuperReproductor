@@ -25,7 +25,9 @@ data class TgMessage(
     val mime: String?,
     val size: Long,
     val links: List<String>,
-    val buttons: List<TgButton> = emptyList()
+    val buttons: List<TgButton> = emptyList(),
+    val outgoing: Boolean = false,
+    val sender: String = ""
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("c", chatId).put("ct", chatTitle).put("cy", chatType)

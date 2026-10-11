@@ -422,4 +422,24 @@
     <string name="tgacc_buttons_title">Botones</string>
     <string name="tgacc_bot_answer">Respuesta del bot</string>
     <string name="tgacc_no_favs">Aún no tienes favoritos. Toca la ☆ de un chat para añadirlo.</string>
+    <string name="tgacc_menu_join">➕ Unirme a este canal/grupo</string>
+    <string name="tgacc_joined">Te has unido</string>
+    <string name="tgacc_join_error">No se pudo unir</string>
+    <string name="tgacc_search_tab_names">Chats, canales y bots</string>
+    <string name="tgacc_search_tab_messages">Mensajes</string>
+    <string name="tgacc_search_prompt_names">Escribe el nombre de un canal, grupo, bot o persona</string>
+    <string name="tgacc_search_prompt_messages">Escribe el texto a buscar en tus mensajes</string>
+    <string name="tgacc_search_hint_names">Nombre del canal, grupo o bot</string>
+    <string name="tgacc_search_hint_messages">Texto en mensajes</string>
+    <string name="tgacc_reply_to">↩ Respondiendo a %1$s (toca para cancelar)</string>
+    <string name="tgacc_act_reply">↩ Responder</string>
+    <string name="tgacc_act_copy">📋 Copiar texto</string>
+    <string name="tgacc_act_delete">🗑 Eliminar</string>
+    <string name="tgacc_copied">Copiado</string>
+    <string name="tgacc_deleted">Mensaje eliminado</string>
+    <string name="tgacc_delete_error">No se pudo eliminar</string>
+    <string name="tgacc_attach_error">No se pudo leer el archivo</string>
+    <string name="tgacc_view_photo">🖼 Ver foto</string>
+    <string name="tgacc_unread">%1$d sin leer</string>
+    <string name="tgacc_me">Tú</string>
 </resources>

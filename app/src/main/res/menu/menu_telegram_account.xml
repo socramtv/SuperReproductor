@@ -16,6 +16,12 @@
     <item
         android:id="@+id/action_tgacc_search"
         android:title="@string/tgacc_menu_search"
+        android:icon="@drawable/ic_tg_search"
+        app:actionViewClass="androidx.appcompat.widget.SearchView"
+        app:showAsAction="always|collapseActionView" />
+    <item
+        android:id="@+id/action_tgacc_join"
+        android:title="@string/tgacc_menu_join"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_tgacc_api"
