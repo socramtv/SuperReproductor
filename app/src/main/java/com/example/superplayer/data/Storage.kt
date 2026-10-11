@@ -254,7 +254,10 @@ object AppPrefs {
     private fun profilePrefs(context: Context) = Profiles.prefs(context, PREFS_NAME)
 
     /** Clave de la API de TMDb (v3) para las fichas de Cine; vacía = solo iTunes/TVMaze. La pone el usuario en Cine → ⋮. */
-    fun getTmdbKey(context: Context): String = prefs(context).getString("tmdb_key", "").orEmpty().trim()
+    fun getTmdbKey(context: Context): String = prefs(context).getString("tmdb_key", DEFAULT_TMDB_KEY).orEmpty().trim()
+
+    /** Clave de TMDb incluida por defecto (solo la usa Cine). Se puede cambiar en Cine → ⋮ → Clave de TMDb… */
+    private const val DEFAULT_TMDB_KEY = "8057a54a57714cade319b15e4fc0c3b4"
 
     fun setTmdbKey(context: Context, key: String) {
         prefs(context).edit().putString("tmdb_key", key.trim()).apply()

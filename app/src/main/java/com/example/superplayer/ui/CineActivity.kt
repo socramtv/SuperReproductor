@@ -78,10 +78,6 @@ class CineActivity : AppCompatActivity() {
         if (AppPrefs.getTmdbKey(this).isBlank()) {
             android.widget.Toast.makeText(this, R.string.cine_tmdb_key_missing, android.widget.Toast.LENGTH_LONG).show()
         }
-        // Primera vez sin ninguna categoría de cine reconocida: se deja elegir directamente.
-        if (allMovies.isEmpty() && categories.isNotEmpty() && AppPrefs.getCineCategories(this) == null) {
-            showCategoryChooser()
-        }
     }
 
     override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
@@ -143,7 +139,7 @@ class CineActivity : AppCompatActivity() {
     private fun chosenCategories(): List<Category> {
         val chosen = AppPrefs.getCineCategories(this)
         return if (chosen != null) categories.filter { it.name in chosen }
-        else categories.filter { looksLikeMovies(it.name) }
+        else categories
     }
 
     private fun reload() {
