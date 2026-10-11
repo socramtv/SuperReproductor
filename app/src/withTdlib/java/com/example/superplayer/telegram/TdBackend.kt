@@ -293,6 +293,32 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         val content: TdApi.InputMessageContent
         if (asPhoto) {
             val c = TdApi.InputMessagePhoto()
+            assignInput(c, "photo", file)
+            c.caption = cap
+            content = c
+        } else {
+            val c = TdApi.InputMessageDocument()
+            assignInput(c, "document", file)
+            c.caption = cap
+            content = c
+        }
+        val request = TdApi.SendMessage()
+        request.chatId = chatId
+        request.inputMessageContent = content
+        if (replyTo != 0L) {
+            val r = TdApi.InputMessageReplyToMessage()
+            r.messageId = replyTo
+            request.replyTo = r
+        }
+        send(request) { result -> onDone(result is TdApi.Message) }
+    }
+
+    override fun sendFile(chatId: Long, path: String, asPhoto: Boolean, caption: String, onDone: (Boolean) -> Unit) {
+        val file = TdApi.InputFileLocal(path)
+        val cap = TdApi.FormattedText(caption, arrayOf<TdApi.TextEntity>())
+        val content: TdApi.InputMessageContent
+        if (asPhoto) {
+            val c = TdApi.InputMessagePhoto()
             c.photo = file
             c.caption = cap
             content = c
@@ -314,6 +340,42 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
 
     override fun joinChat(chatId: Long, onDone: (Boolean) -> Unit) {
         send(TdApi.JoinChat(chatId)) { result -> onDone(result is TdApi.Ok) }
+    }
+
+    /**
+     * Versiones recientes de TDLib envuelven el archivo (InputPhoto / InputDocument) en vez de
+     * aceptar un InputFile directo; se detecta el tipo del campo en ejecución para valer con ambas.
+     */
+    private fun assignInput(target: Any, fieldName: String, file: TdApi.InputFile) {
+        try {
+            val field = target.javaClass.getField(fieldName)
+            val type = field.type
+            if (type.isAssignableFrom(file.javaClass)) {
+                field.set(target, file)
+                return
+            }
+            val wrapper = type.getDeclaredConstructor().newInstance()
+            val inner = type.fields.firstOrNull { it.type.isAssignableFrom(file.javaClass) }
+            inner?.set(wrapper, file)
+            field.set(target, wrapper)
+        } catch (e: Exception) {
+            listener?.onError(e.message ?: "adjunto")
+        }
+    }
+
+    /** Rellena el filtro de tipo de chat (si esta versión de TDLib lo pide) con el que admite todos los tipos. */
+    private fun fillTypeFilter(request: Any) {
+        try {
+            val field = request.javaClass.getField("typeFilter")
+            val base = field.type
+            val candidates = TdApi::class.java.declaredClasses.filter {
+                base.isAssignableFrom(it) && it != base && !java.lang.reflect.Modifier.isAbstract(it.modifiers)
+            }
+            val pick = candidates.firstOrNull { it.simpleName.contains("All") } ?: candidates.firstOrNull()
+            if (pick != null) field.set(request, pick.getDeclaredConstructor().newInstance())
+        } catch (e: Exception) {
+            // si no existe el campo, la petición ya vale tal cual
+        }
     }
 
     override fun searchChats(query: String, onDone: (List<TgChat>) -> Unit) {
@@ -341,11 +403,18 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
                 }
             }
         }
-        send(TdApi.SearchChats(query, 30)) { r ->
+        val searchOwn = TdApi.SearchChats()
+        searchOwn.query = query
+        searchOwn.limit = 30
+        fillTypeFilter(searchOwn)
+        send(searchOwn) { r ->
             if (r is TdApi.Chats) synchronized(ids) { r.chatIds.forEach { ids.add(it) } }
             finish()
         }
-        send(TdApi.SearchPublicChats(query)) { r ->
+        val searchPublic = TdApi.SearchPublicChats()
+        searchPublic.query = query
+        fillTypeFilter(searchPublic)
+        send(searchPublic) { r ->
             if (r is TdApi.Chats) synchronized(ids) { r.chatIds.forEach { ids.add(it) } }
             finish()
         }
