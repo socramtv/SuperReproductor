@@ -40,7 +40,6 @@ class CineActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityCineBinding
     private lateinit var adapter: CineAdapter
-    private var allMovies: List<Stream> = emptyList()
     private var query = ""
     private var posterHeight = 0
     private var selectedCategory = 0 // 0 = todas
@@ -88,21 +87,40 @@ class CineActivity : AppCompatActivity() {
 
     private fun looksLikeMovies(name: String): Boolean = MOVIE_NAME.containsMatchIn(name)
 
+    /** Una película con su clave de orden y su nombre normalizado ya calculados (así buscar y ordenar miles no bloquea la pantalla). */
+    private class Entry(val stream: Stream, val sortKey: String, val norm: String)
+
+    private var entries: List<Entry> = emptyList()
+    private var reloadToken = 0
+
     private fun reload() {
+        val token = ++reloadToken
         val list = if (selectedCategory == 0) categories else listOfNotNull(categories.getOrNull(selectedCategory - 1))
-        allMovies = list
-            .flatMap { it.streams }
-            .distinctBy { it.id }
-            .sortedBy { MovieInfo.cleanTitle(it.name).first.lowercase(Locale.ROOT) }
-        applyFilter()
+        Thread {
+            val built = try {
+                list.flatMap { it.streams }
+                    .distinctBy { it.id }
+                    .map { Entry(it, MovieInfo.cleanTitle(it.name).first.lowercase(Locale.ROOT), normalize(it.name)) }
+                    .sortedBy { it.sortKey }
+            } catch (e: Throwable) {
+                emptyList()
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed || token != reloadToken) return@runOnUiThread
+                entries = built
+                applyFilter()
+            }
+        }.start()
     }
 
+    private val markRegex = Regex("\\p{M}+")
+
     private fun normalize(text: String): String =
-        Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+        Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(markRegex, "")
 
     private fun applyFilter() {
         val q = normalize(query.trim())
-        val shown = if (q.isEmpty()) allMovies else allMovies.filter { normalize(it.name).contains(q) }
+        val shown = (if (q.isEmpty()) entries else entries.filter { it.norm.contains(q) }).map { it.stream }
         adapter.submit(shown)
         binding.emptyView.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
     }

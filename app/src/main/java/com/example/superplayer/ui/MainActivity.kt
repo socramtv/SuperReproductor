@@ -251,13 +251,13 @@ class MainActivity : AppCompatActivity() {
                     null
                 }
             }
-            val result = data
+            val result = data?.let { ChannelOverrides.apply(this, it) }
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 if (isFinishing || isDestroyed) return@post
                 if (result == null) {
                     Toast.makeText(this, R.string.cine_load_error, Toast.LENGTH_LONG).show()
                 } else {
-                    CineActivity.categories = ChannelOverrides.apply(this, result).categories
+                    CineActivity.categories = result.categories
                     startActivity(Intent(this, CineActivity::class.java))
                 }
             }

@@ -65,27 +65,46 @@ object MovieInfo {
     )
 
     /** (título limpio, año si lo trae): quita prefijos de idioma, etiquetas de calidad, corchetes y el año. */
+    private val RE_YEAR_BRACKET = Regex("[\\(\\[]\\s*((?:19|20)\\d{2})\\s*[\\)\\]]")
+    private val RE_SQUARE = Regex("\\[[^\\]]*\\]")
+    private val RE_ROUND = Regex("\\([^)]*\\)")
+    private val RE_LANG_PREFIX = Regex("^\\s*\\|?[A-Za-z]{2,3}\\|?\\s*[-:|]\\s+")
+    private val RE_YEAR_END = Regex("\\s((?:19|20)\\d{2})\\s*$")
+    private val RE_DOTS = Regex("[._]+")
+    private val RE_SPACES = Regex("\\s+")
+    private val RE_MARKS = Regex("\\p{M}+")
+    private val RE_NON_ALNUM = Regex("[^a-z0-9]+")
+    private val cleanCache = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String?>>()
+
     fun cleanTitle(raw: String): Pair<String, String?> {
+        cleanCache[raw]?.let { return it }
+        val result = cleanTitleUncached(raw)
+        if (cleanCache.size > 20000) cleanCache.clear()
+        cleanCache[raw] = result
+        return result
+    }
+
+    private fun cleanTitleUncached(raw: String): Pair<String, String?> {
         var text = raw.trim()
         var year: String? = null
-        Regex("[\\(\\[]\\s*((?:19|20)\\d{2})\\s*[\\)\\]]").find(text)?.let { year = it.groupValues[1] }
-        text = text.replace(Regex("\\[[^\\]]*\\]"), " ").replace(Regex("\\([^)]*\\)"), " ")
-        text = text.replace(Regex("^\\s*\\|?[A-Za-z]{2,3}\\|?\\s*[-:|]\\s+"), "")
+        RE_YEAR_BRACKET.find(text)?.let { year = it.groupValues[1] }
+        text = text.replace(RE_SQUARE, " ").replace(RE_ROUND, " ")
+        text = text.replace(RE_LANG_PREFIX, "")
         if (year == null) {
-            Regex("\\s((?:19|20)\\d{2})\\s*$").find(text)?.let {
+            RE_YEAR_END.find(text)?.let {
                 year = it.groupValues[1]
                 text = text.removeRange(it.range)
             }
         }
         text = QUALITY_TAGS.replace(text, " ")
-        text = text.replace(Regex("[._]+"), " ").replace(Regex("\\s+"), " ").trim(' ', '-', '_', '.', ':', '|')
+        text = text.replace(RE_DOTS, " ").replace(RE_SPACES, " ").trim(' ', '-', '_', '.', ':', '|')
         return (if (text.isEmpty()) raw.trim() else text) to year
     }
 
     private fun keyOf(cleanTitle: String, year: String?): String =
         Normalizer.normalize(cleanTitle.lowercase(Locale.ROOT), Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
-            .replace(Regex("[^a-z0-9]+"), " ")
+            .replace(RE_MARKS, "")
+            .replace(RE_NON_ALNUM, " ")
             .trim() + (if (year != null) "|$year" else "")
 
     // -----------------------------------------------------------------
