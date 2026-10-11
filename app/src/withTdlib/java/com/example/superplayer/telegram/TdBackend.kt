@@ -305,32 +305,6 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         val request = TdApi.SendMessage()
         request.chatId = chatId
         request.inputMessageContent = content
-        if (replyTo != 0L) {
-            val r = TdApi.InputMessageReplyToMessage()
-            r.messageId = replyTo
-            request.replyTo = r
-        }
-        send(request) { result -> onDone(result is TdApi.Message) }
-    }
-
-    override fun sendFile(chatId: Long, path: String, asPhoto: Boolean, caption: String, onDone: (Boolean) -> Unit) {
-        val file = TdApi.InputFileLocal(path)
-        val cap = TdApi.FormattedText(caption, arrayOf<TdApi.TextEntity>())
-        val content: TdApi.InputMessageContent
-        if (asPhoto) {
-            val c = TdApi.InputMessagePhoto()
-            c.photo = file
-            c.caption = cap
-            content = c
-        } else {
-            val c = TdApi.InputMessageDocument()
-            c.document = file
-            c.caption = cap
-            content = c
-        }
-        val request = TdApi.SendMessage()
-        request.chatId = chatId
-        request.inputMessageContent = content
         send(request) { result -> onDone(result is TdApi.Message) }
     }
 
