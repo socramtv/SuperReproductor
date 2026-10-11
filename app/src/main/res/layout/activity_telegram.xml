@@ -38,4 +38,34 @@
             android:visibility="gone" />
     </FrameLayout>
 
+    <!-- Solo en Telegram con cuenta, dentro de un chat (ver TelegramAccountActivity) -->
+    <LinearLayout
+        android:id="@+id/inputBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="6dp"
+        android:background="@color/surface_dark"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/tgInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="@string/tgacc_write_hint"
+            android:inputType="textMultiLine|textCapSentences"
+            android:maxLines="4"
+            android:textColor="@color/on_background"
+            android:textColorHint="@color/on_surface_muted" />
+
+        <Button
+            android:id="@+id/tgSend"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="@string/tgacc_send" />
+    </LinearLayout>
+
 </LinearLayout>

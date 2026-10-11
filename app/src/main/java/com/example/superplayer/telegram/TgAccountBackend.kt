@@ -30,6 +30,16 @@ interface TgAccountBackend {
     /** Descarga un archivo; [onProgress] (descargado, total) y [onDone] con la ruta local o null si falló. */
     fun download(fileId: Int, onProgress: (Long, Long) -> Unit, onDone: (String?) -> Unit)
     fun cancelDownload(fileId: Int)
+    /** Busca mensajes: en un chat ([chatId] != 0) o en todos los chats (0). */
+    fun searchMessages(query: String, chatId: Long, onDone: (List<TgMessage>) -> Unit)
+    /** Envía un mensaje de texto al chat; [onDone] con true si salió bien. */
+    fun sendText(chatId: Long, text: String, onDone: (Boolean) -> Unit)
+    /**
+     * Lee bytes de un archivo sin descargarlo entero (reproducción directa): espera, hasta unos
+     * segundos, a que TDLib tenga el trozo que empieza en [pos]. Devuelve null si no llega.
+     * Se llama desde hilos de fondo (el servidor local de streaming).
+     */
+    fun readBytes(fileId: Int, pos: Long, maxLen: Int): ByteArray?
 }
 
 object TelegramAccountPrefs {

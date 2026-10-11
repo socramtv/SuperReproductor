@@ -2,6 +2,10 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_tgacc_search"
+        android:title="@string/tgacc_menu_search"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tgacc_api"
         android:title="@string/tgacc_menu_api"
         app:showAsAction="never" />

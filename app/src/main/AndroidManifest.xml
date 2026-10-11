@@ -102,6 +102,7 @@
         <activity
             android:name=".ui.TelegramAccountActivity"
             android:exported="false"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!-- Cine: carátulas y sinopsis (ver CineActivity) -->

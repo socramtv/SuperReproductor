@@ -211,7 +211,102 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         send(TdApi.CancelDownloadFile(fileId, false))
     }
 
+    override fun searchMessages(query: String, chatId: Long, onDone: (List<TgMessage>) -> Unit) {
+        val request: TdApi.Function<*>
+        if (chatId != 0L) {
+            val r = TdApi.SearchChatMessages()
+            r.chatId = chatId
+            r.query = query
+            r.fromMessageId = 0L
+            r.offset = 0
+            r.limit = 100
+            request = r
+        } else {
+            val r = TdApi.SearchMessages()
+            r.chatList = TdApi.ChatListMain()
+            r.query = query
+            r.offset = ""
+            r.limit = 100
+            request = r
+        }
+        send(request) { result ->
+            val found: Array<TdApi.Message> = when (result) {
+                is TdApi.FoundMessages -> result.messages
+                is TdApi.FoundChatMessages -> result.messages
+                else -> emptyArray()
+            }
+            onDone(found.mapNotNull { toMessage(it, chats[it.chatId]?.title ?: "") })
+        }
+    }
+
+    override fun sendText(chatId: Long, text: String, onDone: (Boolean) -> Unit) {
+        val content = TdApi.InputMessageText()
+        content.text = TdApi.FormattedText(text, arrayOf<TdApi.TextEntity>())
+        val request = TdApi.SendMessage()
+        request.chatId = chatId
+        request.inputMessageContent = content
+        send(request) { result -> onDone(result is TdApi.Message) }
+    }
+
+    private fun getFileBlocking(fileId: Int): TdApi.File? {
+        val c = client ?: return null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var out: TdApi.File? = null
+        c.send(TdApi.GetFile(fileId)) { r ->
+            if (r is TdApi.File) out = r
+            latch.countDown()
+        }
+        latch.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        return out
+    }
+
+    override fun readBytes(fileId: Int, pos: Long, maxLen: Int): ByteArray? {
+        val deadline = System.currentTimeMillis() + 40_000
+        var requestedAt = -1L
+        while (System.currentTimeMillis() < deadline) {
+            val f = getFileBlocking(fileId) ?: return null
+            val l = f.local
+            val total = if (f.size > 0) f.size else f.expectedSize
+            if (l.path.isNotEmpty()) {
+                val available: Long = when {
+                    l.isDownloadingCompleted -> total - pos
+                    pos >= l.downloadOffset && pos < l.downloadOffset + l.downloadedPrefixSize ->
+                        l.downloadOffset + l.downloadedPrefixSize - pos
+                    else -> 0L
+                }
+                if (available > 0) {
+                    val n = minOf(available, maxLen.toLong()).toInt()
+                    return try {
+                        java.io.RandomAccessFile(l.path, "r").use { raf ->
+                            raf.seek(pos)
+                            val buf = ByteArray(n)
+                            var read = 0
+                            while (read < n) {
+                                val r = raf.read(buf, read, n - read)
+                                if (r < 0) break
+                                read += r
+                            }
+                            if (read == n) buf else buf.copyOf(read)
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            }
+            // Hay que pedir a TDLib que descargue desde esta posición (si no lo está haciendo ya).
+            if (requestedAt != pos || !l.isDownloadingActive) {
+                requestedAt = pos
+                send(TdApi.DownloadFile(fileId, 32, pos, STREAM_WINDOW, false))
+            }
+            try { Thread.sleep(120) } catch (e: InterruptedException) { return null }
+        }
+        return null
+    }
+
     companion object {
+        /** Cuánto pide a TDLib de una vez al reproducir sin descargar (así no baja el vídeo entero). */
+        private const val STREAM_WINDOW = 32L * 1024 * 1024
+
         @Volatile
         private var instance: TdBackend? = null
 

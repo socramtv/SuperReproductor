@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Lista 2</string>
+    <string name="list_slot_2">Acestream+</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -392,4 +392,15 @@
     <string name="tgacc_downloading">Descargando…</string>
     <string name="tg_empty_chat">No hay mensajes con vídeo, audio, archivos ni enlaces</string>
     <string name="tg_menu_account">Iniciar sesión con mi cuenta…</string>
+    <string name="tgacc_menu_search">🔍 Buscar…</string>
+    <string name="tgacc_search_title_all">Buscar en todos los chats</string>
+    <string name="tgacc_search_title_chat">Buscar en este chat</string>
+    <string name="tgacc_search_hint">Texto a buscar</string>
+    <string name="tgacc_search_results">Búsqueda: %1$s</string>
+    <string name="tgacc_search_none">Sin resultados</string>
+    <string name="tgacc_searching">Buscando…</string>
+    <string name="tgacc_write_hint">Escribe un mensaje…</string>
+    <string name="tgacc_send">Enviar</string>
+    <string name="tgacc_send_error">No se pudo enviar el mensaje</string>
+    <string name="tgacc_stream_play">▶ Reproducir sin descargar</string>
 </resources>
