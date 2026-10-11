@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import com.example.superplayer.R
 import com.example.superplayer.data.AppPrefs
@@ -40,6 +41,10 @@ class CineActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityCineBinding
     private lateinit var adapter: CineAdapter
+    private lateinit var rowsAdapter: CineRowsAdapter
+    private var rowPosterWidth = 0
+    private var rowPosterHeight = 0
+    private var rows: List<Row> = emptyList()
     private var query = ""
     private var posterHeight = 0
     private var selectedCategory = 0 // 0 = todas
@@ -63,6 +68,14 @@ class CineActivity : AppCompatActivity() {
         adapter = CineAdapter(emptyList(), { posterHeight }) { stream -> showDetails(stream) }
         binding.recyclerView.layoutManager = GridLayoutManager(this, columns)
         binding.recyclerView.adapter = adapter
+
+        // Filas al estilo Netflix: carátulas en horizontal, un poco más pequeñas que en la parrilla.
+        rowPosterWidth = ((if (isTv) 150f else 118f) * resources.displayMetrics.density).toInt()
+        rowPosterHeight = (rowPosterWidth * 1.5f).toInt()
+        rowsAdapter = CineRowsAdapter(emptyList(), { rowPosterHeight }, { rowPosterWidth }) { stream -> showDetails(stream) }
+        binding.rowsView.layoutManager = LinearLayoutManager(this)
+        binding.rowsView.adapter = rowsAdapter
+        binding.rowsView.setHasFixedSize(false)
 
         binding.cineSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -96,6 +109,7 @@ class CineActivity : AppCompatActivity() {
     private fun reload() {
         val token = ++reloadToken
         val list = if (selectedCategory == 0) categories else listOfNotNull(categories.getOrNull(selectedCategory - 1))
+        val allCategories = categories
         Thread {
             val built = try {
                 list.flatMap { it.streams }
@@ -105,9 +119,11 @@ class CineActivity : AppCompatActivity() {
             } catch (e: Throwable) {
                 emptyList()
             }
+            val builtRows = try { buildRows(allCategories) } catch (e: Throwable) { emptyList() }
             runOnUiThread {
                 if (isFinishing || isDestroyed || token != reloadToken) return@runOnUiThread
                 entries = built
+                rows = builtRows
                 applyFilter()
             }
         }.start()
@@ -118,8 +134,52 @@ class CineActivity : AppCompatActivity() {
     private fun normalize(text: String): String =
         Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(markRegex, "")
 
+    /** Una fila de Cine: título y sus películas. */
+    class Row(val title: String, val streams: List<Stream>)
+
+    /**
+     * Filas automáticas: primero una por cada categoría de la lista (las que
+     * existan, en su orden) y luego una por género (Acción, Animación,
+     * Comedia...) con las películas cuya ficha ya se conoce, de modo que
+     * salen solas según se van descubriendo.
+     */
+    private fun buildRows(source: List<Category>): List<Row> {
+        val out = ArrayList<Row>()
+        val all = LinkedHashMap<String, Stream>()
+        for (category in source) {
+            val streams = category.streams.distinctBy { it.id }
+            if (streams.isEmpty()) continue
+            out.add(Row(category.name, streams.take(ROW_MAX)))
+            for (s in streams) all.putIfAbsent(s.id, s)
+        }
+        val byGenre = HashMap<String, MutableList<Stream>>()
+        for (stream in all.values) {
+            val genre = MovieInfo.peek(this, stream.name)?.genre ?: continue
+            for (g in genre.split(",", "/", "&")) {
+                val name = g.trim()
+                if (name.length < 3) continue
+                byGenre.getOrPut(name) { ArrayList() }.add(stream)
+            }
+        }
+        byGenre.entries
+            .filter { it.value.size >= GENRE_MIN }
+            .sortedByDescending { it.value.size }
+            .take(GENRE_ROWS)
+            .forEach { out.add(Row("🎭 " + it.key, it.value.take(ROW_MAX))) }
+        return out
+    }
+
     private fun applyFilter() {
         val q = normalize(query.trim())
+        if (q.isEmpty() && selectedCategory == 0) {
+            binding.rowsView.visibility = View.VISIBLE
+            binding.recyclerView.visibility = View.GONE
+            rowsAdapter.submit(rows)
+            binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+            return
+        }
+        binding.rowsView.visibility = View.GONE
+        binding.recyclerView.visibility = View.VISIBLE
         val shown = (if (q.isEmpty()) entries else entries.filter { it.norm.contains(q) }).map { it.stream }
         adapter.submit(shown)
         binding.emptyView.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
@@ -276,6 +336,10 @@ class CineActivity : AppCompatActivity() {
     companion object {
         /** Las categorías de la lista cargada (las rellena MainActivity antes de abrir esta pantalla). */
         var categories: List<Category> = emptyList()
+
+        private const val ROW_MAX = 60
+        private const val GENRE_MIN = 4
+        private const val GENRE_ROWS = 12
 
         private val MOVIE_NAME = Regex(
             "pel[ií]cula|peli|cine|movie|film|vod|estreno",

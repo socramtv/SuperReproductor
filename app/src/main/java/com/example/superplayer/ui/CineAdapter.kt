@@ -19,6 +19,7 @@ import com.example.superplayer.model.Stream
 class CineAdapter(
     private var items: List<Stream>,
     private val posterHeightPx: () -> Int,
+    private val itemWidthPx: () -> Int = { 0 },
     private val onClick: (Stream) -> Unit
 ) : RecyclerView.Adapter<CineAdapter.ViewHolder>() {
 
@@ -40,6 +41,14 @@ class CineAdapter(
 
         fun bind(stream: Stream) {
             val context = binding.root.context
+            val width = itemWidthPx()
+            if (width > 0) {
+                val rootParams = binding.root.layoutParams
+                if (rootParams != null && rootParams.width != width) {
+                    rootParams.width = width
+                    binding.root.layoutParams = rootParams
+                }
+            }
             val params = binding.cinePoster.layoutParams
             val height = posterHeightPx()
             if (height > 0 && params.height != height) {

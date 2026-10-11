@@ -1248,6 +1248,8 @@ Lo encontrado (y lo no encontrado, 7 días) se guarda en el móvil. Código: `da
 
 **TMDb (ficha completa):** ya viene una clave incluida (solo la usa Cine); un desplegable bajo el buscador filtra por categoría (por defecto todas). Si quisieras otra clave, cámbiala en `AppPrefs.DEFAULT_TMDB_KEY`. Antes: pega tu API key (v3, gratis en themoviedb.org). Con ella la ficha muestra nota, duración, género, clasificación, frase, sinopsis, dirección/creador, reparto y botón de tráiler (YouTube). Sin clave (o si TMDb no encuentra el título) se usa iTunes/TVMaze. La clave se guarda solo en el móvil, no en el código.
 
+**Estilo Netflix / Prime:** la pantalla de Cine abre con filas: una por cada categoría de la lista (Disney, Marvel…) y, debajo, filas automáticas por género (🎭 Acción, Animación, Comedia…) con las películas cuya ficha ya se conoce, que van apareciendo solas según se descubren. Al buscar o elegir una categoría en el desplegable se pasa a la parrilla de carátulas. Código: `ui/CineRowsAdapter.kt`.
+
 ## Móvil como mando de la tele
 
 - **En la tele** (Fire TV / Google TV / Android TV): viene **activado**. Menú ⋮ → "Control remoto de esta pantalla…" enseña la dirección
