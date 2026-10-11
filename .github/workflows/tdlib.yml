@@ -24,13 +24,20 @@ jobs:
       - name: Preparar archivos
         run: |
           find /tmp/tdout -maxdepth 3 | head -50
+          mkdir -p /tmp/tdx
+          unzip -q /tmp/tdout/tdlib.zip -d /tmp/tdx
+          find /tmp/tdx -maxdepth 4 -type d | head -60
+          LIBS=$(find /tmp/tdx -type d -name libs | head -1)
+          JAVA=$(find /tmp/tdx -type d -name java | head -1)
+          echo "LIBS=$LIBS JAVA=$JAVA"
+          test -n "$LIBS" && test -n "$JAVA"
           mkdir -p app/tdlib/libs app/tdlib/java
           for abi in arm64-v8a armeabi-v7a; do
-            if [ -d "/tmp/tdout/libs/$abi" ]; then cp -r "/tmp/tdout/libs/$abi" app/tdlib/libs/; fi
+            if [ -d "$LIBS/$abi" ]; then cp -r "$LIBS/$abi" app/tdlib/libs/; fi
           done
-          cp -r /tmp/tdout/java/. app/tdlib/java/
+          cp -r "$JAVA"/. app/tdlib/java/
           find app/tdlib -name "*.so" -o -name "TdApi.java" -o -name "Client.java"
-          test -f "$(find app/tdlib/java -name TdApi.java | head -1)"
+          test -n "$(find app/tdlib/java -name TdApi.java | head -1)"
           test -f app/tdlib/libs/arm64-v8a/libtdjni.so
       - name: Guardar en la caché
         uses: actions/cache/save@v4
