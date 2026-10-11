@@ -65,9 +65,15 @@ class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) :
         val requestProperties = linkedMapOf("Icy-MetaData" to "1")
         requestProperties.putAll(headers)
 
-        val dataSourceFactory: DataSource.Factory = DefaultHttpDataSource.Factory()
-            .setDefaultRequestProperties(requestProperties)
-            .setAllowCrossProtocolRedirects(true)
+        // Archivos locales (p. ej. un vídeo de Telegram ya descargado): sin red.
+        val dataSourceFactory: DataSource.Factory =
+            if (mediaItem.localConfiguration?.uri?.scheme == "file") {
+                androidx.media3.datasource.FileDataSource.Factory()
+            } else {
+                DefaultHttpDataSource.Factory()
+                    .setDefaultRequestProperties(requestProperties)
+                    .setAllowCrossProtocolRedirects(true)
+            }
 
         val mimeType = when (type.trim().uppercase()) {
             "DASH", "MPD" -> MimeTypes.APPLICATION_MPD

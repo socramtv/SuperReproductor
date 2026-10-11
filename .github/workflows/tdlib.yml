@@ -1,0 +1,39 @@
+name: Build TDLib
+# Compila TDLib (la librería oficial de Telegram) para Android con el Dockerfile
+# oficial de tdlib/td y la guarda en la caché de GitHub para que "Build APK" la
+# use. Se lanza a mano una sola vez: Actions -> Build TDLib -> Run workflow.
+# Tarda bastante (de 30 min a más de 1 hora).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tdlib:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Liberar espacio en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+      - name: Descargar TDLib
+        run: git clone --depth 1 https://github.com/tdlib/td.git /tmp/td
+      - name: Compilar TDLib para Android (Docker)
+        working-directory: /tmp/td/example/android
+        run: docker build --output /tmp/tdout .
+      - name: Preparar archivos
+        run: |
+          find /tmp/tdout -maxdepth 3 | head -50
+          mkdir -p app/tdlib/libs app/tdlib/java
+          for abi in arm64-v8a armeabi-v7a; do
+            if [ -d "/tmp/tdout/libs/$abi" ]; then cp -r "/tmp/tdout/libs/$abi" app/tdlib/libs/; fi
+          done
+          cp -r /tmp/tdout/java/. app/tdlib/java/
+          find app/tdlib -name "*.so" -o -name "TdApi.java" -o -name "Client.java"
+          test -f "$(find app/tdlib/java -name TdApi.java | head -1)"
+          test -f app/tdlib/libs/arm64-v8a/libtdjni.so
+      - name: Guardar en la caché
+        uses: actions/cache/save@v4
+        with:
+          path: app/tdlib
+          key: tdlib-android-${{ github.run_id }}

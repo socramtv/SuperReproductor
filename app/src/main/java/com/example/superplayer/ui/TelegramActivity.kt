@@ -108,6 +108,10 @@ class TelegramActivity : AppCompatActivity() {
                 } else finish()
                 return true
             }
+            R.id.action_tg_account -> {
+                startActivity(Intent(this, TelegramAccountActivity::class.java))
+                return true
+            }
             R.id.action_tg_token -> {
                 showTokenDialog()
                 return true

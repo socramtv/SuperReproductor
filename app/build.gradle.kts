@@ -3,6 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// TDLib (Telegram con la cuenta del usuario): solo se incluye si el workflow
+// "Build TDLib" ya la ha compilado y la compilación la ha restaurado en app/tdlib.
+// Sin ella, la app compila igual con una versión "vacía" de esa función.
+val tdlibPresent = fileTree("tdlib/java").matching { include("**/TdApi.java") }.files.isNotEmpty()
+
 android {
     namespace = "com.example.superplayer"
     compileSdk = 36
@@ -13,6 +18,12 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        if (tdlibPresent) {
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
+        }
 
     }
 
@@ -58,6 +69,18 @@ android {
 
     buildFeatures {
         viewBinding = true
+    }
+
+    sourceSets {
+        getByName("main") {
+            if (tdlibPresent) {
+                java.srcDir("src/withTdlib/java")
+                java.srcDir("tdlib/java")
+                jniLibs.srcDir("tdlib/libs")
+            } else {
+                java.srcDir("src/noTdlib/java")
+            }
+        }
     }
 }
 

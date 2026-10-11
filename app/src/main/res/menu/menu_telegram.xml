@@ -2,6 +2,10 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_tg_account"
+        android:title="@string/tg_menu_account"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tg_token"
         android:title="@string/tg_menu_token"
         app:showAsAction="never" />

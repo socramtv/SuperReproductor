@@ -1272,3 +1272,11 @@ aunque estés viendo otro canal. Se actualiza cada minuto (datos de ESPN, como l
 
 Menú ⋮ → **"✈️ Telegram…"**. Crea un bot con @BotFather, pega su token en ⋮ → "Bot de Telegram…" y añade el bot a tu grupo, o como **administrador** a tu canal. Mientras la pantalla está abierta, la app recoge los mensajes nuevos (se guardan en el móvil) y los muestra por chat: vídeos y audios se reproducen, un archivo .m3u/.json se abre como lista de canales, y los enlaces de los mensajes (m3u8, mp4…) se reproducen al tocarlos.
 Límites de la API de bots de Telegram: no se puede leer el historial anterior a añadir el bot ni grupos privados donde no esté el bot, y los archivos solo se pueden descargar hasta 20 MB (los enlaces no tienen límite). Código: `telegram/TelegramBot.kt`, `ui/TelegramActivity.kt`.
+
+### Telegram con tu cuenta (TDLib)
+
+En la pantalla de Telegram, ⋮ → **"Iniciar sesión con mi cuenta…"**: número, código y (si la tienes) contraseña de dos pasos; después ves tus canales y grupos (también privados) con sus vídeos, audios, listas .m3u y enlaces. Los archivos se descargan al móvil antes de reproducirlos.
+
+Hace falta tu `api_id` y `api_hash` de https://my.telegram.org (API development tools); se piden en la app y se guardan solo en el dispositivo.
+
+La librería oficial TDLib no está en el repositorio: se compila con el workflow **Build TDLib** (GitHub → Actions → Build TDLib → Run workflow; **una sola vez**, tarda de 30 min a más de 1 h) y queda en la caché de GitHub; el workflow normal "Build APK" la restaura y la incluye. Si no se ha compilado, la app se construye igual, con esta función desactivada. Si la caché se borra (GitHub la elimina tras 7 días sin usarse), basta con volver a lanzar Build TDLib. Código: `telegram/TgAccountBackend.kt`, `src/withTdlib` (TDLib real), `src/noTdlib` (sin TDLib), `ui/TelegramAccountActivity.kt`.

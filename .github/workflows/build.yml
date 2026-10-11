@@ -24,6 +24,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
+      # TDLib (Telegram con tu cuenta): si ya se compiló con el workflow
+      # "Build TDLib", se restaura aquí; si no, la app compila sin esa función.
+      - name: Restore TDLib
+        uses: actions/cache/restore@v4
+        with:
+          path: app/tdlib
+          key: tdlib-android-none
+          restore-keys: |
+            tdlib-android-
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
       - name: Upload APK

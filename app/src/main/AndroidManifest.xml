@@ -98,6 +98,12 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- Telegram con la cuenta del usuario, TDLib (ver TelegramAccountActivity) -->
+        <activity
+            android:name=".ui.TelegramAccountActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <!-- Cine: carátulas y sinopsis (ver CineActivity) -->
         <activity
             android:name=".ui.CineActivity"
