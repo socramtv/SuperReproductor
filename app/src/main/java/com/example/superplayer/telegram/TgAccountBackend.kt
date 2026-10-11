@@ -49,6 +49,9 @@ interface TgAccountBackend {
      */
     fun readBytes(fileId: Int, pos: Long, maxLen: Int): ByteArray?
     /** Comandos (/start, /help...) que declara un bot: pares (comando sin barra, descripción). */
+    /** Borra los archivos que Telegram ha ido descargando (vídeos, fotos…) menos los más recientes. */
+    fun cleanCache()
+
     fun loadBotCommands(userId: Long, onDone: (List<Pair<String, String>>) -> Unit)
     /** Pulsa un botón "cb" de un mensaje; [onDone] recibe el texto de respuesta y/o una URL, si el bot los da. */
     fun pressButton(chatId: Long, messageId: Long, data: String, onDone: (String?, String?) -> Unit)

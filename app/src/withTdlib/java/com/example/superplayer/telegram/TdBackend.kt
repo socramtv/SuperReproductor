@@ -126,6 +126,32 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         send(TdApi.CheckAuthenticationPassword(password))
     }
 
+    override fun cleanCache() {
+        try {
+            // Subidas temporales copiadas por la app.
+            File(app.cacheDir, "tg_upload").deleteRecursively()
+        } catch (e: Exception) {
+            // no es imprescindible
+        }
+        // size/ttl/count a 0 = borrar todo lo que no sea reciente; immunityDelay protege lo descargado hace
+        // poco (p. ej. un vídeo que se está viendo). Por reflexión por si cambian los campos entre versiones.
+        val request = TdApi.OptimizeStorage()
+        fun set(name: String, value: Any) {
+            try {
+                request.javaClass.getField(name).set(request, value)
+            } catch (e: Exception) {
+                // campo inexistente en esta versión
+            }
+        }
+        set("size", 0L)
+        set("ttl", 0)
+        set("count", 0)
+        set("immunityDelay", 900)
+        set("returnDeletedFileStatistics", false)
+        set("chatLimit", 0)
+        send(request) { }
+    }
+
     override fun logOut() {
         send(TdApi.LogOut())
     }

@@ -27,12 +27,6 @@ android {
         buildConfigField("int", "TG_API_ID", tgApiId.toString())
         buildConfigField("String", "TG_API_HASH", "\"" + tgApiHash + "\"")
 
-        if (tdlibPresent) {
-            ndk {
-                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-            }
-        }
-
     }
 
     // Firma FIJA para las APK de depuración (ver README, "Actualizar sin
@@ -78,6 +72,26 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+    }
+
+    // Más ligera: las librerías nativas (TDLib) van comprimidas dentro de la APK...
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    // ...y se generan APK por arquitectura (la de móvil moderno, arm64-v8a, pesa la mitad que la
+    // universal), además de la universal de siempre por si dudas (Fire TV viejo, etc.).
+    if (tdlibPresent) {
+        splits {
+            abi {
+                isEnable = true
+                reset()
+                include("arm64-v8a", "armeabi-v7a")
+                isUniversalApk = true
+            }
+        }
     }
 
     sourceSets {

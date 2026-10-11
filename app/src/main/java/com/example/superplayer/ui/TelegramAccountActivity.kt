@@ -143,6 +143,12 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        // Al salir de Telegram se borra lo descargado (la caché de Telegram crece muy rápido).
+        if (isFinishing && state == TgAuthState.READY) backend?.cleanCache()
+        super.onDestroy()
+    }
+
     private fun showMessage(text: String) {
         adapter.submit(emptyList())
         binding.emptyView.text = text
@@ -196,12 +202,19 @@ class TelegramAccountActivity : AppCompatActivity() {
                     InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 ) { b.sendPassword(it) }
             }
-            TgAuthState.READY -> loadChatList()
+            TgAuthState.READY -> {
+                if (!cacheCleaned) {
+                    cacheCleaned = true
+                    b.cleanCache()
+                }
+                loadChatList()
+            }
             TgAuthState.CLOSED -> showMessage(getString(R.string.tgacc_closed))
         }
     }
 
     private var openDialog: AlertDialog? = null
+    private var cacheCleaned = false
 
     private fun askText(titleRes: Int, hintRes: Int, inputType: Int, onOk: (String) -> Unit) {
         openDialog?.dismiss()
