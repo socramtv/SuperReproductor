@@ -4,7 +4,8 @@ import android.content.Context
 
 enum class TgAuthState { STARTING, WAIT_PHONE, WAIT_CODE, WAIT_PASSWORD, READY, CLOSED }
 
-data class TgChat(val id: Long, val title: String, val kind: String, val lastDate: Long)
+/** [kind]: channel, group, bot o private. [userId]: el del otro usuario en chats privados y bots (0 si no aplica). */
+data class TgChat(val id: Long, val title: String, val kind: String, val lastDate: Long, val userId: Long = 0L)
 
 /**
  * Telegram con la cuenta del usuario (TDLib). Esta interfaz no depende de
@@ -17,6 +18,7 @@ interface TgAccountBackend {
     interface Listener {
         fun onState(state: TgAuthState)
         fun onError(message: String)
+        fun onNewMessage(chatId: Long)
     }
 
     fun start(listener: Listener)
@@ -40,6 +42,10 @@ interface TgAccountBackend {
      * Se llama desde hilos de fondo (el servidor local de streaming).
      */
     fun readBytes(fileId: Int, pos: Long, maxLen: Int): ByteArray?
+    /** Comandos (/start, /help...) que declara un bot: pares (comando sin barra, descripción). */
+    fun loadBotCommands(userId: Long, onDone: (List<Pair<String, String>>) -> Unit)
+    /** Pulsa un botón "cb" de un mensaje; [onDone] recibe el texto de respuesta y/o una URL, si el bot los da. */
+    fun pressButton(chatId: Long, messageId: Long, data: String, onDone: (String?, String?) -> Unit)
 }
 
 object TelegramAccountPrefs {
@@ -54,4 +60,16 @@ object TelegramAccountPrefs {
     }
 
     fun hasApi(context: Context) = apiId(context) != 0 && apiHash(context).isNotBlank()
+
+    fun favoriteChats(context: Context): Set<Long> =
+        prefs(context).getStringSet("fav_chats", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
+
+    /** Marca o quita un chat de favoritos; devuelve true si queda como favorito. */
+    fun toggleFavorite(context: Context, chatId: Long): Boolean {
+        val set = HashSet(prefs(context).getStringSet("fav_chats", emptySet())!!)
+        val key = chatId.toString()
+        val nowFav = if (set.contains(key)) { set.remove(key); false } else { set.add(key); true }
+        prefs(context).edit().putStringSet("fav_chats", set).apply()
+        return nowFav
+    }
 }

@@ -15,6 +15,17 @@
         android:background="@color/surface_dark"
         app:titleTextColor="@color/on_background" />
 
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tgTabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_dark"
+        android:visibility="gone"
+        app:tabMode="scrollable"
+        app:tabIndicatorColor="@color/primary"
+        app:tabSelectedTextColor="@color/primary"
+        app:tabTextColor="@color/on_background" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

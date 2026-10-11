@@ -2,6 +2,18 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_tgacc_fav"
+        android:title="@string/tgacc_menu_fav"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_tgacc_cmds"
+        android:title="@string/tgacc_menu_cmds"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_tgacc_kbd"
+        android:title="@string/tgacc_menu_kbd"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tgacc_search"
         android:title="@string/tgacc_menu_search"
         app:showAsAction="never" />

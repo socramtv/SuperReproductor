@@ -18,6 +18,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     private var listener: TgAccountBackend.Listener? = null
     private var state = TgAuthState.STARTING
     private val chats = ConcurrentHashMap<Long, TdApi.Chat>()
+    private val botIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
 
     private class Download(val onProgress: (Long, Long) -> Unit, val onDone: (String?) -> Unit)
     private val downloads = ConcurrentHashMap<Int, Download>()
@@ -56,6 +57,8 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         when (obj) {
             is TdApi.UpdateAuthorizationState -> handleAuth(obj.authorizationState)
             is TdApi.UpdateNewChat -> chats[obj.chat.id] = obj.chat
+            is TdApi.UpdateUser -> if (obj.user.type is TdApi.UserTypeBot) botIds.add(obj.user.id)
+            is TdApi.UpdateNewMessage -> listener?.onNewMessage(obj.message.chatId)
             is TdApi.UpdateFile -> {
                 val file = obj.file
                 val d = downloads[file.id] ?: return
@@ -126,6 +129,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     private fun kindOf(chat: TdApi.Chat): String {
         val t = chat.type
         return when {
+            t is TdApi.ChatTypePrivate && botIds.contains(t.userId) -> "bot"
             t is TdApi.ChatTypeSupergroup && t.isChannel -> "channel"
             t is TdApi.ChatTypeSupergroup || t is TdApi.ChatTypeBasicGroup -> "group"
             else -> "private"
@@ -137,7 +141,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             if (result is TdApi.Chats) {
                 val list = result.chatIds.toList().mapNotNull { id ->
                     val chat = chats[id] ?: return@mapNotNull null
-                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L)
+                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L, (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L)
                 }
                 onDone(list)
             } else {
@@ -185,11 +189,24 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         }
         val links = linkRegex.findAll(text).map { it.value.trimEnd('.', ',', ')', ']', ';', '!') }.distinct().toList()
         if (kind == "none" && text.isEmpty()) return null
+        val buttons = ArrayList<TgButton>()
+        when (val rm = m.replyMarkup) {
+            is TdApi.ReplyMarkupInlineKeyboard -> for (row in rm.rows) for (b in row) {
+                when (val bt = b.type) {
+                    is TdApi.InlineKeyboardButtonTypeCallback ->
+                        buttons.add(TgButton(b.text, "cb", android.util.Base64.encodeToString(bt.data, android.util.Base64.NO_WRAP)))
+                    is TdApi.InlineKeyboardButtonTypeUrl -> buttons.add(TgButton(b.text, "url", bt.url))
+                    else -> {}
+                }
+            }
+            is TdApi.ReplyMarkupShowKeyboard -> for (row in rm.rows) for (b in row) buttons.add(TgButton(b.text, "txt", b.text))
+            else -> {}
+        }
         val chatKind = chats[m.chatId]?.let { kindOf(it) } ?: "private"
         return TgMessage(
             m.chatId, chatTitle, chatKind, m.id, m.date.toLong(), text, kind,
             file?.id?.toString(), name?.ifEmpty { null }, mime?.ifEmpty { null },
-            file?.let { if (it.size > 0) it.size else it.expectedSize } ?: 0L, links
+            file?.let { if (it.size > 0) it.size else it.expectedSize } ?: 0L, links, buttons
         )
     }
 
@@ -246,6 +263,28 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         request.chatId = chatId
         request.inputMessageContent = content
         send(request) { result -> onDone(result is TdApi.Message) }
+    }
+
+    override fun loadBotCommands(userId: Long, onDone: (List<Pair<String, String>>) -> Unit) {
+        send(TdApi.GetUserFullInfo(userId)) { r ->
+            if (r is TdApi.UserFullInfo) {
+                val cmds = r.botInfo?.commands ?: emptyArray()
+                onDone(cmds.map { it.command to it.description })
+            } else {
+                onDone(emptyList())
+            }
+        }
+    }
+
+    override fun pressButton(chatId: Long, messageId: Long, data: String, onDone: (String?, String?) -> Unit) {
+        val bytes = android.util.Base64.decode(data, android.util.Base64.NO_WRAP)
+        send(TdApi.GetCallbackQueryAnswer(chatId, messageId, TdApi.CallbackQueryPayloadData(bytes))) { r ->
+            if (r is TdApi.CallbackQueryAnswer) {
+                onDone(r.text?.ifEmpty { null }, r.url?.ifEmpty { null })
+            } else {
+                onDone(null, null)
+            }
+        }
     }
 
     private fun getFileBlocking(fileId: Int): TdApi.File? {

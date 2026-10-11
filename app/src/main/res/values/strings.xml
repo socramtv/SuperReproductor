@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Acestream+</string>
+    <string name="list_slot_2">Lista 2</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -403,4 +403,23 @@
     <string name="tgacc_send">Enviar</string>
     <string name="tgacc_send_error">No se pudo enviar el mensaje</string>
     <string name="tgacc_stream_play">▶ Reproducir sin descargar</string>
+    <string name="tgacc_menu_fav">⭐ Favorito (poner/quitar)</string>
+    <string name="tgacc_menu_cmds">🤖 Comandos del bot…</string>
+    <string name="tgacc_menu_kbd">⌨ Teclado del bot…</string>
+    <string name="tgacc_tab_fav">⭐ Favoritos</string>
+    <string name="tgacc_tab_all">Todos</string>
+    <string name="tgacc_tab_channels">Canales</string>
+    <string name="tgacc_tab_groups">Grupos</string>
+    <string name="tgacc_tab_bots">Bots</string>
+    <string name="tgacc_tab_people">Personas</string>
+    <string name="tgacc_kind_bot">Bot</string>
+    <string name="tgacc_fav_added">Añadido a favoritos</string>
+    <string name="tgacc_fav_removed">Quitado de favoritos</string>
+    <string name="tgacc_no_commands">Este bot no declara comandos. Prueba a escribir /start</string>
+    <string name="tgacc_cmds_title">Comandos</string>
+    <string name="tgacc_no_keyboard">No hay teclado de bot en este chat</string>
+    <string name="tgacc_buttons">🔘 Botones del bot (%1$d)</string>
+    <string name="tgacc_buttons_title">Botones</string>
+    <string name="tgacc_bot_answer">Respuesta del bot</string>
+    <string name="tgacc_no_favs">Aún no tienes favoritos. Toca la ☆ de un chat para añadirlo.</string>
 </resources>

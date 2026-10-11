@@ -7,6 +7,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
+/** Botón de un bot: "cb" (de la botonera bajo el mensaje), "url" (enlace) o "txt" (teclado de respuesta). */
+data class TgButton(val text: String, val kind: String, val data: String)
+
 /** Un mensaje guardado de un canal o grupo donde está el bot. */
 data class TgMessage(
     val chatId: Long,
@@ -21,7 +24,8 @@ data class TgMessage(
     val fileName: String?,
     val mime: String?,
     val size: Long,
-    val links: List<String>
+    val links: List<String>,
+    val buttons: List<TgButton> = emptyList()
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("c", chatId).put("ct", chatTitle).put("cy", chatType)
