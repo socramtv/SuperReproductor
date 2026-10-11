@@ -75,15 +75,63 @@ class CineActivity : AppCompatActivity() {
         binding.cineCategoriesButton.setOnClickListener { showCategoryChooser() }
 
         reload()
+        if (AppPrefs.getTmdbKey(this).isBlank()) {
+            android.widget.Toast.makeText(this, R.string.cine_tmdb_key_missing, android.widget.Toast.LENGTH_LONG).show()
+        }
         // Primera vez sin ninguna categoría de cine reconocida: se deja elegir directamente.
         if (allMovies.isEmpty() && categories.isNotEmpty() && AppPrefs.getCineCategories(this) == null) {
             showCategoryChooser()
         }
     }
 
+    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_cine, menu)
+        return true
+    }
+
+    private fun showTmdbKeyDialog() {
+        val input = android.widget.EditText(this).apply {
+            setText(AppPrefs.getTmdbKey(this@CineActivity))
+            hint = getString(R.string.cine_tmdb_key_hint)
+            setSingleLine(true)
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = LinearLayout(this).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.cine_tmdb_key_title)
+            .setView(box)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val key = input.text.toString().trim()
+                AppPrefs.setTmdbKey(this, key)
+                adapter.notifyDataSetChanged()
+                if (key.isNotEmpty()) {
+                    Thread {
+                        val code = MovieInfo.checkTmdbKey(key)
+                        runOnUiThread {
+                            val msg = when (code) {
+                                200 -> R.string.cine_tmdb_key_ok
+                                401 -> R.string.cine_tmdb_key_bad
+                                else -> R.string.cine_tmdb_key_unknown
+                            }
+                            android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }.start()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
             finish()
+            return true
+        }
+        if (item.itemId == R.id.action_tmdb_key) {
+            showTmdbKeyDialog()
             return true
         }
         return super.onOptionsItemSelected(item)
@@ -155,6 +203,20 @@ class CineActivity : AppCompatActivity() {
         content.addView(poster)
         content.addView(meta)
         content.addView(synopsis)
+        val extra = TextView(this).apply {
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(this@CineActivity, R.color.on_background))
+            setPadding(0, (10 * density).toInt(), 0, 0)
+        }
+        val trailer = TextView(this).apply {
+            textSize = 15f
+            text = getString(R.string.cine_trailer)
+            setTextColor(ContextCompat.getColor(this@CineActivity, R.color.primary))
+            setPadding(0, (12 * density).toInt(), 0, (8 * density).toInt())
+            visibility = View.GONE
+        }
+        content.addView(extra)
+        content.addView(trailer)
         val scroll = ScrollView(this)
         scroll.addView(content)
 
@@ -163,16 +225,46 @@ class CineActivity : AppCompatActivity() {
                 placeholder(R.drawable.ic_placeholder)
                 error(R.drawable.ic_placeholder)
             }
-            val parts = listOfNotNull(info?.year, info?.genre)
+            val parts = listOfNotNull(
+                info?.rating?.takeIf { it > 0.0 }?.let { "★ " + String.format(Locale.US, "%.1f", it) },
+                info?.year,
+                info?.runtimeMin?.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
+                info?.genre,
+                info?.certification?.takeIf { it.isNotBlank() }
+            )
             meta.text = parts.joinToString(" · ")
             meta.visibility = if (parts.isEmpty()) View.GONE else View.VISIBLE
-            synopsis.text = info?.overview ?: getString(R.string.cine_no_synopsis)
+            val tag = info?.tagline?.takeIf { it.isNotBlank() }
+            val over = info?.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis)
+            synopsis.text = if (tag != null) "“$tag”\n\n$over" else over
+            val lines = ArrayList<String>()
+            info?.director?.takeIf { it.isNotBlank() }?.let {
+                lines.add(getString(if (info?.isTv == true) R.string.cine_creator else R.string.cine_director) + ": " + it)
+            }
+            if (info != null && info.cast.isNotEmpty()) {
+                lines.add(getString(R.string.cine_cast) + ": " + info.cast.joinToString(", "))
+            }
+            extra.text = lines.joinToString("\n\n")
+            extra.visibility = if (lines.isEmpty()) View.GONE else View.VISIBLE
+            val tk = info?.trailerKey
+            if (tk.isNullOrBlank()) {
+                trailer.visibility = View.GONE
+            } else {
+                trailer.visibility = View.VISIBLE
+                trailer.setOnClickListener {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$tk")))
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(this@CineActivity, R.string.cine_trailer_error, android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }
 
         val cached = MovieInfo.peek(this, stream.name)
         fill(cached)
-        if (cached == null) {
-            synopsis.text = getString(R.string.cine_searching)
+        if (MovieInfo.needsFetch(this, stream.name)) {
+            if (cached == null) synopsis.text = getString(R.string.cine_searching)
             MovieInfo.request(this, stream.name) { found ->
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed) {

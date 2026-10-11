@@ -30,7 +30,22 @@ object MovieInfo {
         val year: String?,
         val genre: String?,
         val overview: String?,
-        val posterUrl: String?
+        val posterUrl: String?,
+        val originalTitle: String? = null,
+        val tagline: String? = null,
+        val runtimeMin: Int = 0,
+        val rating: Double = 0.0,
+        val votes: Int = 0,
+        val director: String? = null,
+        val cast: List<String> = emptyList(),
+        val trailerKey: String? = null,
+        val backdropUrl: String? = null,
+        val certification: String? = null,
+        val isTv: Boolean = false,
+        /** "tmdb", "itunes" o "tvmaze". */
+        val source: String = "itunes",
+        /** true si se buscó con la clave de TMDb puesta (aunque no se encontrara ahí). */
+        val tmdbChecked: Boolean = false
     )
 
     private val pool = Executors.newFixedThreadPool(3)
@@ -94,13 +109,11 @@ object MovieInfo {
     fun isKnownMissing(context: Context, rawTitle: String): Boolean {
         val (title, year) = cleanTitle(rawTitle)
         val key = keyOf(title, year)
-        synchronized(memory) {
-            if (memory.containsKey(key) && memory[key] == null) return true
-        }
         val raw = prefs(context).getString(key, null) ?: return false
         return try {
             val o = JSONObject(raw)
-            o.has("none") && System.currentTimeMillis() - o.optLong("none") < MISSING_RETRY_MS
+            o.has("none") && System.currentTimeMillis() - o.optLong("none") < MISSING_RETRY_MS &&
+                (o.optBoolean("tt", false) || AppPrefs.getTmdbKey(context).isBlank())
         } catch (e: Exception) {
             false
         }
@@ -109,23 +122,59 @@ object MovieInfo {
     private fun parseStored(raw: String): Info? = try {
         val o = JSONObject(raw)
         if (o.has("none")) null
-        else Info(
-            o.optString("t"),
-            o.optString("y").ifEmpty { null },
-            o.optString("g").ifEmpty { null },
-            o.optString("o").ifEmpty { null },
-            o.optString("p").ifEmpty { null }
-        )
+        else {
+            val castArr = o.optJSONArray("ca")
+            Info(
+                o.optString("t"),
+                o.optString("y").ifEmpty { null },
+                o.optString("g").ifEmpty { null },
+                o.optString("o").ifEmpty { null },
+                o.optString("p").ifEmpty { null },
+                o.optString("ot").ifEmpty { null },
+                o.optString("tg").ifEmpty { null },
+                o.optInt("rt", 0),
+                o.optDouble("ra", 0.0),
+                o.optInt("vc", 0),
+                o.optString("di").ifEmpty { null },
+                if (castArr == null) emptyList() else (0 until castArr.length()).map { castArr.optString(it) },
+                o.optString("tr").ifEmpty { null },
+                o.optString("bd").ifEmpty { null },
+                o.optString("ce").ifEmpty { null },
+                o.optBoolean("tv", false),
+                o.optString("src", "itunes"),
+                o.optBoolean("tt", false)
+            )
+        }
     } catch (e: Exception) {
         null
     }
 
-    private fun store(context: Context, key: String, info: Info?) {
+    private fun store(context: Context, key: String, info: Info?, tmdbChecked: Boolean) {
         synchronized(memory) { memory[key] = info }
-        val json = if (info == null) JSONObject().put("none", System.currentTimeMillis())
-        else JSONObject().put("t", info.title).put("y", info.year ?: "").put("g", info.genre ?: "")
-            .put("o", info.overview ?: "").put("p", info.posterUrl ?: "")
+        val json = if (info == null) {
+            JSONObject().put("none", System.currentTimeMillis()).put("tt", tmdbChecked)
+        } else {
+            JSONObject().put("t", info.title).put("y", info.year ?: "").put("g", info.genre ?: "")
+                .put("o", info.overview ?: "").put("p", info.posterUrl ?: "")
+                .put("ot", info.originalTitle ?: "").put("tg", info.tagline ?: "")
+                .put("rt", info.runtimeMin).put("ra", info.rating).put("vc", info.votes)
+                .put("di", info.director ?: "").put("ca", JSONArray(info.cast))
+                .put("tr", info.trailerKey ?: "").put("bd", info.backdropUrl ?: "")
+                .put("ce", info.certification ?: "").put("tv", info.isTv)
+                .put("src", info.source).put("tt", info.tmdbChecked)
+        }
         prefs(context).edit().putString(key, json.toString()).apply()
+    }
+
+    /**
+     * ¿Hay que (volver a) pedir los datos de este título? Sí si no se conoce y
+     * no se buscó hace poco, o si ya hay clave de TMDb y lo guardado salió de
+     * otra fuente y nunca se probó con ella.
+     */
+    fun needsFetch(context: Context, rawTitle: String): Boolean {
+        val info = peek(context, rawTitle)
+        if (info == null) return !isKnownMissing(context, rawTitle)
+        return AppPrefs.getTmdbKey(context).isNotBlank() && !info.tmdbChecked
     }
 
     // -----------------------------------------------------------------
@@ -141,6 +190,7 @@ object MovieInfo {
         val appContext = context.applicationContext
         val (title, year) = cleanTitle(rawTitle)
         val key = keyOf(title, year)
+        val tmdbKey = AppPrefs.getTmdbKey(appContext)
         synchronized(waiting) {
             val list = waiting[key]
             if (list != null) {
@@ -150,8 +200,8 @@ object MovieInfo {
             waiting[key] = mutableListOf(onDone)
         }
         pool.execute {
-            val info = try { search(title, year) } catch (e: Exception) { null }
-            store(appContext, key, info)
+            val info = try { search(title, year, tmdbKey) } catch (e: Exception) { null }
+            store(appContext, key, info, tmdbKey.isNotBlank())
             val callbacks = synchronized(waiting) { waiting.remove(key) } ?: emptyList()
             for (cb in callbacks) {
                 try { cb(info) } catch (e: Exception) { }
@@ -178,8 +228,198 @@ object MovieInfo {
             .replace(Regex("[^a-z0-9]+"), " ")
             .trim()
 
-    private fun search(title: String, year: String?): Info? {
-        return searchMovie(title, year) ?: searchShow(title)
+    private fun search(title: String, year: String?, tmdbKey: String): Info? {
+        val checked = tmdbKey.isNotBlank()
+        var info: Info? = null
+        if (checked) info = try { searchTmdb(tmdbKey, title, year) } catch (e: Exception) { null }
+        if (info == null) info = try { searchMovie(title, year) } catch (e: Exception) { null }
+        if (info == null) info = try { searchShow(title) } catch (e: Exception) { null }
+        return info?.copy(tmdbChecked = checked)
+    }
+
+    // ---- TMDb (con la clave del usuario) ----
+
+    private const val TMDB = "https://api.themoviedb.org/3"
+    private const val TMDB_IMG = "https://image.tmdb.org/t/p/"
+
+    /** ¿Es válida esta clave? (200 = sí, 401 = no, otro = no se pudo comprobar). Bloquea: hilo de fondo. */
+    fun checkTmdbKey(key: String): Int {
+        return try {
+            val conn = URL("$TMDB/configuration?api_key=${URLEncoder.encode(key.trim(), "UTF-8")}").openConnection() as HttpURLConnection
+            try {
+                conn.connectTimeout = 8_000
+                conn.readTimeout = 8_000
+                conn.responseCode
+            } finally {
+                conn.disconnect()
+            }
+        } catch (e: Exception) {
+            -1
+        }
+    }
+
+    private fun searchTmdb(key: String, title: String, year: String?): Info? {
+        val q = URLEncoder.encode(title, "UTF-8")
+        val wanted = norm(title)
+        for (kind in listOf("movie", "tv")) {
+            val yearParam = when {
+                year == null -> ""
+                kind == "movie" -> "&year=$year"
+                else -> "&first_air_date_year=$year"
+            }
+            val body = httpGet("$TMDB/search/$kind?api_key=$key&language=es-ES&query=$q$yearParam") ?: continue
+            val results = JSONObject(body).optJSONArray("results") ?: continue
+            var bestId = 0
+            var bestScore = -1.0
+            for (i in 0 until minOf(results.length(), 10)) {
+                val r = results.optJSONObject(i) ?: continue
+                val names = if (kind == "movie") listOf(r.optString("title"), r.optString("original_title"))
+                else listOf(r.optString("name"), r.optString("original_name"))
+                var match = 0
+                for (n in names) {
+                    val nn = norm(n)
+                    if (nn.isEmpty()) continue
+                    val m = if (nn == wanted) 10 else if (nn.contains(wanted) || wanted.contains(nn)) 4 else 0
+                    if (m > match) match = m
+                }
+                if (match == 0) continue
+                val score = match + minOf(r.optDouble("popularity", 0.0), 100.0) / 100.0
+                if (score > bestScore) {
+                    bestScore = score
+                    bestId = r.optInt("id")
+                }
+            }
+            if (bestId == 0) continue
+            val info = tmdbDetails(key, kind, bestId)
+            if (info != null) return info
+        }
+        return null
+    }
+
+    private fun tmdbDetails(key: String, kind: String, id: Int): Info? {
+        val isMovie = kind == "movie"
+        val extra = if (isMovie) "credits,videos,release_dates" else "credits,videos,content_ratings"
+        val body = httpGet(
+            "$TMDB/$kind/$id?api_key=$key&language=es-ES&append_to_response=$extra&include_video_language=es,en,null"
+        ) ?: return null
+        val o = JSONObject(body)
+
+        var overview = o.optString("overview")
+        var tagline = o.optString("tagline")
+        if (overview.isBlank()) {
+            // Sin sinopsis en español: se completa con la inglesa.
+            httpGet("$TMDB/$kind/$id?api_key=$key&language=en-US")?.let {
+                val en = JSONObject(it)
+                overview = en.optString("overview")
+                if (tagline.isBlank()) tagline = en.optString("tagline")
+            }
+        }
+        val title = o.optString(if (isMovie) "title" else "name")
+        if (title.isBlank()) return null
+        val date = o.optString(if (isMovie) "release_date" else "first_air_date")
+
+        val genresArr = o.optJSONArray("genres")
+        val genres = if (genresArr == null) null
+        else (0 until genresArr.length()).mapNotNull { genresArr.optJSONObject(it)?.optString("name")?.ifEmpty { null } }
+            .joinToString(", ").ifEmpty { null }
+
+        val runtime = if (isMovie) o.optInt("runtime", 0)
+        else o.optJSONArray("episode_run_time")?.let { if (it.length() > 0) it.optInt(0, 0) else 0 } ?: 0
+
+        val credits = o.optJSONObject("credits")
+        var director: String? = null
+        if (isMovie) {
+            val crew = credits?.optJSONArray("crew")
+            if (crew != null) {
+                val directors = (0 until crew.length()).mapNotNull {
+                    val c = crew.optJSONObject(it)
+                    if (c != null && c.optString("job") == "Director") c.optString("name").ifEmpty { null } else null
+                }
+                director = directors.take(2).joinToString(", ").ifEmpty { null }
+            }
+        } else {
+            val creators = o.optJSONArray("created_by")
+            if (creators != null) {
+                director = (0 until creators.length()).mapNotNull { creators.optJSONObject(it)?.optString("name")?.ifEmpty { null } }
+                    .take(2).joinToString(", ").ifEmpty { null }
+            }
+        }
+        val castArr = credits?.optJSONArray("cast")
+        val cast = if (castArr == null) emptyList()
+        else (0 until minOf(castArr.length(), 8)).mapNotNull { castArr.optJSONObject(it)?.optString("name")?.ifEmpty { null } }
+
+        // Tráiler de YouTube: primero en español, luego en inglés o sin idioma; "Trailer" antes que "Teaser".
+        var trailer: String? = null
+        val videos = o.optJSONObject("videos")?.optJSONArray("results")
+        if (videos != null) {
+            var bestRank = Int.MAX_VALUE
+            for (i in 0 until videos.length()) {
+                val v = videos.optJSONObject(i) ?: continue
+                if (v.optString("site") != "YouTube") continue
+                val vKey = v.optString("key").ifEmpty { null } ?: continue
+                val typeRank = when (v.optString("type")) { "Trailer" -> 0; "Teaser" -> 1; else -> continue }
+                val langRank = when (v.optString("iso_639_1")) { "es" -> 0; "en" -> 1; else -> 2 }
+                val rank = langRank * 2 + typeRank
+                if (rank < bestRank) {
+                    bestRank = rank
+                    trailer = vKey
+                }
+            }
+        }
+
+        // Clasificación por edad en España.
+        var certification: String? = null
+        if (isMovie) {
+            val countries = o.optJSONObject("release_dates")?.optJSONArray("results")
+            if (countries != null) {
+                for (i in 0 until countries.length()) {
+                    val c = countries.optJSONObject(i) ?: continue
+                    if (c.optString("iso_3166_1") != "ES") continue
+                    val dates = c.optJSONArray("release_dates") ?: continue
+                    for (j in 0 until dates.length()) {
+                        val cert = dates.optJSONObject(j)?.optString("certification").orEmpty()
+                        if (cert.isNotBlank()) {
+                            certification = cert
+                            break
+                        }
+                    }
+                }
+            }
+        } else {
+            val countries = o.optJSONObject("content_ratings")?.optJSONArray("results")
+            if (countries != null) {
+                for (i in 0 until countries.length()) {
+                    val c = countries.optJSONObject(i) ?: continue
+                    if (c.optString("iso_3166_1") == "ES" && c.optString("rating").isNotBlank()) {
+                        certification = c.optString("rating")
+                    }
+                }
+            }
+        }
+
+        val poster = o.optString("poster_path").ifEmpty { null }?.let { TMDB_IMG + "w500" + it }
+        val backdrop = o.optString("backdrop_path").ifEmpty { null }?.let { TMDB_IMG + "w780" + it }
+        return Info(
+            title = title,
+            year = date.take(4).ifEmpty { null },
+            genre = genres,
+            overview = overview.ifBlank { null },
+            posterUrl = poster,
+            originalTitle = o.optString(if (isMovie) "original_title" else "original_name").ifEmpty { null }
+                ?.takeIf { it != title },
+            tagline = tagline.ifBlank { null },
+            runtimeMin = runtime,
+            rating = o.optDouble("vote_average", 0.0),
+            votes = o.optInt("vote_count", 0),
+            director = director,
+            cast = cast,
+            trailerKey = trailer,
+            backdropUrl = backdrop,
+            certification = certification,
+            isTv = !isMovie,
+            source = "tmdb",
+            tmdbChecked = true
+        )
     }
 
     private fun searchMovie(title: String, year: String?): Info? {

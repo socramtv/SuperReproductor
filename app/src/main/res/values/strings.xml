@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">acestream+</string>
+    <string name="list_slot_2">Acestream+</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -327,4 +327,16 @@
     <string name="floating_score_on">Marcador flotante: activado</string>
     <string name="floating_score_off">Marcador flotante: desactivado</string>
     <string name="floating_score_no_teams">Activado. Añade tus equipos en «Avisos de goles» para ver sus marcadores aquí</string>
+    <string name="cine_tmdb_key_menu">Clave de TMDb…</string>
+    <string name="cine_tmdb_key_title">Clave de TMDb</string>
+    <string name="cine_tmdb_key_hint">Pega aquí tu API key (v3)</string>
+    <string name="cine_tmdb_key_missing">Para ver nota, reparto y tráiler, añade tu clave de TMDb en ⋮ → Clave de TMDb…</string>
+    <string name="cine_tmdb_key_ok">Clave válida ✔</string>
+    <string name="cine_tmdb_key_bad">Clave no válida</string>
+    <string name="cine_tmdb_key_unknown">No se pudo comprobar la clave (¿sin conexión?)</string>
+    <string name="cine_director">Dirección</string>
+    <string name="cine_creator">Creador</string>
+    <string name="cine_cast">Reparto</string>
+    <string name="cine_trailer">▶ Ver tráiler</string>
+    <string name="cine_trailer_error">No se pudo abrir el tráiler</string>
 </resources>

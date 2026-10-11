@@ -253,6 +253,13 @@ object AppPrefs {
     /** Lo que es de cada perfil dentro de los ajustes (filtros y orden de categorías): ver Profiles. */
     private fun profilePrefs(context: Context) = Profiles.prefs(context, PREFS_NAME)
 
+    /** Clave de la API de TMDb (v3) para las fichas de Cine; vacía = solo iTunes/TVMaze. La pone el usuario en Cine → ⋮. */
+    fun getTmdbKey(context: Context): String = prefs(context).getString("tmdb_key", "").orEmpty().trim()
+
+    fun setTmdbKey(context: Context, key: String) {
+        prefs(context).edit().putString("tmdb_key", key.trim()).apply()
+    }
+
     /** Marcador flotante de tus equipos sobre el reproductor (ver PlayerActivity.refreshFloatingScore). Por defecto sí. */
     fun isFloatingScore(context: Context): Boolean = prefs(context).getBoolean("floating_score", true)
 

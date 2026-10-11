@@ -48,13 +48,19 @@ class CineAdapter(
             }
             val info = MovieInfo.peek(context, stream.name)
             binding.cineTitle.text = info?.title?.takeIf { it.isNotBlank() } ?: MovieInfo.cleanTitle(stream.name).first
+            val metaParts = listOfNotNull(
+                info?.rating?.takeIf { it > 0.0 }?.let { "★ " + String.format(java.util.Locale.US, "%.1f", it) },
+                info?.year
+            )
+            binding.cineMeta.text = metaParts.joinToString(" · ")
+            binding.cineMeta.visibility = if (metaParts.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
             binding.cinePoster.load(info?.posterUrl ?: stream.icon) {
                 placeholder(R.drawable.ic_placeholder)
                 error(R.drawable.ic_placeholder)
             }
             binding.root.setOnClickListener { onClick(stream) }
 
-            if (info == null && !MovieInfo.isKnownMissing(context, stream.name)) {
+            if (MovieInfo.needsFetch(context, stream.name)) {
                 val streamId = stream.id
                 MovieInfo.request(context, stream.name) { found ->
                     if (found == null) return@request

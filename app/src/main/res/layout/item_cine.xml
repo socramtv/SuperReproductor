@@ -29,4 +29,13 @@
         android:textColor="@color/on_background"
         android:textSize="12sp" />
 
+    <TextView
+        android:id="@+id/cineMeta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:maxLines="1"
+        android:textColor="@color/primary"
+        android:textSize="11sp" />
+
 </LinearLayout>

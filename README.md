@@ -1246,6 +1246,8 @@ vod, estreno) y se eligen a mano con el botón **Categorías**. Carátula y sino
 español de España) y, si no aparece, de TVMaze (series); sin clave de API. Si no se encuentra nada se usa el logo de la propia lista.
 Lo encontrado (y lo no encontrado, 7 días) se guarda en el móvil. Código: `data/MovieInfo.kt`, `ui/CineActivity.kt`, `ui/CineAdapter.kt`.
 
+**TMDb (ficha completa):** en Cine, menú ⋮ → **"Clave de TMDb…"** pega tu API key (v3, gratis en themoviedb.org). Con ella la ficha muestra nota, duración, género, clasificación, frase, sinopsis, dirección/creador, reparto y botón de tráiler (YouTube). Sin clave (o si TMDb no encuentra el título) se usa iTunes/TVMaze. La clave se guarda solo en el móvil, no en el código.
+
 ## Móvil como mando de la tele
 
 - **En la tele** (Fire TV / Google TV / Android TV): viene **activado**. Menú ⋮ → "Control remoto de esta pantalla…" enseña la dirección
