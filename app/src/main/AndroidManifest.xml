@@ -92,12 +92,6 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
-        <!-- Telegram con un bot (ver TelegramActivity) -->
-        <activity
-            android:name=".ui.TelegramActivity"
-            android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden" />
-
         <!-- Telegram con la cuenta del usuario, TDLib (ver TelegramAccountActivity) -->
         <activity
             android:name=".ui.TelegramAccountActivity"

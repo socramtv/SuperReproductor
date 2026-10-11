@@ -221,12 +221,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // A diferencia de los de arriba, este no guarda ninguna URL: elige un
-        // archivo JSON/M3U del propio dispositivo (antes había también un
-        // icono de carpeta redundante en la barra superior para esto mismo;
-        // se quitó por quedarse ya este botón de aquí abajo).
-        binding.loadFileButton.setOnClickListener {
-            openDocumentLauncher.launch(arrayOf("*/*"))
+        // A diferencia de los de arriba, este no guarda ninguna URL: abre Telegram.
+        // (Elegir un archivo del dispositivo está en el menú ⋮, "Abrir archivo…".)
+        binding.telegramButton.setOnClickListener {
+            startActivity(Intent(this, TelegramAccountActivity::class.java))
         }
     }
 
@@ -381,6 +379,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Lista recibida por Telegram (ver TelegramImport): se carga como lista principal.
+        TelegramImport.pending?.let { imported ->
+            TelegramImport.pending = null
+            setPlaylist(imported, "telegram")
+            Toast.makeText(
+                this,
+                getString(R.string.load_success, imported.categories.size, imported.categories.sumOf { it.streams.size }),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
         updateSlotButtonLabels()
         // Canales ocultados/renombrados desde una lista: se reaplican sobre la lista cargada.
         reapplyChannelOverrides()
@@ -960,8 +968,8 @@ class MainActivity : AppCompatActivity() {
                 showRemoteControlDialog(this)
                 true
             }
-            R.id.action_telegram -> {
-                startActivity(Intent(this, TelegramActivity::class.java))
+            R.id.action_load_file -> {
+                openDocumentLauncher.launch(arrayOf("*/*"))
                 true
             }
             R.id.action_profiles -> {

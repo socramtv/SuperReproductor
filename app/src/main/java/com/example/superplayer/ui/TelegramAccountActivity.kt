@@ -902,6 +902,8 @@ class TelegramAccountActivity : AppCompatActivity() {
                 labels.add(getString(R.string.tgacc_view_photo))
                 actions.add { viewPhoto(m) }
             } else if (looksLikePlaylist(m)) {
+                labels.add(getString(R.string.tg_load_as_main))
+                actions.add { loadPlaylistFile(m) { data -> TelegramImport.openInMain(this, data) } }
                 labels.add(getString(R.string.tg_open_playlist))
                 actions.add { openPlaylist(m) }
             } else if (m.kind != "document" || looksLikeMedia(m)) {
@@ -914,6 +916,10 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
         }
         for (link in m.links) {
+            if (TelegramImport.looksLikeListUrl(link)) {
+                labels.add(getString(R.string.tg_link_as_list, link.removePrefix("https://").removePrefix("http://").take(40)))
+                actions.add { loadPlaylistUrl(link) }
+            }
             labels.add("▶ " + link.removePrefix("https://").removePrefix("http://").take(60))
             actions.add { playUrl(link, m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: link) }
         }
@@ -935,10 +941,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun looksLikePlaylist(m: TgMessage): Boolean {
-        val name = (m.fileName ?: "").lowercase()
-        val mime = (m.mime ?: "").lowercase()
-        if (m.kind != "document" || m.size > 2_000_000) return false
-        return name.endsWith(".m3u") || name.endsWith(".m3u8") || name.endsWith(".json") || mime.contains("mpegurl")
+        if (m.kind != "document" || m.size > 30_000_000) return false
+        return TelegramImport.looksLikeListName(m.fileName) || TelegramImport.looksLikeListMime(m.mime)
     }
 
     private fun looksLikeMedia(m: TgMessage): Boolean {
@@ -1000,34 +1004,64 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
-    private fun openPlaylist(m: TgMessage) {
+    /** Descarga y analiza una lista enviada como archivo; [onData] se llama en el hilo principal. */
+    private fun loadPlaylistFile(m: TgMessage, onData: (com.example.superplayer.model.PlaylistData) -> Unit) {
         download(m) { path ->
             Thread {
-                var streams: List<Stream> = emptyList()
+                var data: com.example.superplayer.model.PlaylistData? = null
                 try {
-                    val data = PlaylistRepository.parse(File(path).readText())
-                    streams = data.categories.flatMap { it.streams }.take(500)
+                    data = PlaylistRepository.parse(File(path).readText())
                 } catch (e: Exception) {
                     // se avisa abajo
                 }
-                val found = streams
+                val found = data
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
-                    if (found.isEmpty()) {
+                    if (found == null || found.categories.sumOf { it.streams.size } == 0) {
                         Toast.makeText(this, getString(R.string.tg_file_error, getString(R.string.tg_playlist_error)), Toast.LENGTH_LONG).show()
                     } else {
-                        AlertDialog.Builder(this)
-                            .setTitle(getString(R.string.tg_playlist_title, found.size))
-                            .setItems(found.map { it.name }.toTypedArray()) { _, which ->
-                                PlayerActivity.pendingStream = found[which]
-                                PlayerActivity.pendingChannelList = found
-                                startActivity(Intent(this, PlayerActivity::class.java))
-                            }
-                            .setNegativeButton(R.string.channel_check_close, null)
-                            .show()
+                        onData(found)
                     }
                 }
             }.start()
+        }
+    }
+
+    /** Una lista a la que apunta un enlace del chat: se descarga y se carga como lista principal. */
+    private fun loadPlaylistUrl(url: String) {
+        Toast.makeText(this, R.string.tg_loading, Toast.LENGTH_SHORT).show()
+        Thread {
+            var data: com.example.superplayer.model.PlaylistData? = null
+            try {
+                data = PlaylistRepository.loadFromUrl(url)
+            } catch (e: Exception) {
+                // se avisa abajo
+            }
+            val found = data
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (found == null || found.categories.sumOf { it.streams.size } == 0) {
+                    Toast.makeText(this, getString(R.string.tg_file_error, getString(R.string.tg_playlist_error)), Toast.LENGTH_LONG).show()
+                } else {
+                    TelegramImport.openInMain(this, found)
+                }
+            }
+        }.start()
+    }
+
+    /** Elegir un canal suelto de la lista de un archivo, sin cargarla como lista principal. */
+    private fun openPlaylist(m: TgMessage) {
+        loadPlaylistFile(m) { data ->
+            val found = data.categories.flatMap { it.streams }.take(500)
+            AlertDialog.Builder(this)
+                .setTitle(getString(R.string.tg_playlist_title, found.size))
+                .setItems(found.map { it.name }.toTypedArray()) { _, which ->
+                    PlayerActivity.pendingStream = found[which]
+                    PlayerActivity.pendingChannelList = found
+                    startActivity(Intent(this, PlayerActivity::class.java))
+                }
+                .setNegativeButton(R.string.channel_check_close, null)
+                .show()
         }
     }
 

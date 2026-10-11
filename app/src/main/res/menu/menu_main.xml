@@ -59,12 +59,6 @@
 
     <!-- Cine: carátulas y sinopsis de las películas (ver ui/CineActivity) -->
 
-    <!-- Telegram con un bot (ver ui/TelegramActivity) -->
-    <item
-        android:id="@+id/action_telegram"
-        android:title="@string/action_telegram"
-        app:showAsAction="never" />
-
     <!-- Perfiles (ver data/Profiles); el título lleva el perfil activo (lo pone MainActivity) -->
     <item
         android:id="@+id/action_profiles"
@@ -97,6 +91,12 @@
     <item
         android:id="@+id/action_backup_import"
         android:title="@string/action_backup_import"
+        app:showAsAction="never" />
+
+    <!-- Elegir un archivo JSON/M3U del propio dispositivo (antes era un botón de la pantalla principal) -->
+    <item
+        android:id="@+id/action_load_file"
+        android:title="@string/action_load_file_menu"
         app:showAsAction="never" />
 
 </menu>

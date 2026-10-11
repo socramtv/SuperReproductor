@@ -63,12 +63,13 @@ object TelegramAccountPrefs {
      * pedirá nunca (ojo: si el repositorio es público, quedarían visibles). Vacías = se piden en
      * la app una vez y se guardan en el móvil (se conservan al actualizar la app).
      */
-    private const val DEFAULT_API_ID = 0
-    private const val DEFAULT_API_HASH = ""
+    private val DEFAULT_API_ID: Int = com.example.superplayer.BuildConfig.TG_API_ID
+    private val DEFAULT_API_HASH: String = com.example.superplayer.BuildConfig.TG_API_HASH
 
-    fun apiId(context: Context): Int = prefs(context).getInt("api_id", 0).takeIf { it != 0 } ?: DEFAULT_API_ID
+    fun apiId(context: Context): Int = DEFAULT_API_ID.takeIf { it != 0 && DEFAULT_API_HASH.isNotBlank() } ?: prefs(context).getInt("api_id", 0)
     fun apiHash(context: Context): String =
-        prefs(context).getString("api_hash", "").orEmpty().ifBlank { DEFAULT_API_HASH }
+        if (DEFAULT_API_ID != 0 && DEFAULT_API_HASH.isNotBlank()) DEFAULT_API_HASH
+        else prefs(context).getString("api_hash", "").orEmpty()
 
     fun setApi(context: Context, id: Int, hash: String) {
         prefs(context).edit().putInt("api_id", id).putString("api_hash", hash.trim()).apply()

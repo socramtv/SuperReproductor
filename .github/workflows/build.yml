@@ -34,6 +34,9 @@ jobs:
           restore-keys: |
             tdlib-android-
       - name: Build debug APK
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: gradle assembleDebug --stacktrace
       - name: Upload APK
         if: success()

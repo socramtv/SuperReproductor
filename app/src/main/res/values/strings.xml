@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Lista 2</string>
+    <string name="list_slot_2">Acestream+</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -105,6 +105,8 @@
     <string name="list_updated_hours">hace %1$d h</string>
     <string name="list_updated_days">hace %1$d d</string>
     <string name="action_load_file_button">Archivo 📁</string>
+    <string name="action_telegram_button">Telegram ✈️</string>
+    <string name="action_load_file_menu">📁 Abrir archivo…</string>
     <string name="loading_list">Cargando lista…</string>
     <string name="list_load_error">No se pudo cargar esa lista (%1$s).</string>
     <!-- Caché de listas remotas (ver PlaylistCache): cuando falla la descarga
@@ -356,6 +358,8 @@
     <string name="tg_empty_no_token">Pulsa ⋮ → Bot de Telegram… y pega el token de tu bot.</string>
     <string name="tg_chat_sub">%1$d mensajes · último %2$s</string>
     <string name="tg_links_count">%1$d enlaces</string>
+    <string name="tg_load_as_main">📥 Cargar como lista principal</string>
+    <string name="tg_link_as_list">📥 Cargar lista del enlace: %1$s</string>
     <string name="tg_open_playlist">📋 Abrir lista de canales</string>
     <string name="tg_play_file">▶ Reproducir</string>
     <string name="tg_nothing_to_play">Este mensaje no tiene nada que reproducir</string>

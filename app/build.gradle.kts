@@ -19,6 +19,14 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // Credenciales de Telegram (api_id / api_hash de my.telegram.org) inyectadas al compilar
+        // desde los "secrets" de GitHub (TG_API_ID, TG_API_HASH), para no escribirlas en el
+        // repositorio ni pedirlas en la app. Si no existen, la app las pide una sola vez.
+        val tgApiId = (System.getenv("TG_API_ID") ?: "").trim().toIntOrNull() ?: 0
+        val tgApiHash = (System.getenv("TG_API_HASH") ?: "").trim().replace("\"", "")
+        buildConfigField("int", "TG_API_ID", tgApiId.toString())
+        buildConfigField("String", "TG_API_HASH", "\"" + tgApiHash + "\"")
+
         if (tdlibPresent) {
             ndk {
                 abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -69,6 +77,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     sourceSets {
