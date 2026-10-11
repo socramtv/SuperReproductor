@@ -192,6 +192,26 @@
     </LinearLayout>
 
     <!--
+        Mini marcador flotante (ver PlayerActivity.refreshFloatingScore): los
+        partidos en juego de los equipos que sigues, arriba a la izquierda.
+    -->
+    <TextView
+        android:id="@+id/floatingScore"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:maxWidth="300dp"
+        android:background="@drawable/bg_floating_score"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
+        android:textColor="@color/player_text"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!--
         Pausa en directo (ver TimeShiftSession / PlayerActivity): cuánto va
         por detrás del directo y botones para retroceder, adelantar y volver
         al directo. Solo se ve con los controles y si el canal usa el buffer.

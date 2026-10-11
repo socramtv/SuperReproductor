@@ -46,6 +46,23 @@
         android:title="@string/action_now_live"
         app:showAsAction="never" />
 
+    <!-- Móvil como mando de la tele (ver ui/RemoteActivity) y ajustes de control remoto de esta pantalla (ver remote/RemoteServer) -->
+    <item
+        android:id="@+id/action_remote_control"
+        android:title="@string/action_remote_control"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_remote_settings"
+        android:title="@string/action_remote_settings"
+        app:showAsAction="never" />
+
+    <!-- Cine: carátulas y sinopsis de las películas (ver ui/CineActivity) -->
+    <item
+        android:id="@+id/action_cine"
+        android:title="@string/action_cine"
+        app:showAsAction="never" />
+
     <!-- Perfiles (ver data/Profiles); el título lleva el perfil activo (lo pone MainActivity) -->
     <item
         android:id="@+id/action_profiles"

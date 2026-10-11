@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Móvil como mando de la tele: encontrar y anunciar la app en la red local (ver remote/) -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Recordatorios de la guía EPG (ver reminder/ReminderManager.kt) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -80,6 +83,18 @@
         <!-- Ahora en directo: mosaico de favoritos con vista previa (ver NowLiveActivity) -->
         <activity
             android:name=".ui.NowLiveActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Móvil como mando de la tele (ver RemoteActivity) -->
+        <activity
+            android:name=".ui.RemoteActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Cine: carátulas y sinopsis (ver CineActivity) -->
+        <activity
+            android:name=".ui.CineActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 

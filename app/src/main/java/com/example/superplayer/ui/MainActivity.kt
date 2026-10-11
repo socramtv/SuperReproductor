@@ -105,6 +105,8 @@ class MainActivity : AppCompatActivity() {
         applySystemBarInsets(top = binding.headerLogo, bottom = binding.recyclerView)
 
         favoritesStore = FavoritesStore(this)
+        // Control remoto desde otro móvil (solo si está activado: por defecto en TV).
+        com.example.superplayer.remote.RemoteServer.ensureStarted(applicationContext)
 
         categoryAdapter = CategoryAdapter(emptyList()) { category -> openCategory(category) }
         streamAdapter = StreamAdapter(
@@ -910,6 +912,19 @@ class MainActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_goal_alerts -> {
                 showGoalAlertsDialog(this)
+                true
+            }
+            R.id.action_remote_control -> {
+                startActivity(Intent(this, RemoteActivity::class.java))
+                true
+            }
+            R.id.action_remote_settings -> {
+                showRemoteControlDialog(this)
+                true
+            }
+            R.id.action_cine -> {
+                CineActivity.categories = playlist.categories
+                startActivity(Intent(this, CineActivity::class.java))
                 true
             }
             R.id.action_profiles -> {

@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Acestream+</string>
+    <string name="list_slot_2">acestream+</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -277,4 +277,54 @@
     <string name="widget_tab_matches">⚽</string>
     <string name="widget_home_empty_continue">No tienes nada a medias</string>
     <string name="widget_home_empty_matches">No hay partidos ahora mismo (o sin conexión). Toca ⟳</string>
+
+    <!-- Cine -->
+    <string name="action_cine">🎬 Cine…</string>
+    <string name="cine_title">Cine</string>
+    <string name="cine_search_hint">Buscar película</string>
+    <string name="cine_categories_button">Categorías</string>
+    <string name="cine_categories_title">Categorías de cine</string>
+    <string name="cine_empty">No hay películas. Toca «Categorías» y marca las categorías de películas de tu lista.</string>
+    <string name="cine_no_synopsis">Sin sinopsis disponible</string>
+    <string name="cine_searching">Buscando carátula y sinopsis…</string>
+    <string name="cine_watch">▶ Ver</string>
+
+    <!-- Móvil como mando de la tele -->
+    <string name="action_remote_control">📱 Usar este móvil como mando…</string>
+    <string name="action_remote_settings">Control remoto de esta pantalla…</string>
+    <string name="remote_title">Mando de tele</string>
+    <string name="remote_choose_device">📺 Elegir tele…</string>
+    <string name="remote_choose_title">Teles encontradas</string>
+    <string name="remote_add_ip">Añadir por IP…</string>
+    <string name="remote_add_ip_message">La IP (y el puerto, si es distinto de 8765) salen en la tele: menú ⋮ → Control remoto de esta pantalla.</string>
+    <string name="remote_pin_title">Código de %1$s</string>
+    <string name="remote_pin_message">Escribe el código de 4 cifras que sale en la tele (menú ⋮ → Control remoto de esta pantalla).</string>
+    <string name="remote_wrong_pin">Código incorrecto</string>
+    <string name="remote_unreachable">No se encuentra la tele. ¿Está encendida, con la app abierta y en la misma wifi?</string>
+    <string name="remote_not_playing">Abre antes un canal en la tele</string>
+    <string name="remote_no_device">Elige primero una tele</string>
+    <string name="remote_idle">La app está abierta en la tele, sin reproducir nada</string>
+    <string name="remote_prev">⏮ Canal −</string>
+    <string name="remote_next">Canal + ⏭</string>
+    <string name="remote_back30">⏪ 30 s</string>
+    <string name="remote_playpause">⏯</string>
+    <string name="remote_fwd30">30 s ⏩</string>
+    <string name="remote_vol_down">🔉 −</string>
+    <string name="remote_mute">🔇</string>
+    <string name="remote_vol_up">🔊 +</string>
+    <string name="remote_send_channel">📺 Enviar un canal…</string>
+    <string name="remote_send_favorite">⭐ Favoritos…</string>
+    <string name="remote_no_channels">No hay canales cargados en este móvil</string>
+    <string name="remote_sent">Enviado: %1$s</string>
+    <string name="remote_server_title">Control remoto de esta pantalla</string>
+    <string name="remote_server_on">Se puede controlar desde otro móvil con la app (menú ⋮ → «Usar este móvil como mando»).\n\nNombre: %1$s\nDirección: %2$s\nCódigo: %3$s</string>
+    <string name="remote_server_off">Desactivado: nadie puede controlar esta pantalla desde otro móvil.</string>
+    <string name="remote_server_enable">Activar</string>
+    <string name="remote_server_disable">Desactivar</string>
+    <string name="remote_server_new_pin">Código nuevo</string>
+
+    <!-- Marcador flotante -->
+    <string name="floating_score_on">Marcador flotante: activado</string>
+    <string name="floating_score_off">Marcador flotante: desactivado</string>
+    <string name="floating_score_no_teams">Activado. Añade tus equipos en «Avisos de goles» para ver sus marcadores aquí</string>
 </resources>

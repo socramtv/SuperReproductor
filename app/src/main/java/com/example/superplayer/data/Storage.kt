@@ -253,6 +253,28 @@ object AppPrefs {
     /** Lo que es de cada perfil dentro de los ajustes (filtros y orden de categorías): ver Profiles. */
     private fun profilePrefs(context: Context) = Profiles.prefs(context, PREFS_NAME)
 
+    /** Marcador flotante de tus equipos sobre el reproductor (ver PlayerActivity.refreshFloatingScore). Por defecto sí. */
+    fun isFloatingScore(context: Context): Boolean = prefs(context).getBoolean("floating_score", true)
+
+    fun setFloatingScore(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean("floating_score", enabled).apply()
+    }
+
+    /** Categorías que se enseñan en Cine (ver CineActivity); null = sin elegir, se detectan por el nombre. */
+    fun getCineCategories(context: Context): Set<String>? {
+        val raw = prefs(context).getString("cine_categories", null) ?: return null
+        return try {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }.toSet()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun setCineCategories(context: Context, names: Set<String>) {
+        prefs(context).edit().putString("cine_categories", org.json.JSONArray(names.toList()).toString()).apply()
+    }
+
     /** Pausa en directo: minutos de memoria (0 = desactivada). Ver player/TimeShiftSession. */
     fun getTimeShiftMinutes(context: Context): Int = prefs(context).getInt("timeshift_minutes", 0)
 

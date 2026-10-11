@@ -41,6 +41,13 @@ object MatchCache {
         }.start()
     }
 
+    /** Partidos en juego ahora de los equipos que sigues (para el marcador flotante del reproductor). */
+    fun liveFor(followed: List<String>): List<MatchFeed.Match> =
+        matches.filter {
+            it.state == "in" &&
+                (GoalAlerts.matchesTeam(followed, it.home) || GoalAlerts.matchesTeam(followed, it.away))
+        }
+
     /** El partido al que corresponde un programa de la guía (los dos equipos en el título y la hora parecida), o null. */
     fun find(title: String, startMillis: Long): MatchFeed.Match? {
         for (m in matches) {

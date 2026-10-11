@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una carátula de la parrilla de Cine (ver CineAdapter); el alto del póster lo fija el adaptador (2:3) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_margin="4dp"
+    android:padding="4dp"
+    android:focusable="true"
+    android:clickable="true"
+    android:background="@drawable/bg_cine_card">
+
+    <ImageView
+        android:id="@+id/cinePoster"
+        android:layout_width="match_parent"
+        android:layout_height="150dp"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:id="@+id/cineTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_horizontal"
+        android:minLines="2"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:textColor="@color/on_background"
+        android:textSize="12sp" />
+
+</LinearLayout>

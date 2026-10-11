@@ -165,6 +165,78 @@ class PlayerActivity : AppCompatActivity() {
     private var timeShift: TimeShiftSession? = null
     private var timeShiftActive = false
     private var tsItemStartTime = 0L
+    // Órdenes del móvil-mando (ver remote/RemoteServer): siempre llegan en el hilo principal.
+    private val remoteCommands = object : com.example.superplayer.remote.RemoteServer.PlayerCommands {
+        override fun next() = switchChannel(1)
+        override fun previous() = switchChannel(-1)
+        override fun playPause() {
+            val ctrl = controller ?: return
+            if (ctrl.playWhenReady) ctrl.pause() else ctrl.play()
+        }
+        override fun seek(deltaMs: Long) {
+            if (timeShiftActive) {
+                timeShiftSeek(deltaMs)
+                return
+            }
+            val ctrl = controller ?: return
+            if (ctrl.isCurrentMediaItemSeekable) ctrl.seekTo((ctrl.currentPosition + deltaMs).coerceAtLeast(0L))
+        }
+        override fun open(stream: Stream) = openRemoteStream(stream)
+        override fun status(): String {
+            val current = currentStream
+            return org.json.JSONObject()
+                .put("title", current?.name ?: "")
+                .put("now", EpgRepository.currentTitle(current?.tvgId) ?: "")
+                .put("playing", controller?.playWhenReady == true)
+                .put("timeshift", timeShiftActive)
+                .toString()
+        }
+    }
+
+    /** Abre en este reproductor un canal mandado desde el móvil-mando (si no está en la lista actual, se añade al final). */
+    private fun openRemoteStream(stream: Stream) {
+        if (stream.id == currentStream?.id) return
+        val existing = channelList.indexOfFirst { it.id == stream.id }
+        if (existing >= 0) {
+            switchToIndex(existing)
+            return
+        }
+        channelList = channelList + stream
+        switchToIndex(channelList.size - 1)
+    }
+
+    // Mini marcador flotante: se actualiza cada minuto mientras la pantalla está visible.
+    private val scoreHandler = Handler(Looper.getMainLooper())
+    private val scoreRunnable = object : Runnable {
+        override fun run() {
+            refreshFloatingScore()
+            scoreHandler.postDelayed(this, 60_000L)
+        }
+    }
+
+    private fun refreshFloatingScore() {
+        val teams = com.example.superplayer.sports.GoalAlerts.getTeams(this)
+        if (!AppPrefs.isFloatingScore(this) || teams.isEmpty() || isInPictureInPictureMode) {
+            binding.floatingScore.visibility = View.GONE
+            return
+        }
+        com.example.superplayer.sports.MatchCache.refresh {
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val live = com.example.superplayer.sports.MatchCache.liveFor(teams)
+                if (live.isEmpty()) {
+                    binding.floatingScore.visibility = View.GONE
+                } else {
+                    binding.floatingScore.text = live.take(2).joinToString("\n") { m ->
+                        "${m.home} ${m.homeScore}-${m.awayScore} ${m.away}" +
+                            (if (m.clock.isNotBlank()) " · ${m.clock}" else "")
+                    }
+                    binding.floatingScore.visibility = View.VISIBLE
+                }
+            }
+        }
+    }
+
     private val tsHandler = Handler(Looper.getMainLooper())
     private val tsUiRunnable = object : Runnable {
         override fun run() {
@@ -837,6 +909,10 @@ class PlayerActivity : AppCompatActivity() {
         super.onStart()
         launchingMultiView = false
         if (currentStream == null) return // canal no válido, o ya redirigido a una app externa (ver onCreate)
+        com.example.superplayer.remote.RemoteServer.player = remoteCommands
+        com.example.superplayer.remote.RemoteServer.ensureStarted(applicationContext)
+        scoreHandler.removeCallbacks(scoreRunnable)
+        scoreHandler.post(scoreRunnable)
         epgHandler.removeCallbacks(epgRefreshRunnable)
         epgHandler.postDelayed(epgRefreshRunnable, EPG_REFRESH_INTERVAL_MS)
         SleepTimer.activityListener = {
@@ -881,6 +957,10 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        scoreHandler.removeCallbacks(scoreRunnable)
+        if (com.example.superplayer.remote.RemoteServer.player === remoteCommands) {
+            com.example.superplayer.remote.RemoteServer.player = null
+        }
         unregisterCastSessionListener()
         SleepTimer.activityListener = null
         epgHandler.removeCallbacks(epgRefreshRunnable)
@@ -1020,6 +1100,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.pipButton.visibility = View.GONE
             binding.videoNowPlayingBar.visibility = View.GONE
             binding.timeShiftBar.visibility = View.GONE
+            binding.floatingScore.visibility = View.GONE
         } else {
             // Al volver a pantalla completa se restauran los controles
             // nativos y se muestran los propios otra vez a través del mismo
@@ -1481,7 +1562,25 @@ class PlayerActivity : AppCompatActivity() {
             if (AppPrefs.isBackgroundAudio(this)) R.string.background_audio_on else R.string.background_audio_off
         ))
         popup.menu.add(0, MENU_ID_TIMESHIFT, 3, getString(R.string.timeshift_menu_item))
+        popup.menu.add(0, MENU_ID_SCORE, 4, getString(
+            if (AppPrefs.isFloatingScore(this)) R.string.floating_score_on else R.string.floating_score_off
+        ))
         popup.setOnMenuItemClickListener { item ->
+            if (item.itemId == MENU_ID_SCORE) {
+                val enabled = !AppPrefs.isFloatingScore(this)
+                AppPrefs.setFloatingScore(this, enabled)
+                if (enabled && com.example.superplayer.sports.GoalAlerts.getTeams(this).isEmpty()) {
+                    Toast.makeText(this, R.string.floating_score_no_teams, Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(
+                        this,
+                        getString(if (enabled) R.string.floating_score_on else R.string.floating_score_off),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                refreshFloatingScore()
+                return@setOnMenuItemClickListener true
+            }
             if (item.itemId == MENU_ID_TIMESHIFT) {
                 showTimeShiftDialog(this) { restartCurrentChannel() }
                 return@setOnMenuItemClickListener true
@@ -1658,6 +1757,7 @@ class PlayerActivity : AppCompatActivity() {
         private const val MENU_ID_AUDIO = 2
         private const val MENU_ID_BG_AUDIO = 5
         private const val MENU_ID_TIMESHIFT = 6
+        private const val MENU_ID_SCORE = 7
         private const val EPG_REFRESH_INTERVAL_MS = 60_000L
 
         // Ancho de las zonas laterales de toque (izquierda/derecha), como

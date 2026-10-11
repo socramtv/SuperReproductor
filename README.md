@@ -1237,3 +1237,28 @@ Además del widget sencillo de favoritos, hay uno nuevo **"Socram TV+"** (4x4, r
 pestañas: **⭐ Favoritos** (con lo que echan ahora y barra de progreso, si la guía está cargada), **▶ Continuar viendo** (por dónde
 vas) y **⚽ Partidos** (marcadores de hoy; tocar uno busca su canal). Botón ⟳ para refrescar; tocar el título abre la app.
 Código: `widget/HomeWidgetProvider.kt`, `HomeWidgetService.kt`, `WidgetClickActivity.kt`.
+
+## Cine (carátulas y sinopsis)
+
+Menú ⋮ → **"🎬 Cine…"**: parrilla de carátulas de las películas de tus listas, con buscador. Al tocar una sale su ficha (carátula
+grande, año, género y sinopsis) con **▶ Ver** y favorito. Las categorías de cine se detectan por el nombre (película, cine, movie, film,
+vod, estreno) y se eligen a mano con el botón **Categorías**. Carátula y sinopsis salen de la búsqueda de películas de iTunes (en
+español de España) y, si no aparece, de TVMaze (series); sin clave de API. Si no se encuentra nada se usa el logo de la propia lista.
+Lo encontrado (y lo no encontrado, 7 días) se guarda en el móvil. Código: `data/MovieInfo.kt`, `ui/CineActivity.kt`, `ui/CineAdapter.kt`.
+
+## Móvil como mando de la tele
+
+- **En la tele** (Fire TV / Google TV / Android TV): viene **activado**. Menú ⋮ → "Control remoto de esta pantalla…" enseña la dirección
+  (IP:puerto), el nombre y un **código de 4 cifras**; se puede desactivar o cambiar el código. En un móvil viene desactivado.
+- **En el móvil**: menú ⋮ → "📱 Usar este móvil como mando…". Busca las teles de la misma wifi (también se puede escribir la IP), pide el código
+  y da: **canal −/+, pausa, ⏪/⏩ 30 s** (en la pausa en directo mueve el buffer), **volumen −/mute/+**, y **enviar un canal / un favorito** a la tele.
+  Arriba se ve lo que está viendo la tele.
+- Las órdenes viajan por HTTP dentro de tu red local, con el código en cada petición. Para enviar canales, la app tiene que estar abierta en la tele
+  (portada o reproductor). Canal −/+ necesita haber abierto el canal desde una lista. Código: `remote/RemoteServer.kt`, `remote/RemoteClient.kt`,
+  `ui/RemoteActivity.kt`.
+
+## Mini marcador flotante
+
+En el reproductor, arriba a la izquierda, sale el marcador (y minuto) de los partidos **en juego** de los equipos que sigues en "Avisos de goles",
+aunque estés viendo otro canal. Se actualiza cada minuto (datos de ESPN, como los avisos) y se activa/desactiva en el botón *Vídeo y audio* →
+"Marcador flotante". Si no sigues ningún equipo no sale nada.
