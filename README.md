@@ -1312,3 +1312,6 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 ## Telegram: vídeos
 - Pulsar un vídeo con datos de TMDb abre la ficha (carátula, nota, sinopsis, reparto) con "▶ Ver" debajo; sin datos se reproduce directo. Nunca se ofrece "descargar y reproducir".
 - Pulsación larga (o mantener OK en la TV) guarda/quita el vídeo en favoritos; se ven en la pestaña "🎬 Vídeos" de Telegram.
+
+## Telegram: listas subidas como archivo
+- Un .m3u que Telegram marca como "audio/…" ya se reconoce como lista (antes se tomaba por vídeo). Si hay una imagen con el mismo nombre (aunque ponga "url=42"), es su miniatura.

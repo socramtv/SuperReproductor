@@ -851,11 +851,13 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private val reNumPrefix = Regex("^\\s*\\d{1,5}\\s*[-.)]\\s*")
     private val reExtSuffix = Regex("(?i)[\\s.-]+(mkv|mp4|avi|mov|m4v|webm|ts|jpg|jpeg|png|webp)\\s*$")
+    private val reUrlSuffix = Regex("(?i)\\s*\\burl\\s*=\\s*\\d+\\s*$")
     private val reYearOpen = Regex("\\(((?:19|20)\\d{2})[^)]*$")
 
     /** "253-Peli (2025-mkv" y "Peli (2025-" -> "Peli (2025)": el mismo nombre para el vídeo y su imagen. */
     private fun cleanName(raw: String): String {
         var t = raw.trim().replace(reNumPrefix, "")
+        t = t.replace(reUrlSuffix, "")
         t = t.replace(reExtSuffix, "")
         t = t.replace(reYearOpen) { "(" + it.groupValues[1] + ")" }
         return t.trim(' ', '-', '_', '.')
@@ -867,7 +869,11 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun isImageMsg(m: TgMessage) = m.kind == "photo" || (m.kind == "document" && (m.mime ?: "").startsWith("image/"))
 
-    private fun isVideoMsg(m: TgMessage) = m.kind == "video" || m.kind == "animation" || (m.kind == "document" && looksLikeMedia(m))
+    /** Un .m3u subido como documento suele llegar con tipo "audio/…": hay que mirarlo antes de darlo por audio/vídeo. */
+    private fun isListMsg(m: TgMessage) = m.kind == "document" && looksLikePlaylist(m)
+
+    private fun isVideoMsg(m: TgMessage) =
+        !isListMsg(m) && (m.kind == "video" || m.kind == "animation" || (m.kind == "document" && looksLikeMedia(m)))
 
     private fun isMovieFile(m: TgMessage): Boolean {
         if (m.kind == "animation") return false
@@ -896,7 +902,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val paired = HashMap<Long, TgMessage>() // id del vídeo -> su imagen
         val usedImages = HashSet<Long>()
         for (m in messages) {
-            if (!isVideoMsg(m)) continue
+            if (!isVideoMsg(m) && !isListMsg(m)) continue
             val img = imageByName[nameKey(titleOf(m))] ?: continue
             if (usedImages.add(img.messageId)) paired[m.messageId] = img
         }
@@ -917,9 +923,11 @@ class TelegramAccountActivity : AppCompatActivity() {
                 items.add(MediaItem(key = "${m.messageId}:vid", caption = (if (q.isNotEmpty()) q else caption.ifEmpty { m.fileName.orEmpty() }), meta = date, thumbFileId = thumb,
                     badge = if (fav) "▶ ★" else "▶", messageId = m.messageId, query = q,
                     onLong = { toggleVideoFav(m, q, thumb) }) { onVideoClick(m, q, thumb) })
-            } else if (m.kind == "document" && looksLikePlaylist(m)) {
-                items.add(MediaItem(key = "${m.messageId}:file", caption = m.fileName ?: caption, meta = date, iconRes = R.drawable.ic_tg_list,
-                    tileRes = R.drawable.bg_tg_tile_list,
+            } else if (isListMsg(m)) {
+                val img = paired[m.messageId]
+                val name = m.fileName ?: caption
+                items.add(MediaItem(key = "${m.messageId}:file", caption = cleanName(caption.ifEmpty { name }), meta = date, thumbFileId = img?.thumbId ?: 0,
+                    iconRes = R.drawable.ic_tg_list, tileRes = R.drawable.bg_tg_tile_list,
                     badge = getString(R.string.tgacc_badge_list), messageId = m.messageId,
                     onLong = { onMessageLong(m) }) { onMessageClick(m) })
             }
