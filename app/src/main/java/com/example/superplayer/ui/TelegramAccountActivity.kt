@@ -916,18 +916,20 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun isListMsg(m: TgMessage) = m.kind == "document" && looksLikePlaylist(m)
 
     private fun isVideoMsg(m: TgMessage) =
-        !isListMsg(m) && (m.kind == "video" || m.kind == "animation" || (m.kind == "document" && looksLikeMedia(m)))
+        !isListMsg(m) && (m.kind == "video" || m.kind == "linkvideo" || m.kind == "animation" || (m.kind == "document" && looksLikeMedia(m)))
 
     private fun isMovieFile(m: TgMessage): Boolean {
         if (m.kind == "animation") return false
+        if (m.kind == "linkvideo") return true
         val mime = (m.mime ?: "").lowercase()
         val name = (m.fileName ?: "").lowercase()
         return m.kind == "video" || mime.startsWith("video/") ||
             listOf(".mp4", ".mkv", ".avi", ".mov", ".webm", ".ts", ".m4v").any { name.endsWith(it) }
     }
 
+    /** Primera línea con texto (sin enlaces) o, si no hay, el nombre del archivo. */
     private fun titleOf(m: TgMessage): String =
-        m.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: m.fileName.orEmpty()
+        m.text.lineSequence().map { it.replace(reUrlInText, "").trim() }.firstOrNull { it.isNotEmpty() } ?: m.fileName.orEmpty()
 
     /** Galería: solo fotos, vídeos, listas (archivos y enlaces) y enlaces de Telegram, en miniaturas con su texto debajo. */
     private fun renderMedia(auto: Boolean = true) {
@@ -935,9 +937,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val items = ArrayList<MediaItem>()
         val seenLinks = HashSet<String>()
+        val source = withLinkVideos(messages)
         // Imagen y vídeo con el mismo nombre: la imagen es la miniatura del vídeo y no se repite aparte.
         val imageByName = HashMap<String, TgMessage>()
-        for (m in messages) {
+        for (m in source) {
             if (!isImageMsg(m)) continue
             val k = nameKey(titleOf(m))
             if (k.length >= 2) imageByName.putIfAbsent(k, m)
@@ -948,7 +951,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         fun findImage(k: String): TgMessage? = imageByName[k] ?: imageNoYear[noYear(k)]?.takeIf { noYear(k).length >= 2 }
         val groups = LinkedHashMap<String, MutableList<TgMessage>>()
         val groupName = HashMap<String, String>() // clave del grupo -> nombre para buscar en TMDb
-        for (m in messages) {
+        for (m in source) {
             if (!isVideoMsg(m)) continue
             val ep = parseEpisode(titleOf(m))
             val base = if (ep != null) nameKey(ep.series) else nameKey(titleOf(m))
@@ -964,14 +967,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         // Listas (.m3u…) con su imagen del mismo nombre.
         val listImage = HashMap<Long, TgMessage>()
-        for (m in messages) {
+        for (m in source) {
             if (!isListMsg(m)) continue
             val img = imageByName[nameKey(titleOf(m))] ?: continue
             if (usedImages.add(img.messageId)) listImage[m.messageId] = img
         }
         val groupOf = HashMap<Long, String>()
         for ((k, list) in groups) for (v in list) groupOf[v.messageId] = k
-        for (m in messages) { // de más nuevo a más antiguo
+        for (m in source) { // de más nuevo a más antiguo
             val caption = m.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
             val date = df.format(Date(m.date * 1000L))
             val isImage = isImageMsg(m)
@@ -1006,6 +1009,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
             for (link in m.links) {
                 if (!seenLinks.add(link)) continue
+                if (isTgMessageLink(link)) continue // enlace a un vídeo: ya sale como vídeo
                 val shortLink = link.removePrefix("https://").removePrefix("http://")
                 if (isTgLink(link)) {
                     items.add(MediaItem(key = "${m.messageId}:tg:$link", caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_link,
@@ -1425,6 +1429,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** Reproduce siempre directamente (sin descargar antes). */
     private fun playVideo(m: TgMessage) {
         when {
+            m.kind == "linkvideo" -> m.links.firstOrNull()?.let { playLinkVideo(it) }
             m.fileId == null -> Toast.makeText(this, R.string.tg_nothing_to_play, Toast.LENGTH_SHORT).show()
             m.size > 0 -> streamPlay(m)
             else -> downloadAndPlay(m) // Telegram no dio el tamaño: no se puede emitir, se descarga solo en este caso
@@ -1711,6 +1716,70 @@ class TelegramAccountActivity : AppCompatActivity() {
                 .setTitle(messageTitle(m))
                 .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
                 .show()
+        }
+    }
+
+    private val reMsgLink = Regex("(?i)t\\.me/(?:c/\\d+/\\d+(?:/\\d+)?|[a-z][a-z0-9_]{3,}/\\d+(?:/\\d+)?)/?(?:\\?.*)?$")
+    private val reUrlInText = Regex("https?://\\S+|(?:t|telegram)\\.me/\\S+")
+
+    /** Enlace a un mensaje concreto (t.me/c/<chat>/<mensaje>, t.me/c/<chat>/<tema>/<mensaje>, t.me/nombre/<mensaje>). */
+    private fun isTgMessageLink(url: String): Boolean = isTgLink(url) && reMsgLink.containsMatchIn(url.trim())
+
+    /**
+     * Mensajes con enlaces a otro mensaje de Telegram (donde está el vídeo de verdad) -p. ej. una imagen con
+     * "Peli (2025) https://t.me/c/…/…"-: cada enlace se añade como un "vídeo" más, con el título de su línea,
+     * para que se una a su imagen y a sus versiones/capítulos igual que un vídeo normal.
+     */
+    private fun withLinkVideos(list: List<TgMessage>): List<TgMessage> {
+        val out = ArrayList<TgMessage>(list.size)
+        for (m in list) {
+            out.add(m)
+            if (isVideoMsg(m)) continue
+            val links = m.links.filter { isTgMessageLink(it) }.distinct()
+            if (links.isEmpty()) continue
+            val lines = m.text.lineSequence().filter { it.isNotBlank() }.toList()
+            for ((i, link) in links.withIndex()) {
+                val own = lines.firstOrNull { it.contains(link) || it.contains(link.removePrefix("https://").removePrefix("http://")) }
+                val raw = own?.replace(reUrlInText, "")
+                    ?: (if (links.size == lines.size) lines[i] else lines.firstOrNull())
+                    ?: ""
+                var title = raw.trim().trim('-', ':', '|', ' ', '·')
+                if (title.isEmpty()) title = lines.firstOrNull()?.replace(reUrlInText, "")?.trim()?.trim('-', ':', '|', ' ', '·').orEmpty()
+                out.add(m.copy(messageId = m.messageId + i + 1, text = title, kind = "linkvideo", fileId = null, fileName = null,
+                    mime = null, size = 0L, links = listOf(link), buttons = emptyList(), thumbId = 0))
+            }
+        }
+        return out
+    }
+
+    private val linkVideoCache = HashMap<String, TgMessage>()
+
+    /** Busca el vídeo al que lleva un enlace interno de Telegram y lo reproduce. */
+    private fun playLinkVideo(link: String) {
+        val b = backend ?: return
+        val cached = linkVideoCache[link]
+        if (cached != null) {
+            playVideo(cached)
+            return
+        }
+        Toast.makeText(this, R.string.tgvid_searching, Toast.LENGTH_SHORT).show()
+        b.resolveLink(link, false) { target ->
+            if (target == null || target.chat.id == 0L || target.messageId == 0L) {
+                runOnUiThread { if (!isFinishing && !isDestroyed) Toast.makeText(this, R.string.tgacc_link_error, Toast.LENGTH_LONG).show() }
+                return@resolveLink
+            }
+            b.loadHistory(target.chat.id, target.chat.title, target.messageId, -1) { batch ->
+                val found = batch.firstOrNull { it.messageId == target.messageId }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (found == null || (found.fileId == null && found.kind != "video")) {
+                        Toast.makeText(this, R.string.tgvid_link_nofile, Toast.LENGTH_LONG).show()
+                    } else {
+                        linkVideoCache[link] = found
+                        playVideo(found)
+                    }
+                }
+            }
         }
     }
 

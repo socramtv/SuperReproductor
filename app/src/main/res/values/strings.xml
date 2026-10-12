@@ -440,6 +440,8 @@
     <string name="tgacc_search_hint_messages">Texto en mensajes</string>
     <string name="tgacc_reply_to">↩ Respondiendo a %1$s (toca para cancelar)</string>
     <string name="tgvid_season">T%1$d</string>
+    <string name="tgvid_searching">Buscando el vídeo…</string>
+    <string name="tgvid_link_nofile">No encuentro un vídeo en ese enlace (¿estás unido a ese canal?)</string>
     <string name="tgvid_watch">▶ Ver</string>
     <string name="tgvid_option">▶ Ver opción %1$d</string>
     <string name="tgvid_tab">🎬 Vídeos</string>

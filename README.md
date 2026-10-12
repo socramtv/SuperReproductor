@@ -1332,3 +1332,6 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 
 ## Telegram: series por capítulos
 - Los vídeos "Serie 1x01", "Serie S01E02", "Serie T1 E03"… se juntan en una sola miniatura (con la imagen de la serie, o la de TMDb). La ficha muestra T1, T2… y un botón por capítulo (01, 02, 03…).
+
+## Telegram: vídeos referenciados por enlace
+- Una imagen (o un texto) con un enlace a otro mensaje de Telegram (t.me/c/<chat>/<mensaje>, t.me/c/<chat>/<tema>/<mensaje>, t.me/nombre/<mensaje>) se trata como un vídeo: la imagen es la miniatura, se agrupa con sus versiones o capítulos y, al pulsar Ver, la app busca el mensaje enlazado y reproduce su vídeo (hay que estar unido a ese canal o grupo).
