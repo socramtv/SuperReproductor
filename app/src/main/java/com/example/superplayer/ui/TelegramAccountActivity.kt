@@ -134,6 +134,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
     /** Pestaña de la lista de chats: 0 favoritos, 1 todos, 2 canales, 3 grupos, 4 bots, 5 personas. */
     private var chatFilter = 1
+    private val VIDEO_TAB = 7
     private val reloadRunnable = Runnable { refreshNow() }
 
     /** Vuelve a pedir lo que se está viendo: chats, temas o mensajes (también lo usa el botón de actualizar). */
@@ -599,7 +600,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun setupTabs() {
         val labels = listOf(
             R.string.tgacc_tab_fav, R.string.tgacc_tab_all, R.string.tgacc_tab_channels,
-            R.string.tgacc_tab_groups, R.string.tgacc_tab_forums, R.string.tgacc_tab_bots, R.string.tgacc_tab_people
+            R.string.tgacc_tab_groups, R.string.tgacc_tab_forums, R.string.tgacc_tab_bots, R.string.tgacc_tab_people,
+            R.string.tgvid_tab
         )
         if (TelegramAccountPrefs.favoriteChats(this).isNotEmpty()) chatFilter = 0
         for ((i, res) in labels.withIndex()) {
@@ -624,7 +626,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun renderChats() {
-        useList()
+        if (chatFilter != VIDEO_TAB) useList()
         title = getString(R.string.tgacc_title)
         searchResults = null
         binding.inputBar.visibility = View.GONE
@@ -632,6 +634,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.tgSearchTabs.visibility = View.GONE
         updateBack()
         invalidateOptionsMenu()
+        if (chatFilter == VIDEO_TAB) {
+            renderVideoFavs()
+            return
+        }
         val favs = TelegramAccountPrefs.favoriteChats(this)
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val shown = chats.filter { chat ->
@@ -907,9 +913,10 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val img = paired[m.messageId]
                 val thumb = img?.thumbId?.takeIf { it != 0 } ?: m.thumbId
                 val q = if (isMovieFile(m)) cleanName(titleOf(m)).takeIf { it.length >= 2 }.orEmpty() else ""
+                val fav = TelegramAccountPrefs.isVideoFavorite(this, m.chatId, m.messageId)
                 items.add(MediaItem(key = "${m.messageId}:vid", caption = (if (q.isNotEmpty()) q else caption.ifEmpty { m.fileName.orEmpty() }), meta = date, thumbFileId = thumb,
-                    badge = "▶", messageId = m.messageId, query = q,
-                    onLong = { onMessageLong(m, q) }) { onMessageClick(m) })
+                    badge = if (fav) "▶ ★" else "▶", messageId = m.messageId, query = q,
+                    onLong = { toggleVideoFav(m, q, thumb) }) { onVideoClick(m, q, thumb) })
             } else if (m.kind == "document" && looksLikePlaylist(m)) {
                 items.add(MediaItem(key = "${m.messageId}:file", caption = m.fileName ?: caption, meta = date, iconRes = R.drawable.ic_tg_list,
                     tileRes = R.drawable.bg_tg_tile_list,
@@ -1179,63 +1186,101 @@ class TelegramAccountActivity : AppCompatActivity() {
         info.genre
     ).joinToString(" · ")
 
-    /** Ficha de la película: sinopsis, reparto, etc. (los mismos datos que en Cine). */
-    private fun showMovieInfo(m: TgMessage, query: String) {
+    /** Ficha de la película: carátula, datos y sinopsis, con "Ver" debajo (los mismos datos que en Cine). */
+    private fun showMovieInfo(m: TgMessage, query: String, thumbId: Int) {
+        val info = MovieInfo.peek(this, query)
+        if (info == null) {
+            playVideo(m)
+            return
+        }
+        val density = resources.displayMetrics.density
+        val col = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+        val poster = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (300 * density).toInt()
+            ).apply { topMargin = (12 * density).toInt() }
+        }
+        val localThumb = if (thumbId != 0) thumbPaths[thumbId] else null
+        if (info.posterUrl != null) poster.load(info.posterUrl)
+        else if (localThumb != null) poster.load(File(localThumb))
+        else poster.visibility = View.GONE
         val tv = TextView(this).apply {
-            setPadding(48, 24, 48, 8)
+            setPadding((20 * density).toInt(), (12 * density).toInt(), (20 * density).toInt(), (8 * density).toInt())
             textSize = 14f
         }
-        val scroll = android.widget.ScrollView(this).apply { addView(tv) }
-        fun fill(info: MovieInfo.Info?) {
-            if (info == null) {
-                tv.text = getString(R.string.cine_no_synopsis)
-                return
-            }
-            val head = listOfNotNull(
-                info.year,
-                info.runtimeMin.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
-                info.certification?.takeIf { it.isNotBlank() }
-            ).joinToString(" · ")
-            val sb = StringBuilder()
-            val line1 = listOf(infoMeta(info), head).filter { it.isNotEmpty() }.joinToString(" · ")
-            if (line1.isNotEmpty()) sb.append(line1).append("\n\n")
-            info.tagline?.takeIf { it.isNotBlank() }?.let { sb.append("“").append(it).append("”\n\n") }
-            sb.append(info.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis))
-            info.director?.takeIf { it.isNotBlank() }?.let {
-                sb.append("\n\n").append(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director)).append(": ").append(it)
-            }
-            if (info.cast.isNotEmpty()) sb.append("\n\n").append(getString(R.string.cine_cast)).append(": ").append(info.cast.joinToString(", "))
-            tv.text = sb.toString()
+        val head = listOfNotNull(
+            info.year,
+            info.runtimeMin.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
+            info.certification?.takeIf { it.isNotBlank() }
+        ).joinToString(" · ")
+        val sb = StringBuilder()
+        val line1 = listOf(infoMeta(info), head).filter { it.isNotEmpty() }.joinToString(" · ")
+        if (line1.isNotEmpty()) sb.append(line1).append("\n\n")
+        info.tagline?.takeIf { it.isNotBlank() }?.let { sb.append("“").append(it).append("”\n\n") }
+        sb.append(info.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis))
+        info.director?.takeIf { it.isNotBlank() }?.let {
+            sb.append("\n\n").append(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director)).append(": ").append(it)
         }
-        val cached = MovieInfo.peek(this, query)
-        fill(cached)
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(cached?.title?.takeIf { it.isNotBlank() } ?: query)
+        if (info.cast.isNotEmpty()) sb.append("\n\n").append(getString(R.string.cine_cast)).append(": ").append(info.cast.joinToString(", "))
+        tv.text = sb.toString()
+        col.addView(poster)
+        col.addView(tv)
+        val scroll = android.widget.ScrollView(this).apply { addView(col) }
+        val isFav = TelegramAccountPrefs.isVideoFavorite(this, m.chatId, m.messageId)
+        AlertDialog.Builder(this)
+            .setTitle(info.title)
             .setView(scroll)
-            .setPositiveButton(R.string.cine_watch) { _, _ -> onMessageClick(m) }
+            .setPositiveButton(R.string.cine_watch) { _, _ -> playVideo(m) }
+            .setNeutralButton(if (isFav) R.string.tgvid_unfav_btn else R.string.tgvid_fav_btn) { _, _ -> toggleVideoFav(m, query, thumbId) }
             .setNegativeButton(R.string.channel_check_close, null)
             .show()
-        if (MovieInfo.needsFetch(this, query)) {
-            if (cached == null) tv.text = getString(R.string.cine_searching)
-            MovieInfo.request(this, query) { found ->
-                runOnUiThread {
-                    if (!isFinishing && !isDestroyed && dialog.isShowing) {
-                        fill(found)
-                        found?.title?.takeIf { it.isNotBlank() }?.let { dialog.setTitle(it) }
-                        mediaAdapter.infoLoaded(query)
-                    }
-                }
-            }
+    }
+
+    /** Reproduce siempre directamente (sin descargar antes). */
+    private fun playVideo(m: TgMessage) {
+        when {
+            m.fileId == null -> Toast.makeText(this, R.string.tg_nothing_to_play, Toast.LENGTH_SHORT).show()
+            m.size > 0 -> streamPlay(m)
+            else -> downloadAndPlay(m) // Telegram no dio el tamaño: no se puede emitir, se descarga solo en este caso
         }
     }
 
-    private fun onMessageLong(m: TgMessage, movieQuery: String = "") {
+    /** Pulsar un vídeo: con información, ficha con carátula y "Ver"; sin ella, se reproduce directamente. */
+    private fun onVideoClick(m: TgMessage, query: String, thumbId: Int) {
+        if (query.isNotEmpty() && MovieInfo.peek(this, query) != null) showMovieInfo(m, query, thumbId) else playVideo(m)
+    }
+
+    /** Pulsación larga: guarda o quita el vídeo de la carpeta "Vídeos" (favoritos de vídeo). */
+    private fun toggleVideoFav(m: TgMessage, query: String, thumbId: Int) {
+        val now = TelegramAccountPrefs.toggleVideoFavorite(this, m, query, thumbId)
+        Toast.makeText(this, if (now) R.string.tgvid_fav_added else R.string.tgvid_fav_removed, Toast.LENGTH_SHORT).show()
+        if (currentChat == null && chatFilter == VIDEO_TAB && !searching) renderVideoFavs()
+        else if (mediaMode && currentChat != null && !searching) renderMedia(auto = false)
+    }
+
+    /** Pestaña "Vídeos": solo los vídeos marcados como favoritos, en miniaturas. */
+    private fun renderVideoFavs() {
+        useGrid()
+        val items = ArrayList<MediaItem>()
+        for (o in TelegramAccountPrefs.videoFavorites(this)) {
+            val m = TgMessage.fromJson(o)
+            val th = o.optInt("th", 0)
+            val q = o.optString("q")
+            val name = q.ifEmpty { m.fileName ?: m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: m.chatTitle }
+            items.add(MediaItem(key = "fav:${m.chatId}:${m.messageId}", caption = name, meta = m.chatTitle, thumbFileId = th,
+                badge = "▶ ★", messageId = m.messageId, query = q,
+                onLong = { toggleVideoFav(m, q, th) }) { onVideoClick(m, q, th) })
+        }
+        mediaAdapter.submit(items)
+        binding.emptyView.text = getString(R.string.tgvid_empty)
+        binding.emptyView.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+        focusItemIfTv()
+    }
+
+    private fun onMessageLong(m: TgMessage) {
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
-        if (movieQuery.isNotEmpty()) {
-            labels.add(getString(R.string.tgacc_act_info))
-            actions.add { showMovieInfo(m, movieQuery) }
-        }
         if (currentChat != null && !searching) {
             labels.add(getString(R.string.tgacc_act_reply))
             actions.add { setReply(m) }

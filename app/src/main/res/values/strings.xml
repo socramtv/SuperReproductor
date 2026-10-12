@@ -436,7 +436,12 @@
     <string name="tgacc_search_hint_names">Nombre del canal, grupo o bot</string>
     <string name="tgacc_search_hint_messages">Texto en mensajes</string>
     <string name="tgacc_reply_to">↩ Respondiendo a %1$s (toca para cancelar)</string>
-    <string name="tgacc_act_info">ℹ Información de la película</string>
+    <string name="tgvid_tab">🎬 Vídeos</string>
+    <string name="tgvid_empty">Aún no hay vídeos favoritos. Mantén pulsado un vídeo para guardarlo aquí.</string>
+    <string name="tgvid_fav_added">★ Guardado en Vídeos</string>
+    <string name="tgvid_fav_removed">Quitado de Vídeos</string>
+    <string name="tgvid_fav_btn">☆ Favorito</string>
+    <string name="tgvid_unfav_btn">★ Quitar</string>
     <string name="tgacc_act_reply">↩ Responder</string>
     <string name="tgacc_act_copy">📋 Copiar texto</string>
     <string name="tgacc_act_delete">🗑 Eliminar</string>

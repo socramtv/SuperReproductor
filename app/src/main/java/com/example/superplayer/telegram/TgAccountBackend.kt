@@ -1,6 +1,8 @@
 package com.example.superplayer.telegram
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class TgAuthState { STARTING, WAIT_PHONE, WAIT_CODE, WAIT_PASSWORD, READY, CLOSED }
 
@@ -91,6 +93,33 @@ object TelegramAccountPrefs {
     }
 
     fun hasApi(context: Context) = apiId(context) != 0 && apiHash(context).isNotBlank()
+
+    /** Vídeos favoritos (la carpeta "Vídeos"): cada uno es el mensaje en JSON + miniatura ("th") y título de búsqueda ("q"). */
+    fun videoFavorites(context: Context): List<JSONObject> {
+        val arr = try { JSONArray(prefs(context).getString("fav_videos", "[]")) } catch (e: Exception) { JSONArray() }
+        return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+    }
+
+    fun isVideoFavorite(context: Context, chatId: Long, messageId: Long): Boolean =
+        videoFavorites(context).any { it.optLong("c") == chatId && it.optLong("m") == messageId }
+
+    /** Marca o quita un vídeo de favoritos; devuelve true si queda como favorito. */
+    fun toggleVideoFavorite(context: Context, m: TgMessage, query: String, thumbId: Int): Boolean {
+        val list = ArrayList(videoFavorites(context))
+        val idx = list.indexOfFirst { it.optLong("c") == m.chatId && it.optLong("m") == m.messageId }
+        val now: Boolean
+        if (idx >= 0) {
+            list.removeAt(idx)
+            now = false
+        } else {
+            list.add(0, m.toJson().put("th", thumbId).put("q", query))
+            now = true
+        }
+        val arr = JSONArray()
+        for (o in list) arr.put(o)
+        prefs(context).edit().putString("fav_videos", arr.toString()).apply()
+        return now
+    }
 
     fun favoriteChats(context: Context): Set<Long> =
         prefs(context).getStringSet("fav_chats", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()

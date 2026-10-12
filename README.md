@@ -1308,3 +1308,7 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 - Los vídeos muestran título, año, nota y género de TMDb (carátula de TMDb si no hay imagen en el chat). Pulsación larga = ficha con sinopsis y reparto.
 - Listas (m3u, json, txt…) y enlaces de Telegram sin foto tienen su propia imagen (morada / azul).
 - Al abrir un enlace a otro chat, "atrás" vuelve al chat anterior, en el mismo sitio.
+
+## Telegram: vídeos
+- Pulsar un vídeo con datos de TMDb abre la ficha (carátula, nota, sinopsis, reparto) con "▶ Ver" debajo; sin datos se reproduce directo. Nunca se ofrece "descargar y reproducir".
+- Pulsación larga (o mantener OK en la TV) guarda/quita el vídeo en favoritos; se ven en la pestaña "🎬 Vídeos" de Telegram.
