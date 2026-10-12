@@ -27,7 +27,9 @@ data class TgMessage(
     val links: List<String>,
     val buttons: List<TgButton> = emptyList(),
     val outgoing: Boolean = false,
-    val sender: String = ""
+    val sender: String = "",
+    /** Archivo de la miniatura (fotos, vídeos…) para mostrarla en la lista; 0 si no hay. */
+    val thumbId: Int = 0
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("c", chatId).put("ct", chatTitle).put("cy", chatType)

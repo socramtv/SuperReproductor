@@ -443,6 +443,14 @@
     <string name="tgacc_deleted">Mensaje eliminado</string>
     <string name="tgacc_delete_error">No se pudo eliminar</string>
     <string name="tgacc_attach_error">No se pudo leer el archivo</string>
+    <string name="tgacc_tab_forums">Foros</string>
+    <string name="tgacc_kind_forum">Foro (con temas)</string>
+    <string name="tgacc_menu_refresh">Actualizar mensajes</string>
+    <string name="tgacc_open_link">✈️ Abrir en Telegram: %1$s</string>
+    <string name="tgacc_link_error">No se pudo abrir ese enlace de Telegram</string>
+    <string name="tgacc_join_confirm">¿Unirte a «%1$s»?</string>
+    <string name="tgacc_topics_empty">Este foro no tiene temas (o no se pudieron cargar)</string>
+    <string name="tgacc_refreshing">Actualizando…</string>
     <string name="tgacc_view_photo">🖼 Ver foto</string>
     <string name="tgacc_unread">%1$d sin leer</string>
     <string name="tgacc_me">Tú</string>

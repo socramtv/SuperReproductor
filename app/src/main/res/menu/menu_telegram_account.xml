@@ -14,6 +14,11 @@
         android:title="@string/tgacc_menu_kbd"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_tgacc_refresh"
+        android:title="@string/tgacc_menu_refresh"
+        android:icon="@drawable/ic_tg_refresh"
+        app:showAsAction="ifRoom" />
+    <item
         android:id="@+id/action_tgacc_search"
         android:title="@string/tgacc_menu_search"
         android:icon="@drawable/ic_tg_search"

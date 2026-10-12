@@ -7,6 +7,12 @@ enum class TgAuthState { STARTING, WAIT_PHONE, WAIT_CODE, WAIT_PASSWORD, READY, 
 /** [kind]: channel, group, bot o private. [userId]: el del otro usuario en chats privados y bots (0 si no aplica). */
 data class TgChat(val id: Long, val title: String, val kind: String, val lastDate: Long, val userId: Long = 0L, val unread: Int = 0)
 
+/** Un tema de un supergrupo con temas (foro). */
+data class TgTopic(val id: Long, val name: String, val lastDate: Long = 0L, val unread: Int = 0)
+
+/** A dónde lleva un enlace interno de Telegram. [chat].id == 0 = invitación a un chat al que aún no estás unido (el título va en [chat].title). */
+data class TgLinkTarget(val chat: TgChat, val messageId: Long = 0L, val startParam: String = "")
+
 /**
  * Telegram con la cuenta del usuario (TDLib). Esta interfaz no depende de
  * TDLib: la implementación real (TdBackend) solo se compila si TDLib está
@@ -28,16 +34,22 @@ interface TgAccountBackend {
     fun logOut()
     fun loadChats(onDone: (List<TgChat>) -> Unit)
     /** Mensajes del chat, de más nuevos a más antiguos, a partir de [fromMessageId] (0 = los últimos). */
-    fun loadHistory(chatId: Long, chatTitle: String, fromMessageId: Long, onDone: (List<TgMessage>) -> Unit)
+    fun loadHistory(chatId: Long, chatTitle: String, fromMessageId: Long, offset: Int = 0, onDone: (List<TgMessage>) -> Unit)
+    /** Temas de un supergrupo con temas. */
+    fun loadTopics(chatId: Long, onDone: (List<TgTopic>) -> Unit)
+    /** Como [loadHistory], pero dentro de un tema. */
+    fun loadTopicHistory(chatId: Long, chatTitle: String, topicId: Long, fromMessageId: Long, onDone: (List<TgMessage>) -> Unit)
+    /** Resuelve un enlace interno (t.me/usuario, t.me/c/id/msg, t.me/+invitación…). Con [join] entra en el chat si es una invitación. */
+    fun resolveLink(link: String, join: Boolean, onDone: (TgLinkTarget?) -> Unit)
     /** Descarga un archivo; [onProgress] (descargado, total) y [onDone] con la ruta local o null si falló. */
     fun download(fileId: Int, onProgress: (Long, Long) -> Unit, onDone: (String?) -> Unit)
     fun cancelDownload(fileId: Int)
     /** Busca mensajes: en un chat ([chatId] != 0) o en todos los chats (0). */
     fun searchMessages(query: String, chatId: Long, onDone: (List<TgMessage>) -> Unit)
     /** Envía un mensaje de texto al chat; [onDone] con true si salió bien. */
-    fun sendText(chatId: Long, text: String, replyTo: Long = 0L, onDone: (Boolean) -> Unit)
+    fun sendText(chatId: Long, text: String, replyTo: Long = 0L, topicId: Long = 0L, onDone: (Boolean) -> Unit)
     /** Envía un archivo local como foto o documento, con texto opcional. */
-    fun sendFile(chatId: Long, path: String, asPhoto: Boolean, caption: String, onDone: (Boolean) -> Unit)
+    fun sendFile(chatId: Long, path: String, asPhoto: Boolean, caption: String, topicId: Long = 0L, onDone: (Boolean) -> Unit)
     fun deleteMessage(chatId: Long, messageId: Long, onDone: (Boolean) -> Unit)
     fun joinChat(chatId: Long, onDone: (Boolean) -> Unit)
     /** Busca chats, canales, grupos y bots por nombre: los tuyos y los públicos. */

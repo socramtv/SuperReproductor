@@ -55,6 +55,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val star: Boolean? = null,
         val onStar: (() -> Unit)? = null,
         val onLong: (() -> Unit)? = null,
+        val thumbFileId: Int = 0,
         val onClick: () -> Unit
     )
 
@@ -79,6 +80,12 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var searchItem: MenuItem? = null
     private var suppressExit = false
     private var pendingScroll = -1
+    private var currentTopic: TgTopic? = null
+    private var showingTopics = false
+    private var initialFrom = 0L
+    private var jumpTarget = 0L
+    private val thumbPaths = HashMap<Int, String>()
+    private val thumbRequested = HashSet<Int>()
     private var searchView: SearchView? = null
     private var menuRef: Menu? = null
     private val searchDebounce = Runnable { runSearchNow() }
@@ -87,13 +94,21 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
     /** Pestaña de la lista de chats: 0 favoritos, 1 todos, 2 canales, 3 grupos, 4 bots, 5 personas. */
     private var chatFilter = 1
-    private val reloadRunnable = Runnable {
-        val c = currentChat
-        if (c != null && !searching && !isFinishing && !isDestroyed) {
-            messages.clear()
-            lastBatchFull = false
-            scrollToEnd = true
-            loadMore()
+    private val reloadRunnable = Runnable { refreshNow() }
+
+    /** Vuelve a pedir lo que se está viendo: chats, temas o mensajes (también lo usa el botón de actualizar). */
+    private fun refreshNow() {
+        if (searching || isFinishing || isDestroyed || state != TgAuthState.READY) return
+        val chat = currentChat
+        when {
+            chat == null -> loadChatList()
+            showingTopics -> showTopics(chat)
+            else -> {
+                messages.clear()
+                lastBatchFull = false
+                scrollToEnd = true
+                loadMore()
+            }
         }
     }
 
@@ -167,7 +182,13 @@ class TelegramAccountActivity : AppCompatActivity() {
 
             override fun onNewMessage(chatId: Long) {
                 runOnUiThread {
-                    if (!isFinishing && !isDestroyed && currentChat?.id == chatId && !searching) scheduleReload(600)
+                    if (isFinishing || isDestroyed || searching) return@runOnUiThread
+                    val open = currentChat
+                    if (open == null) {
+                        scheduleReload(2000)
+                    } else if (open.id == chatId) {
+                        scheduleReload(600)
+                    }
                 }
             }
 
@@ -327,10 +348,11 @@ class TelegramAccountActivity : AppCompatActivity() {
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val chat = currentChat
         val inChat = chat != null && !searching
+        menu.findItem(R.id.action_tgacc_refresh)?.isVisible = !searching && state == TgAuthState.READY
         menu.findItem(R.id.action_tgacc_fav)?.isVisible = inChat
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_kbd)?.isVisible = inChat && chat?.kind == "bot"
-        menu.findItem(R.id.action_tgacc_join)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group")
+        menu.findItem(R.id.action_tgacc_join)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group" || chat?.kind == "forum")
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -338,6 +360,11 @@ class TelegramAccountActivity : AppCompatActivity() {
         when (item.itemId) {
             android.R.id.home -> {
                 goBack()
+                return true
+            }
+            R.id.action_tgacc_refresh -> {
+                Toast.makeText(this, R.string.tgacc_refreshing, Toast.LENGTH_SHORT).show()
+                refreshNow()
                 return true
             }
             R.id.action_tgacc_fav -> {
@@ -389,8 +416,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 chats = list
-                if (searching) return@runOnUiThread
-                currentChat = null
+                if (searching || currentChat != null) return@runOnUiThread
                 renderChats()
             }
         }
@@ -399,6 +425,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun kindLabel(kind: String) = when (kind) {
         "channel" -> getString(R.string.tgacc_kind_channel)
         "group" -> getString(R.string.tgacc_kind_group)
+        "forum" -> getString(R.string.tgacc_kind_forum)
         "bot" -> getString(R.string.tgacc_kind_bot)
         else -> getString(R.string.tgacc_kind_private)
     }
@@ -410,6 +437,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun goBack() {
         if (searching) {
             searchItem?.collapseActionView()
+        } else if (currentTopic != null) {
+            currentChat?.let { showTopics(it) }
         } else if (currentChat != null) {
             closeChat()
         } else {
@@ -420,7 +449,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun setupTabs() {
         val labels = listOf(
             R.string.tgacc_tab_fav, R.string.tgacc_tab_all, R.string.tgacc_tab_channels,
-            R.string.tgacc_tab_groups, R.string.tgacc_tab_bots, R.string.tgacc_tab_people
+            R.string.tgacc_tab_groups, R.string.tgacc_tab_forums, R.string.tgacc_tab_bots, R.string.tgacc_tab_people
         )
         if (TelegramAccountPrefs.favoriteChats(this).isNotEmpty()) chatFilter = 0
         for ((i, res) in labels.withIndex()) {
@@ -459,8 +488,9 @@ class TelegramAccountActivity : AppCompatActivity() {
                 0 -> chat.id in favs
                 2 -> chat.kind == "channel"
                 3 -> chat.kind == "group"
-                4 -> chat.kind == "bot"
-                5 -> chat.kind == "private"
+                4 -> chat.kind == "forum"
+                5 -> chat.kind == "bot"
+                6 -> chat.kind == "private"
                 else -> true
             }
         }
@@ -479,7 +509,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
     }
 
-    private fun openChat(chat: TgChat) {
+    private fun openChat(chat: TgChat, messageId: Long = 0L, startParam: String = "") {
         if (searching) {
             suppressExit = true
             searchItem?.collapseActionView()
@@ -488,14 +518,71 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         binding.tgSearchTabs.visibility = View.GONE
         currentChat = chat
+        currentTopic = null
+        showingTopics = false
         messages.clear()
         lastBatchFull = false
-        scrollToEnd = true
+        scrollToEnd = messageId == 0L
+        jumpTarget = messageId
+        initialFrom = messageId
         setReply(null)
         title = chat.title
         searchResults = null
+        if (startParam.isNotEmpty()) binding.tgInput.setText("/start $startParam")
+        updateBack()
+        invalidateOptionsMenu()
+        if (chat.kind == "forum") {
+            showTopics(chat)
+            return
+        }
         binding.inputBar.visibility = View.VISIBLE
         binding.tgTabs.visibility = View.GONE
+        adapter.submit(emptyList())
+        binding.emptyView.text = getString(R.string.tg_loading)
+        binding.emptyView.visibility = View.VISIBLE
+        loadMore()
+    }
+
+    /** Lista de temas de un supergrupo con temas (foro). */
+    private fun showTopics(chat: TgChat) {
+        currentTopic = null
+        showingTopics = true
+        title = chat.title
+        binding.inputBar.visibility = View.GONE
+        binding.tgTabs.visibility = View.GONE
+        binding.tgSearchTabs.visibility = View.GONE
+        updateBack()
+        invalidateOptionsMenu()
+        adapter.submit(emptyList())
+        binding.emptyView.text = getString(R.string.tg_loading)
+        binding.emptyView.visibility = View.VISIBLE
+        backend?.loadTopics(chat.id) { list ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed || currentChat?.id != chat.id || !showingTopics || searching) return@runOnUiThread
+                val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                val rows = list.sortedByDescending { it.lastDate }.map { t ->
+                    val sub = (if (t.unread > 0) getString(R.string.tgacc_unread, t.unread) + " · " else "") +
+                        (if (t.lastDate > 0) df.format(Date(t.lastDate * 1000L)) else "")
+                    Row("💬 " + t.name, sub) { openTopic(chat, t) }
+                }
+                adapter.submit(rows)
+                binding.emptyView.text = getString(R.string.tgacc_topics_empty)
+                binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+            }
+        }
+    }
+
+    private fun openTopic(chat: TgChat, topic: TgTopic) {
+        currentTopic = topic
+        showingTopics = false
+        messages.clear()
+        lastBatchFull = false
+        scrollToEnd = true
+        initialFrom = 0L
+        jumpTarget = 0L
+        setReply(null)
+        title = chat.title + " › " + topic.name
+        binding.inputBar.visibility = View.VISIBLE
         updateBack()
         invalidateOptionsMenu()
         adapter.submit(emptyList())
@@ -506,6 +593,8 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun closeChat() {
         currentChat = null
+        currentTopic = null
+        showingTopics = false
         binding.root.removeCallbacks(reloadRunnable)
         renderChats()
         loadChatList()
@@ -513,15 +602,25 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun loadMore() {
         val chat = currentChat ?: return
-        val from = messages.lastOrNull()?.messageId ?: 0L
-        backend?.loadHistory(chat.id, chat.title, from) { batch ->
+        val topic = currentTopic
+        val firstLoad = messages.isEmpty()
+        val from = messages.lastOrNull()?.messageId ?: initialFrom
+        val offset = if (firstLoad && initialFrom != 0L) -20 else 0
+        val onBatch: (List<TgMessage>) -> Unit = { batch ->
             runOnUiThread {
-                if (isFinishing || isDestroyed || currentChat?.id != chat.id) return@runOnUiThread
-                if (from != 0L) pendingScroll = batch.size
-                messages.addAll(batch)
-                lastBatchFull = batch.size >= 5
-                if (!searching) renderMessages()
+                if (!(isFinishing || isDestroyed || currentChat?.id != chat.id || currentTopic?.id != topic?.id)) {
+                    if (!firstLoad) pendingScroll = batch.size
+                    initialFrom = 0L
+                    messages.addAll(batch)
+                    lastBatchFull = batch.size >= 5
+                    if (!searching) renderMessages()
+                }
             }
+        }
+        if (topic != null) {
+            backend?.loadTopicHistory(chat.id, chat.title, topic.id, from, onBatch)
+        } else {
+            backend?.loadHistory(chat.id, chat.title, from, offset, onBatch)
         }
     }
 
@@ -536,13 +635,20 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         // Como en Telegram: lo más antiguo arriba y lo más nuevo abajo.
         messages.reversed().forEach { m ->
-            rows.add(Row(messageTitle(m), messageSubtitle(m, df), null, null, { onMessageLong(m) }) { onMessageClick(m) })
+            rows.add(Row(messageTitle(m), messageSubtitle(m, df), null, null, { onMessageLong(m) }, m.thumbId) { onMessageClick(m) })
         }
         adapter.submit(rows)
         binding.emptyView.text = getString(R.string.tg_empty_chat)
         binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
         val last = rows.size - 1
-        if (scrollToEnd && last >= 0) {
+        val jump = jumpTarget
+        if (jump != 0L && last >= 0) {
+            val idx = messages.reversed().indexOfFirst { it.messageId == jump }
+            val target = if (idx >= 0) idx + (if (lastBatchFull) 1 else 0) else last
+            binding.recyclerView.post { binding.recyclerView.scrollToPosition(target) }
+            jumpTarget = 0L
+            scrollToEnd = false
+        } else if (scrollToEnd && last >= 0) {
             binding.recyclerView.post { binding.recyclerView.scrollToPosition(last) }
         } else if (pendingScroll > 0 && last >= 0) {
             val target = pendingScroll.coerceAtMost(last)
@@ -628,9 +734,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.tgSearchTabs.visibility = View.GONE
         searchResults = null
         searchChatResults = emptyList()
-        if (currentChat != null) {
-            title = currentChat?.title
-            renderMessages()
+        val open = currentChat
+        if (open != null) {
+            if (showingTopics) {
+                showTopics(open)
+            } else {
+                title = currentTopic?.let { open.title + " › " + it.name } ?: open.title
+                renderMessages()
+            }
         } else {
             renderChats()
         }
@@ -683,7 +794,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val global = currentChat == null
         searchResults?.forEach { m ->
             val prefix = if (global && m.chatTitle.isNotEmpty()) m.chatTitle + " · " else ""
-            rows.add(Row(messageTitle(m), prefix + messageSubtitle(m, df), null, null, { onMessageLong(m) }) { onMessageClick(m) })
+            rows.add(Row(messageTitle(m), prefix + messageSubtitle(m, df), null, null, { onMessageLong(m) }, m.thumbId) { onMessageClick(m) })
         }
         adapter.submit(rows)
         binding.emptyView.text = getString(R.string.tgacc_search_none)
@@ -696,7 +807,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         if (text.isEmpty()) return
         binding.tgSend.isEnabled = false
         val reply = replyTo?.messageId ?: 0L
-        backend?.sendText(chat.id, text, reply) { ok ->
+        backend?.sendText(chat.id, text, reply, currentTopic?.id ?: 0L) { ok ->
             runOnUiThread {
                 binding.tgSend.isEnabled = true
                 if (isFinishing || isDestroyed) return@runOnUiThread
@@ -784,7 +895,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.tgacc_attach_error, Toast.LENGTH_LONG).show()
                     return@runOnUiThread
                 }
-                backend?.sendFile(chat.id, file, isImage, caption) { ok ->
+                backend?.sendFile(chat.id, file, isImage, caption, currentTopic?.id ?: 0L) { ok ->
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
                         if (ok) {
@@ -805,13 +916,13 @@ class TelegramAccountActivity : AppCompatActivity() {
         download(m) { path ->
             val img = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                adjustViewBounds = true
+                setBackgroundColor(android.graphics.Color.BLACK)
             }
             img.load(File(path))
-            AlertDialog.Builder(this)
-                .setView(img)
-                .setPositiveButton(R.string.channel_check_close, null)
-                .show()
+            val dialog = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+            dialog.setContentView(img)
+            img.setOnClickListener { dialog.dismiss() }
+            dialog.show()
         }
     }
 
@@ -821,7 +932,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun sendToCurrentChat(text: String) {
         val chat = currentChat ?: return
-        backend?.sendText(chat.id, text) { ok ->
+        backend?.sendText(chat.id, text, 0L, currentTopic?.id ?: 0L) { ok ->
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (ok) scheduleReload(1500) else Toast.makeText(this, R.string.tgacc_send_error, Toast.LENGTH_LONG).show()
@@ -911,7 +1022,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             actions.add { showButtons(m) }
         }
         if (m.fileId != null) {
-            if (m.kind == "photo") {
+            if (m.kind == "photo" || (m.kind == "document" && (m.mime ?: "").startsWith("image/"))) {
                 labels.add(getString(R.string.tgacc_view_photo))
                 actions.add { viewPhoto(m) }
             } else if (looksLikePlaylist(m)) {
@@ -929,6 +1040,11 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
         }
         for (link in m.links) {
+            if (isTgLink(link)) {
+                labels.add(getString(R.string.tgacc_open_link, link.removePrefix("https://").removePrefix("http://").take(40)))
+                actions.add { openTgLink(link) }
+                continue
+            }
             if (TelegramImport.looksLikeListUrl(link)) {
                 labels.add(getString(R.string.tg_link_as_list, link.removePrefix("https://").removePrefix("http://").take(40)))
                 actions.add { loadPlaylistUrl(link) }
@@ -950,6 +1066,31 @@ class TelegramAccountActivity : AppCompatActivity() {
                 .setTitle(messageTitle(m))
                 .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
                 .show()
+        }
+    }
+
+    private fun isTgLink(url: String): Boolean {
+        val u = url.lowercase().removePrefix("https://").removePrefix("http://")
+        return u.startsWith("t.me/") || u.startsWith("telegram.me/") || u.startsWith("telegram.dog/") || u.startsWith("tg://")
+    }
+
+    /** Abre dentro de la app un enlace interno de Telegram (usuario, canal, grupo, bot, invitación, mensaje). */
+    private fun openTgLink(link: String, join: Boolean = false) {
+        val b = backend ?: return
+        Toast.makeText(this, R.string.tg_loading, Toast.LENGTH_SHORT).show()
+        b.resolveLink(link, join) { target ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                when {
+                    target == null -> Toast.makeText(this, R.string.tgacc_link_error, Toast.LENGTH_LONG).show()
+                    target.chat.id == 0L -> AlertDialog.Builder(this)
+                        .setMessage(getString(R.string.tgacc_join_confirm, target.chat.title))
+                        .setPositiveButton(android.R.string.ok) { _, _ -> openTgLink(link, true) }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                    else -> openChat(target.chat, target.messageId, target.startParam)
+                }
+            }
         }
     }
 
@@ -1112,6 +1253,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             holder.b.tgSubtitle.text = row.subtitle
             holder.b.tgSubtitle.visibility = if (row.subtitle.isEmpty()) View.GONE else View.VISIBLE
             holder.b.root.setOnClickListener { row.onClick() }
+            bindThumb(holder, row)
             val long = row.onLong
             if (long != null) {
                 holder.b.root.setOnLongClickListener { long(); true }
@@ -1126,6 +1268,28 @@ class TelegramAccountActivity : AppCompatActivity() {
                 holder.b.tgStar.visibility = View.VISIBLE
                 holder.b.tgStar.text = if (star) "★" else "☆"
                 holder.b.tgStar.setOnClickListener { row.onStar?.invoke() }
+            }
+        }
+
+        private fun bindThumb(holder: VH, row: Row) {
+            val id = row.thumbFileId
+            val path = if (id != 0) thumbPaths[id] else null
+            if (path == null) {
+                holder.b.tgThumb.setImageDrawable(null)
+                holder.b.tgThumb.visibility = View.GONE
+                if (id != 0 && thumbRequested.add(id)) {
+                    backend?.download(id, { _, _ -> }, { done ->
+                        if (done != null) {
+                            runOnUiThread {
+                                thumbPaths[id] = done
+                                rows.forEachIndexed { i, r -> if (r.thumbFileId == id) notifyItemChanged(i) }
+                            }
+                        }
+                    })
+                }
+            } else {
+                holder.b.tgThumb.visibility = View.VISIBLE
+                holder.b.tgThumb.load(File(path))
             }
         }
 

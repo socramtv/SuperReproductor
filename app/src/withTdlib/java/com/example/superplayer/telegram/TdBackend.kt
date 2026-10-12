@@ -20,6 +20,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     private val chats = ConcurrentHashMap<Long, TdApi.Chat>()
     private val botIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val userNames = ConcurrentHashMap<Long, String>()
+    private val forumIds: MutableSet<Int> = ConcurrentHashMap.newKeySet()
 
     private class Download(val onProgress: (Long, Long) -> Unit, val onDone: (String?) -> Unit)
     private val downloads = ConcurrentHashMap<Int, Download>()
@@ -61,6 +62,9 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             is TdApi.UpdateUser -> {
                 if (obj.user.type is TdApi.UserTypeBot) botIds.add(obj.user.id)
                 userNames[obj.user.id] = (obj.user.firstName + " " + obj.user.lastName).trim()
+            }
+            is TdApi.UpdateSupergroup -> {
+                if (obj.supergroup.isForum) forumIds.add(obj.supergroup.id) else forumIds.remove(obj.supergroup.id)
             }
             is TdApi.UpdateNewMessage -> listener?.onNewMessage(obj.message.chatId)
             is TdApi.UpdateFile -> {
@@ -152,6 +156,203 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         send(request) { }
     }
 
+    // -----------------------------------------------------------------
+    // Temas de supergrupos (foros), enlaces internos. Se usa reflexión en lo que cambia entre
+    // versiones de TDLib (nombres de peticiones y campos), así compila con cualquiera.
+    // -----------------------------------------------------------------
+
+    private fun field(obj: Any?, vararg names: String): Any? {
+        if (obj == null) return null
+        for (n in names) {
+            try {
+                return obj.javaClass.getField(n).get(obj)
+            } catch (e: Exception) {
+                // siguiente nombre
+            }
+        }
+        return null
+    }
+
+    private fun newRequest(name: String, vararg fields: Pair<String, Any>): TdApi.Function<*>? {
+        return try {
+            val cls = Class.forName("org.drinkless.tdlib.TdApi\$" + name)
+            val o = cls.getDeclaredConstructor().newInstance()
+            for ((f, v) in fields) {
+                try {
+                    cls.getField(f).set(o, v)
+                } catch (e: Exception) {
+                    // campo que no existe en esta versión
+                }
+            }
+            o as? TdApi.Function<*>
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    /** Como send(), pero sin avisar de errores (se prueba una petición y, si falla, otra). */
+    private fun sendQuiet(function: TdApi.Function<*>, onResult: (TdApi.Object) -> Unit) {
+        val c = client
+        if (c == null) {
+            onResult(TdApi.Error(0, "sin cliente"))
+            return
+        }
+        c.send(function) { result -> onResult(result) }
+    }
+
+    private fun applyTopic(request: TdApi.SendMessage, topicId: Long) {
+        if (topicId == 0L) return
+        try {
+            request.javaClass.getField("messageThreadId").set(request, topicId)
+            return
+        } catch (e: Exception) {
+            // versión nueva: el tema va en "topicId"
+        }
+        try {
+            val t = Class.forName("org.drinkless.tdlib.TdApi\$MessageTopicForum").getDeclaredConstructor().newInstance()
+            t.javaClass.getField("forumTopicId").set(t, topicId.toInt())
+            request.javaClass.getField("topicId").set(request, t)
+        } catch (e: Exception) {
+            // sin soporte de temas en esta versión: sale en el tema General
+        }
+    }
+
+    override fun loadTopics(chatId: Long, onDone: (List<TgTopic>) -> Unit) {
+        val request = newRequest(
+            "GetForumTopics",
+            "chatId" to chatId, "query" to "", "offsetDate" to 0,
+            "offsetMessageId" to 0L, "offsetMessageThreadId" to 0L, "limit" to 100
+        )
+        if (request == null) {
+            onDone(emptyList())
+            return
+        }
+        sendQuiet(request) { result ->
+            val topics = field(result, "topics") as? Array<*>
+            if (topics == null) {
+                onDone(emptyList())
+            } else {
+                onDone(topics.mapNotNull { t ->
+                    val info = field(t, "info")
+                    val id = (field(info, "forumTopicId", "messageThreadId") as? Number)?.toLong() ?: return@mapNotNull null
+                    val name = field(info, "name") as? String ?: return@mapNotNull null
+                    val date = ((field(t, "lastMessage") as? TdApi.Message)?.date ?: 0).toLong()
+                    val unread = (field(t, "unreadCount") as? Number)?.toInt() ?: 0
+                    TgTopic(id, name, date, unread)
+                })
+            }
+        }
+    }
+
+    override fun loadTopicHistory(chatId: Long, chatTitle: String, topicId: Long, fromMessageId: Long, onDone: (List<TgMessage>) -> Unit) {
+        fun finish(result: TdApi.Object): Boolean {
+            if (result is TdApi.Messages) {
+                onDone(result.messages.mapNotNull { toMessage(it, chatTitle) })
+                return true
+            }
+            return false
+        }
+        val first = newRequest(
+            "GetForumTopicHistory",
+            "chatId" to chatId, "forumTopicId" to topicId.toInt(), "fromMessageId" to fromMessageId, "offset" to 0, "limit" to 50
+        )
+        val second = newRequest(
+            "GetMessageThreadHistory",
+            "chatId" to chatId, "messageId" to topicId, "fromMessageId" to fromMessageId, "offset" to 0, "limit" to 50
+        )
+        fun fallback() {
+            if (second == null) {
+                onDone(emptyList())
+            } else {
+                sendQuiet(second) { r -> if (!finish(r)) onDone(emptyList()) }
+            }
+        }
+        if (first == null) fallback() else sendQuiet(first) { r -> if (!finish(r)) fallback() }
+    }
+
+    private fun tgChatOf(chat: TdApi.Chat): TgChat {
+        chats[chat.id] = chat
+        return TgChat(
+            chat.id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L,
+            (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount
+        )
+    }
+
+    override fun resolveLink(link: String, join: Boolean, onDone: (TgLinkTarget?) -> Unit) {
+        var clean = link.trim()
+        var query = ""
+        val qi = clean.indexOf('?')
+        if (qi >= 0) {
+            query = clean.substring(qi + 1)
+            clean = clean.substring(0, qi)
+        }
+        fun param(name: String): String =
+            query.split('&').firstOrNull { it.startsWith("$name=") }?.substringAfter('=').orEmpty()
+        var path = clean.substringAfter("://", clean).substringBefore('#')
+        for (host in listOf("t.me/", "telegram.me/", "telegram.dog/")) {
+            if (path.startsWith(host)) path = path.removePrefix(host)
+        }
+        path = path.removePrefix("s/").trim('/')
+        // tg://resolve?domain=usuario&start=x  ·  tg://join?invite=hash
+        if (clean.startsWith("tg://")) {
+            val domain = param("domain")
+            val invite = param("invite")
+            path = when {
+                invite.isNotEmpty() -> "+$invite"
+                domain.isNotEmpty() -> domain
+                else -> ""
+            }
+        }
+        val parts = path.split('/').filter { it.isNotEmpty() }
+        if (parts.isEmpty()) {
+            onDone(null)
+            return
+        }
+        fun withChat(chat: TdApi.Chat, messageId: Long) {
+            onDone(TgLinkTarget(tgChatOf(chat), messageId, param("start")))
+        }
+        val first = parts[0]
+        when {
+            // Chat privado/supergrupo por número: t.me/c/<id>/<mensaje>
+            first == "c" && parts.size >= 2 && parts[1].toLongOrNull() != null -> {
+                val chatId = ("-100" + parts[1]).toLongOrNull()
+                val msg = parts.drop(2).lastOrNull()?.toLongOrNull() ?: 0L
+                if (chatId == null) {
+                    onDone(null)
+                } else {
+                    sendQuiet(TdApi.GetChat(chatId)) { r ->
+                        if (r is TdApi.Chat) withChat(r, msg shl 20) else onDone(null)
+                    }
+                }
+            }
+            // Invitaciones: t.me/+hash · t.me/joinchat/hash
+            first.startsWith("+") || first == "joinchat" -> {
+                val hash = if (first == "joinchat") parts.getOrNull(1).orEmpty() else first.removePrefix("+")
+                val inviteLink = "https://t.me/+$hash"
+                sendQuiet(TdApi.CheckChatInviteLink(inviteLink)) { r ->
+                    if (r is TdApi.ChatInviteLinkInfo) {
+                        if (r.chatId != 0L) {
+                            sendQuiet(TdApi.GetChat(r.chatId)) { c -> if (c is TdApi.Chat) withChat(c, 0L) else onDone(null) }
+                        } else if (join) {
+                            sendQuiet(TdApi.JoinChatByInviteLink(inviteLink)) { c -> if (c is TdApi.Chat) withChat(c, 0L) else onDone(null) }
+                        } else {
+                            onDone(TgLinkTarget(TgChat(0L, r.title, "invite", 0L)))
+                        }
+                    } else {
+                        onDone(null)
+                    }
+                }
+            }
+            // Usuario, canal, grupo o bot públicos: t.me/nombre[/mensaje]
+            else -> {
+                val msg = parts.drop(1).lastOrNull()?.toLongOrNull() ?: 0L
+                sendQuiet(TdApi.SearchPublicChat(first)) { r ->
+                    if (r is TdApi.Chat) withChat(r, msg shl 20) else onDone(null)
+                }
+            }
+        }
+    }
+
     override fun logOut() {
         send(TdApi.LogOut())
     }
@@ -161,6 +362,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         return when {
             t is TdApi.ChatTypePrivate && botIds.contains(t.userId) -> "bot"
             t is TdApi.ChatTypeSupergroup && t.isChannel -> "channel"
+            t is TdApi.ChatTypeSupergroup && forumIds.contains(t.supergroupId) -> "forum"
             t is TdApi.ChatTypeSupergroup || t is TdApi.ChatTypeBasicGroup -> "group"
             else -> "private"
         }
@@ -180,10 +382,10 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         }
     }
 
-    private val linkRegex = Regex("https?://[^\\s<>\"']+")
+    private val linkRegex = Regex("(?:https?://|tg://)[^\\s<>\"']+|(?<![\\w/@.])t\\.me/[^\\s<>\"']+")
 
-    override fun loadHistory(chatId: Long, chatTitle: String, fromMessageId: Long, onDone: (List<TgMessage>) -> Unit) {
-        send(TdApi.GetChatHistory(chatId, fromMessageId, 0, 50, false)) { result ->
+    override fun loadHistory(chatId: Long, chatTitle: String, fromMessageId: Long, offset: Int, onDone: (List<TgMessage>) -> Unit) {
+        send(TdApi.GetChatHistory(chatId, fromMessageId, offset, 50, false)) { result ->
             if (result is TdApi.Messages) {
                 onDone(result.messages.mapNotNull { toMessage(it, chatTitle) })
             } else {
@@ -198,25 +400,28 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         var file: TdApi.File? = null
         var name: String? = null
         var mime: String? = null
+        var fmt: TdApi.FormattedText? = null
+        var thumb: TdApi.File? = null
         when (val c = m.content) {
-            is TdApi.MessageText -> text = c.text.text
+            is TdApi.MessageText -> { fmt = c.text; text = c.text.text }
             is TdApi.MessageVideo -> {
-                kind = "video"; file = c.video.video; name = c.video.fileName; mime = c.video.mimeType; text = c.caption.text
+                kind = "video"; thumb = c.video.thumbnail?.file; file = c.video.video; name = c.video.fileName; mime = c.video.mimeType; fmt = c.caption; text = c.caption.text
             }
             is TdApi.MessageAnimation -> {
-                kind = "animation"; file = c.animation.animation; name = c.animation.fileName; mime = c.animation.mimeType; text = c.caption.text
+                kind = "animation"; thumb = c.animation.thumbnail?.file; file = c.animation.animation; name = c.animation.fileName; mime = c.animation.mimeType; fmt = c.caption; text = c.caption.text
             }
             is TdApi.MessageAudio -> {
-                kind = "audio"; file = c.audio.audio; name = c.audio.fileName; mime = c.audio.mimeType; text = c.caption.text
+                kind = "audio"; file = c.audio.audio; name = c.audio.fileName; mime = c.audio.mimeType; fmt = c.caption; text = c.caption.text
             }
             is TdApi.MessageVoiceNote -> {
-                kind = "voice"; file = c.voiceNote.voice; mime = c.voiceNote.mimeType; text = c.caption.text
+                kind = "voice"; file = c.voiceNote.voice; mime = c.voiceNote.mimeType; fmt = c.caption; text = c.caption.text
             }
             is TdApi.MessageDocument -> {
-                kind = "document"; file = c.document.document; name = c.document.fileName; mime = c.document.mimeType; text = c.caption.text
+                kind = "document"; thumb = c.document.thumbnail?.file; file = c.document.document; name = c.document.fileName; mime = c.document.mimeType; fmt = c.caption; text = c.caption.text
             }
             is TdApi.MessagePhoto -> {
-                kind = "photo"; file = c.photo.sizes.lastOrNull()?.photo; name = null; mime = "image/jpeg"; text = c.caption.text
+                kind = "photo"; file = c.photo.sizes.lastOrNull()?.photo;
+                thumb = (c.photo.sizes.firstOrNull { it.width >= 90 } ?: c.photo.sizes.firstOrNull())?.photo; name = null; mime = "image/jpeg"; fmt = c.caption; text = c.caption.text
             }
             is TdApi.MessageSticker -> { kind = "other"; text = "🏷 Sticker " + c.sticker.emoji }
             is TdApi.MessagePoll -> { kind = "other"; text = "📊 Encuesta" }
@@ -224,7 +429,13 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             is TdApi.MessageContact -> { kind = "other"; text = "👤 Contacto" }
             else -> { kind = "other"; text = "(mensaje no compatible con esta app)" }
         }
-        val links = linkRegex.findAll(text).map { it.value.trimEnd('.', ',', ')', ']', ';', '!') }.distinct().toList()
+        val found = ArrayList<String>()
+        linkRegex.findAll(text).forEach { found.add(it.value.trimEnd('.', ',', ')', ']', ';', '!')) }
+        fmt?.entities?.forEach { e ->
+            val t = e.type
+            if (t is TdApi.TextEntityTypeTextUrl) found.add(t.url)
+        }
+        val links = found.map { if (it.startsWith("t.me/")) "https://$it" else it }.distinct()
         if (kind == "none" && text.isEmpty()) return null
         val senderName = when (val sid = m.senderId) {
             is TdApi.MessageSenderUser -> userNames[sid.userId] ?: ""
@@ -249,7 +460,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             m.chatId, chatTitle, chatKind, m.id, m.date.toLong(), text, kind,
             file?.id?.toString(), name?.ifEmpty { null }, mime?.ifEmpty { null },
             file?.let { if (it.size > 0) it.size else it.expectedSize } ?: 0L, links, buttons,
-            m.isOutgoing, senderName
+            m.isOutgoing, senderName, thumb?.id ?: 0
         )
     }
 
@@ -299,12 +510,13 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         }
     }
 
-    override fun sendText(chatId: Long, text: String, replyTo: Long, onDone: (Boolean) -> Unit) {
+    override fun sendText(chatId: Long, text: String, replyTo: Long, topicId: Long, onDone: (Boolean) -> Unit) {
         val content = TdApi.InputMessageText()
         content.text = TdApi.FormattedText(text, arrayOf<TdApi.TextEntity>())
         val request = TdApi.SendMessage()
         request.chatId = chatId
         request.inputMessageContent = content
+        applyTopic(request, topicId)
         if (replyTo != 0L) {
             val r = TdApi.InputMessageReplyToMessage()
             r.messageId = replyTo
@@ -313,7 +525,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         send(request) { result -> onDone(result is TdApi.Message) }
     }
 
-    override fun sendFile(chatId: Long, path: String, asPhoto: Boolean, caption: String, onDone: (Boolean) -> Unit) {
+    override fun sendFile(chatId: Long, path: String, asPhoto: Boolean, caption: String, topicId: Long, onDone: (Boolean) -> Unit) {
         val file = TdApi.InputFileLocal(path)
         val cap = TdApi.FormattedText(caption, arrayOf<TdApi.TextEntity>())
         val content: TdApi.InputMessageContent
@@ -331,6 +543,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         val request = TdApi.SendMessage()
         request.chatId = chatId
         request.inputMessageContent = content
+        applyTopic(request, topicId)
         send(request) { result -> onDone(result is TdApi.Message) }
     }
 
