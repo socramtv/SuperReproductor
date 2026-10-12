@@ -47,14 +47,15 @@
 
     <TextView
         android:id="@+id/tgStar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="10dp"
-        android:paddingVertical="4dp"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:layout_marginStart="6dp"
+        android:gravity="center"
+        android:background="@drawable/bg_tg_star"
         android:focusable="true"
         android:clickable="true"
         android:textColor="@color/primary"
-        android:textSize="24sp"
+        android:textSize="28sp"
         android:visibility="gone" />
 
 </LinearLayout>

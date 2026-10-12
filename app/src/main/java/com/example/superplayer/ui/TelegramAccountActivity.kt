@@ -1,6 +1,7 @@
 package com.example.superplayer.ui
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
@@ -24,6 +25,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.superplayer.R
@@ -66,6 +68,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Una miniatura de la galería: foto, vídeo, lista o enlace de Telegram. */
     private class MediaItem(
+        val key: String = "",
         val caption: String,
         val meta: String = "",
         val thumbFileId: Int = 0,
@@ -129,13 +132,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         when {
             chat == null -> loadChatList()
             showingTopics -> showTopics(chat)
-            else -> {
-                messages.clear()
-                lastBatchFull = false
-                scrollToEnd = true
-                autoLoads = 0
-                loadMore()
-            }
+            else -> refreshLatest(chat)
         }
     }
 
@@ -190,6 +187,83 @@ class TelegramAccountActivity : AppCompatActivity() {
         // Al salir de Telegram se borra lo descargado (la caché de Telegram crece muy rápido).
         if (isFinishing && state == TgAuthState.READY) backend?.cleanCache()
         super.onDestroy()
+    }
+
+    // -----------------------------------------------------------------
+    // Navegación con mando (TV): el foco no se pierde al refrescar y se ve dónde está
+    // -----------------------------------------------------------------
+
+    private val isTvDevice by lazy { packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
+    private var returnToChatId = 0L
+
+    /** Cambia el contenido de la lista y devuelve el foco a la misma posición (si no, el mando salta arriba del todo). */
+    private fun keepFocus(change: () -> Unit) {
+        val rv = binding.recyclerView
+        val focused = rv.focusedChild
+        val pos = if (focused != null) rv.getChildAdapterPosition(focused) else RecyclerView.NO_POSITION
+        change()
+        if (pos == RecyclerView.NO_POSITION) return
+        rv.post {
+            val count = rv.adapter?.itemCount ?: 0
+            if (count == 0) return@post
+            val target = pos.coerceAtMost(count - 1)
+            val holder = rv.findViewHolderForAdapterPosition(target)
+            if (holder != null) {
+                holder.itemView.requestFocus()
+            } else {
+                rv.scrollToPosition(target)
+                rv.post { rv.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus() }
+            }
+        }
+    }
+
+    /** En TV, si tras pintar la lista no hay nada con foco, se lo da al primer (o último) elemento. */
+    private fun focusItemIfTv(last: Boolean = false) {
+        if (!isTvDevice) return
+        val rv = binding.recyclerView
+        rv.post {
+            if (currentFocus != null || rv.childCount == 0) return@post
+            val child = if (last) rv.getChildAt(rv.childCount - 1) else rv.getChildAt(0)
+            child?.requestFocus()
+        }
+    }
+
+    private fun isAtBottom(): Boolean {
+        val lm = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return false
+        val count = binding.recyclerView.adapter?.itemCount ?: 0
+        return count == 0 || lm.findLastCompletelyVisibleItemPosition() >= count - 2
+    }
+
+    /** Pide solo los mensajes más recientes y los mezcla con los ya cargados: la lista no salta ni pierde lo que ya bajaste. */
+    private fun refreshLatest(chat: TgChat) {
+        val topic = currentTopic
+        if (messages.isEmpty()) {
+            scrollToEnd = true
+            autoLoads = 0
+            loadMore()
+            return
+        }
+        val atEnd = !mediaMode && isAtBottom()
+        val onBatch: (List<TgMessage>) -> Unit = { batch ->
+            runOnUiThread {
+                val stale = isFinishing || isDestroyed || currentChat?.id != chat.id || currentTopic?.id != topic?.id ||
+                    searching || showingTopics
+                if (!stale && batch.isNotEmpty()) {
+                    val oldest = batch.last().messageId
+                    val kept = messages.filter { it.messageId < oldest }
+                    messages.clear()
+                    messages.addAll(batch)
+                    messages.addAll(kept)
+                    scrollToEnd = atEnd
+                    renderMessages()
+                }
+            }
+        }
+        if (topic != null) {
+            backend?.loadTopicHistory(chat.id, chat.title, topic.id, 0L, onBatch)
+        } else {
+            backend?.loadHistory(chat.id, chat.title, 0L, 0, onBatch)
+        }
     }
 
     private fun useList() {
@@ -566,6 +640,15 @@ class TelegramAccountActivity : AppCompatActivity() {
             }, thumbFileId = chat.photoId, circle = true) { openChat(chat) }
         }
         adapter.submit(rows)
+        val back = returnToChatId
+        returnToChatId = 0L
+        val backIdx = if (back != 0L) shown.indexOfFirst { it.id == back } else -1
+        if (backIdx >= 0) {
+            binding.recyclerView.scrollToPosition(backIdx)
+            binding.recyclerView.post { binding.recyclerView.findViewHolderForAdapterPosition(backIdx)?.itemView?.requestFocus() }
+        } else {
+            focusItemIfTv()
+        }
         binding.emptyView.text = getString(if (chatFilter == 0) R.string.tgacc_no_favs else R.string.tgacc_no_chats)
         binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
     }
@@ -630,6 +713,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     Row("💬 " + t.name, sub) { openTopic(chat, t) }
                 }
                 adapter.submit(rows)
+                focusItemIfTv()
                 binding.emptyView.text = getString(R.string.tgacc_topics_empty)
                 binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
             }
@@ -657,6 +741,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun closeChat() {
+        returnToChatId = currentChat?.id ?: 0L
         currentChat = null
         currentTopic = null
         showingTopics = false
@@ -726,6 +811,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         scrollToEnd = false
         pendingScroll = -1
+        focusItemIfTv(last = true)
     }
 
     /** Galería: solo fotos, vídeos, listas (archivos y enlaces) y enlaces de Telegram, en miniaturas con su texto debajo. */
@@ -740,13 +826,13 @@ class TelegramAccountActivity : AppCompatActivity() {
             val isImage = m.kind == "photo" || (m.kind == "document" && (m.mime ?: "").startsWith("image/"))
             val isVideo = m.kind == "video" || m.kind == "animation" || (m.kind == "document" && looksLikeMedia(m))
             if (isImage) {
-                items.add(MediaItem(caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
+                items.add(MediaItem(key = "${m.messageId}:img", caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
                     messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
             } else if (isVideo) {
-                items.add(MediaItem(caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
+                items.add(MediaItem(key = "${m.messageId}:vid", caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
                     badge = "▶", messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
             } else if (m.kind == "document" && looksLikePlaylist(m)) {
-                items.add(MediaItem(caption = m.fileName ?: caption, meta = date, iconRes = R.drawable.ic_tg_list,
+                items.add(MediaItem(key = "${m.messageId}:file", caption = m.fileName ?: caption, meta = date, iconRes = R.drawable.ic_tg_list,
                     badge = getString(R.string.tgacc_badge_list), messageId = m.messageId,
                     onLong = { onMessageLong(m) }) { onMessageClick(m) })
             }
@@ -754,18 +840,18 @@ class TelegramAccountActivity : AppCompatActivity() {
                 if (!seenLinks.add(link)) continue
                 val shortLink = link.removePrefix("https://").removePrefix("http://")
                 if (isTgLink(link)) {
-                    items.add(MediaItem(caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_link,
+                    items.add(MediaItem(key = "${m.messageId}:tg:$link", caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_link,
                         badge = getString(R.string.tgacc_badge_link), link = link, messageId = m.messageId,
                         onLong = { onMessageLong(m) }) { openTgLink(link) })
                 } else if (TelegramImport.looksLikeListUrl(link)) {
-                    items.add(MediaItem(caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_list,
+                    items.add(MediaItem(key = "${m.messageId}:l:$link", caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_list,
                         badge = getString(R.string.tgacc_badge_list), messageId = m.messageId,
                         onLong = { onMessageLong(m) }) { onMessageClick(m) })
                 }
             }
         }
         val real = items.size
-        if (lastBatchFull) items.add(MediaItem(caption = getString(R.string.tgacc_load_more), loadMore = true) { loadMore() })
+        if (lastBatchFull) items.add(MediaItem(key = "more", caption = getString(R.string.tgacc_load_more), loadMore = true) { loadMore() })
         mediaAdapter.submit(items)
         binding.emptyView.text = getString(R.string.tgacc_media_empty)
         binding.emptyView.visibility = if (real == 0 && !lastBatchFull) View.VISIBLE else View.GONE
@@ -779,6 +865,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         scrollToEnd = false
         pendingScroll = -1
+        focusItemIfTv()
         // Pocos medios en esta tanda: sigue cargando mensajes más antiguos (con tope).
         if (lastBatchFull && real < 12 && autoLoads < 6) {
             autoLoads++
@@ -1395,8 +1482,19 @@ class TelegramAccountActivity : AppCompatActivity() {
         private var rows: List<Row> = emptyList()
 
         fun submit(newRows: List<Row>) {
-            rows = newRows
-            notifyDataSetChanged()
+            val same = rows.size == newRows.size && rows.indices.all { i ->
+                val a = rows[i]
+                val b = newRows[i]
+                a.title == b.title && a.subtitle == b.subtitle && a.star == b.star && a.thumbFileId == b.thumbFileId
+            }
+            if (same) {
+                rows = newRows // mismas filas: solo se actualizan las acciones, sin repintar (así no se pierde el foco)
+                return
+            }
+            keepFocus {
+                rows = newRows
+                notifyDataSetChanged()
+            }
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
@@ -1408,14 +1506,15 @@ class TelegramAccountActivity : AppCompatActivity() {
             holder.b.tgSubtitle.text = row.subtitle
             holder.b.tgSubtitle.visibility = if (row.subtitle.isEmpty()) View.GONE else View.VISIBLE
             holder.b.root.setOnClickListener { row.onClick() }
-            bindThumb(holder, row)
-            val long = row.onLong
-            if (long != null) {
-                holder.b.root.setOnLongClickListener { long(); true }
+            // Mando de TV: mantener pulsado OK sobre un chat lo marca/desmarca como favorito.
+            val longAction = row.onLong ?: row.onStar
+            if (longAction != null) {
+                holder.b.root.setOnLongClickListener { longAction(); true }
             } else {
                 holder.b.root.setOnLongClickListener(null)
                 holder.b.root.isLongClickable = false
             }
+            bindThumb(holder, row)
             val star = row.star
             if (star == null) {
                 holder.b.tgStar.visibility = View.GONE
@@ -1461,8 +1560,26 @@ class TelegramAccountActivity : AppCompatActivity() {
         private var items: List<MediaItem> = emptyList()
 
         fun submit(list: List<MediaItem>) {
+            val old = items
+            if (old.isEmpty() || list.isEmpty()) {
+                items = list
+                notifyDataSetChanged()
+                return
+            }
+            // Cambios puntuales (mensajes nuevos, miniaturas): la lista no salta y el mando conserva el foco.
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize() = old.size
+                override fun getNewListSize() = list.size
+                override fun areItemsTheSame(o: Int, n: Int) = old[o].key == list[n].key
+                override fun areContentsTheSame(o: Int, n: Int): Boolean {
+                    val a = old[o]
+                    val b = list[n]
+                    return a.caption == b.caption && a.meta == b.meta && a.thumbFileId == b.thumbFileId &&
+                        a.iconRes == b.iconRes && a.badge == b.badge && a.link == b.link
+                }
+            })
             items = list
-            notifyDataSetChanged()
+            diff.dispatchUpdatesTo(this)
         }
 
         fun isFull(position: Int) = items.getOrNull(position)?.loadMore == true

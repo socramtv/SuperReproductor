@@ -1296,3 +1296,9 @@ App más ligera y caché de Telegram: las librerías nativas de TDLib van compri
 Telegram v4: **enlaces internos** (t.me/usuario, t.me/c/id/mensaje, t.me/+invitación, tg://…) se abren dentro de la app al tocar el mensaje ("✈️ Abrir en Telegram"; las invitaciones piden confirmar antes de unirse; un enlace a un mensaje salta a ese mensaje; ?start=x deja "/start x" escrito). **Foros** (supergrupos con temas): pestaña "Foros" en la lista; al abrir uno salen sus temas y dentro de cada tema se leen y envían mensajes. **Imágenes**: miniaturas en la lista y visor a pantalla completa al tocarlas (fotos y archivos de imagen). Botón **actualizar** (⟳) junto a la lupa; la lista de chats y el chat abierto también se refrescan solos al llegar mensajes. Los temas usan peticiones de TDLib que cambian entre versiones, por eso van por reflexión (`TdBackend.loadTopics`).
 
 Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cuadrícula de **miniaturas** (solo fotos, vídeos, listas y enlaces de Telegram, cada uno con su texto debajo; los mensajes de texto no salen). Las listas (archivos .m3u/.m3u8/.json/.txt y enlaces a listas) llevan un icono de lista y la etiqueta LISTA; los enlaces de Telegram muestran la foto y el nombre del canal/grupo/bot al que llevan. Menú ⋮ → "Ver todos los mensajes" / "Ver solo fotos, vídeos y listas" para cambiar de vista (los chats privados y bots se abren con todos los mensajes). En la lista de chats cada uno lleva su foto de perfil. Si una tanda trae pocos medios, la app sigue cargando mensajes antiguos sola (hasta 6 veces); "Cargar más" al final.
+
+## Navegación con mando (TV) en Telegram
+- El foco se mantiene al refrescar (ya no salta al principio ni se pierde al bajar).
+- Estrella de favorito más grande y con anillo de foco; mantener OK sobre un chat la marca/desmarca.
+- Al volver de un chat, el foco regresa a ese chat.
+- Filas de listas y botones de ranura muestran borde naranja con el foco.
