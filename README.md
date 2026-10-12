@@ -1329,3 +1329,6 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 ## Telegram: varias versiones de un vídeo
 - Los vídeos con el mismo nombre (mp4, mkv…) se juntan en una sola miniatura con "▶ ×N". La ficha trae un botón por versión ("Ver opción 1 · MP4 · 1080p · 1.4 GB"…); sin ficha de TMDb, una lista para elegir (o reproduce directo si solo hay una).
 - La miniatura es la imagen del chat si existe; si no, la carátula de TMDb; si no, el fotograma del vídeo. Favoritos guarda todas las versiones a la vez.
+
+## Telegram: series por capítulos
+- Los vídeos "Serie 1x01", "Serie S01E02", "Serie T1 E03"… se juntan en una sola miniatura (con la imagen de la serie, o la de TMDb). La ficha muestra T1, T2… y un botón por capítulo (01, 02, 03…).

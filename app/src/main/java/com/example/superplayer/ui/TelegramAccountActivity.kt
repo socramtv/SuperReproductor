@@ -885,6 +885,27 @@ class TelegramAccountActivity : AppCompatActivity() {
         return t.trim(' ', '-', '_', '.')
     }
 
+    private val reEpisode = Regex("(?i)\\bS(\\d{1,2})\\s*E(\\d{1,3})\\b|\\b(\\d{1,2})\\s*[x×]\\s*(\\d{1,3})\\b|\\bT(?:emporada)?\\s*(\\d{1,2})\\s*[ .-]*(?:E|Cap(?:itulo|ítulo)?\\.?)\\s*(\\d{1,3})\\b")
+    private val reYearWord = Regex("\\b(?:19|20)\\d{2}\\b")
+
+    /** Capítulo de una serie: temporada, número y nombre de la serie ("Serie 1x02", "Serie S01E02", "Serie T1 E02"). */
+    private class EpInfo(val season: Int, val episode: Int, val series: String)
+
+    private fun parseEpisode(raw: String): EpInfo? {
+        var t = raw.trim().replace(reNumPrefix, "").replace(reExtSuffix, "")
+        val m = reEpisode.find(t) ?: return null
+        val g = m.groupValues
+        val season = (g[1].ifEmpty { g[3].ifEmpty { g[5] } }).toIntOrNull() ?: return null
+        val episode = (g[2].ifEmpty { g[4].ifEmpty { g[6] } }).toIntOrNull() ?: return null
+        var series = t.substring(0, m.range.first).trim(' ', '-', '_', '.', ':', '|')
+        if (series.length < 2) series = t.substring(m.range.last + 1).trim(' ', '-', '_', '.', ':', '|')
+        series = cleanName(series)
+        if (series.length < 2) return null
+        return EpInfo(season, episode, series)
+    }
+
+    private fun noYear(key: String) = key.replace(reYearWord, " ").replace(Regex("\\s+"), " ").trim()
+
     private fun nameKey(raw: String): String =
         java.text.Normalizer.normalize(cleanName(raw).lowercase(), java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
@@ -921,17 +942,24 @@ class TelegramAccountActivity : AppCompatActivity() {
             val k = nameKey(titleOf(m))
             if (k.length >= 2) imageByName.putIfAbsent(k, m)
         }
-        // Varias versiones del mismo vídeo (mismo nombre): una sola miniatura con todas las opciones.
+        // Varias versiones del mismo vídeo (mismo nombre) o todos los capítulos de una serie: una sola miniatura.
+        val imageNoYear = HashMap<String, TgMessage>()
+        for ((k, img) in imageByName) imageNoYear.putIfAbsent(noYear(k), img)
+        fun findImage(k: String): TgMessage? = imageByName[k] ?: imageNoYear[noYear(k)]?.takeIf { noYear(k).length >= 2 }
         val groups = LinkedHashMap<String, MutableList<TgMessage>>()
+        val groupName = HashMap<String, String>() // clave del grupo -> nombre para buscar en TMDb
         for (m in messages) {
             if (!isVideoMsg(m)) continue
-            val k = nameKey(titleOf(m)).let { if (it.length >= 2) it else "id${m.messageId}" }
+            val ep = parseEpisode(titleOf(m))
+            val base = if (ep != null) nameKey(ep.series) else nameKey(titleOf(m))
+            val k = if (base.length >= 2) (if (ep != null) "s:$base" else base) else "id${m.messageId}"
             groups.getOrPut(k) { ArrayList() }.add(m)
+            if (ep != null) groupName.putIfAbsent(k, ep.series)
         }
         val pairedByLeader = HashMap<Long, TgMessage>() // id del vídeo principal -> su imagen
         val usedImages = HashSet<Long>()
         for ((k, list) in groups) {
-            val img = imageByName[k] ?: continue
+            val img = findImage(k.removePrefix("s:")) ?: continue
             if (usedImages.add(img.messageId)) pairedByLeader[list[0].messageId] = img
         }
         // Listas (.m3u…) con su imagen del mismo nombre.
@@ -956,10 +984,13 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val k = groupOf[m.messageId]
                 val list = if (k != null) groups[k].orEmpty() else listOf(m)
                 if (list.isNotEmpty() && list[0].messageId != m.messageId) continue // ya salió con su grupo
-                val options = list.sortedBy { it.messageId }
+                val isSeries = k != null && k.startsWith("s:")
+                val options = if (isSeries) {
+                    list.sortedWith(compareBy({ parseEpisode(titleOf(it))?.season ?: 0 }, { parseEpisode(titleOf(it))?.episode ?: 0 }, { it.messageId }))
+                } else list.sortedBy { it.messageId }
                 val img = pairedByLeader[m.messageId]
                 val thumb = img?.thumbId?.takeIf { it != 0 } ?: m.thumbId
-                val q = if (options.any { isMovieFile(it) }) cleanName(titleOf(m)).takeIf { it.length >= 2 }.orEmpty() else ""
+                val q = if (options.any { isMovieFile(it) }) (k?.let { groupName[it] } ?: cleanName(titleOf(m))).takeIf { it.length >= 2 }.orEmpty() else ""
                 val fav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
                 val badge = (if (options.size > 1) "▶ ×${options.size}" else "▶") + (if (fav) " ★" else "")
                 items.add(MediaItem(key = "${m.messageId}:vid", caption = (if (q.isNotEmpty()) q else caption.ifEmpty { m.fileName.orEmpty() }), meta = date, thumbFileId = thumb,
@@ -1263,69 +1294,120 @@ class TelegramAccountActivity : AppCompatActivity() {
         return if (info.isEmpty()) base else "$base · $info"
     }
 
-    /** Ficha de la película: carátula, datos y sinopsis, con un botón "Ver" por cada versión (opción 1, opción 2…). */
+    /** ¿Son los capítulos de una serie? (varios con temporada y número). */
+    private fun isSeriesGroup(options: List<TgMessage>): Boolean =
+        options.count { parseEpisode(titleOf(it)) != null } >= 2
+
+    /** Ficha de la película o serie: carátula, datos y sinopsis; abajo, un botón por versión (opción 1…) o por capítulo (T1: 01 02 03…). */
     private fun showMovieInfo(options: List<TgMessage>, query: String, thumbId: Int) {
         val info = MovieInfo.peek(this, query)
-        if (info == null) {
+        val series = isSeriesGroup(options)
+        if (info == null && !series) {
             chooseVideoOption(options, query)
             return
         }
         val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
         val col = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
         val poster = android.widget.ImageView(this).apply {
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
             layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (300 * density).toInt()
-            ).apply { topMargin = (12 * density).toInt() }
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, dp(300)
+            ).apply { topMargin = dp(12) }
         }
         val localThumb = if (thumbId != 0) thumbPaths[thumbId] else null
-        if (info.posterUrl != null) poster.load(info.posterUrl)
+        if (info?.posterUrl != null) poster.load(info.posterUrl)
         else if (localThumb != null) poster.load(File(localThumb))
         else poster.visibility = View.GONE
-        val tv = TextView(this).apply {
-            setPadding((20 * density).toInt(), (12 * density).toInt(), (20 * density).toInt(), (8 * density).toInt())
-            textSize = 14f
-        }
-        val head = listOfNotNull(
-            info.year,
-            info.runtimeMin.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
-            info.certification?.takeIf { it.isNotBlank() }
-        ).joinToString(" · ")
-        val sb = StringBuilder()
-        val line1 = listOf(infoMeta(info), head).filter { it.isNotEmpty() }.joinToString(" · ")
-        if (line1.isNotEmpty()) sb.append(line1).append("\n\n")
-        info.tagline?.takeIf { it.isNotBlank() }?.let { sb.append("“").append(it).append("”\n\n") }
-        sb.append(info.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis))
-        info.director?.takeIf { it.isNotBlank() }?.let {
-            sb.append("\n\n").append(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director)).append(": ").append(it)
-        }
-        if (info.cast.isNotEmpty()) sb.append("\n\n").append(getString(R.string.cine_cast)).append(": ").append(info.cast.joinToString(", "))
-        tv.text = sb.toString()
         col.addView(poster)
-        col.addView(tv)
-        var dialog: AlertDialog? = null
-        for ((i, m) in options.withIndex()) {
-            val btn = android.widget.Button(this).apply {
-                text = optionLabel(m, i + 1, options.size > 1)
-                isAllCaps = false
-                setOnClickListener {
-                    dialog?.dismiss()
-                    playVideo(m)
-                }
-                layoutParams = android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins((16 * density).toInt(), (4 * density).toInt(), (16 * density).toInt(), (4 * density).toInt()) }
+        if (info != null) {
+            val tv = TextView(this).apply {
+                setPadding(dp(20), dp(12), dp(20), dp(8))
+                textSize = 14f
             }
-            col.addView(btn)
+            val head = listOfNotNull(
+                info.year,
+                info.runtimeMin.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
+                info.certification?.takeIf { it.isNotBlank() }
+            ).joinToString(" · ")
+            val sb = StringBuilder()
+            val line1 = listOf(infoMeta(info), head).filter { it.isNotEmpty() }.joinToString(" · ")
+            if (line1.isNotEmpty()) sb.append(line1).append("\n\n")
+            info.tagline?.takeIf { it.isNotBlank() }?.let { sb.append("“").append(it).append("”\n\n") }
+            sb.append(info.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis))
+            info.director?.takeIf { it.isNotBlank() }?.let {
+                sb.append("\n\n").append(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director)).append(": ").append(it)
+            }
+            if (info.cast.isNotEmpty()) sb.append("\n\n").append(getString(R.string.cine_cast)).append(": ").append(info.cast.joinToString(", "))
+            tv.text = sb.toString()
+            col.addView(tv)
+        }
+        var dialog: AlertDialog? = null
+        fun play(m: TgMessage) {
+            dialog?.dismiss()
+            playVideo(m)
+        }
+        if (series) {
+            // Capítulos por temporada: T1, T2…; cada número es un botón.
+            val eps = options.mapNotNull { m -> parseEpisode(titleOf(m))?.let { Triple(it.season, it.episode, m) } }
+            val others = options.filter { parseEpisode(titleOf(it)) == null }
+            for ((season, list) in eps.groupBy { it.first }.toSortedMap()) {
+                col.addView(TextView(this).apply {
+                    text = getString(R.string.tgvid_season, season)
+                    textSize = 16f
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setTextColor(androidx.core.content.ContextCompat.getColor(this@TelegramAccountActivity, R.color.primary))
+                    setPadding(dp(20), dp(12), dp(20), dp(2))
+                })
+                val grid = android.widget.GridLayout(this).apply {
+                    columnCount = 5
+                    setPadding(dp(12), 0, dp(12), 0)
+                }
+                for ((_, ep, m) in list.sortedBy { it.second }) {
+                    val btn = android.widget.Button(this).apply {
+                        text = String.format(java.util.Locale.US, "%02d", ep)
+                        isAllCaps = false
+                        textSize = 13f
+                        minWidth = 0
+                        minimumWidth = 0
+                        setPadding(0, 0, 0, 0)
+                        setOnClickListener { play(m) }
+                    }
+                    val lp = android.widget.GridLayout.LayoutParams(
+                        android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
+                        android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
+                    ).apply {
+                        width = 0
+                        setMargins(dp(3), dp(3), dp(3), dp(3))
+                    }
+                    grid.addView(btn, lp)
+                }
+                col.addView(grid)
+            }
+            for ((i, m) in others.withIndex()) col.addView(optionButton(m, i + 1, others.size > 1) { play(m) })
+        } else {
+            for ((i, m) in options.withIndex()) col.addView(optionButton(m, i + 1, options.size > 1) { play(m) })
         }
         val scroll = android.widget.ScrollView(this).apply { addView(col) }
         val isFav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
         dialog = AlertDialog.Builder(this)
-            .setTitle(info.title)
+            .setTitle(info?.title ?: query)
             .setView(scroll)
             .setNeutralButton(if (isFav) R.string.tgvid_unfav_btn else R.string.tgvid_fav_btn) { _, _ -> toggleVideoFav(options, query, thumbId) }
             .setNegativeButton(R.string.channel_check_close, null)
             .show()
+    }
+
+    private fun optionButton(m: TgMessage, n: Int, multiple: Boolean, onClick: () -> Unit): android.widget.Button {
+        val density = resources.displayMetrics.density
+        return android.widget.Button(this).apply {
+            text = optionLabel(m, n, multiple)
+            isAllCaps = false
+            setOnClickListener { onClick() }
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins((16 * density).toInt(), (4 * density).toInt(), (16 * density).toInt(), (4 * density).toInt()) }
+        }
     }
 
     /** Sin ficha de TMDb: una sola versión se reproduce directa; si hay varias, se elige cuál ver. */
@@ -1351,7 +1433,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Pulsar un vídeo: con información, ficha con carátula y "Ver"; sin ella, se reproduce directamente (o se elige versión). */
     private fun onVideoClick(options: List<TgMessage>, query: String, thumbId: Int) {
-        if (query.isNotEmpty() && MovieInfo.peek(this, query) != null) showMovieInfo(options, query, thumbId)
+        if ((query.isNotEmpty() && MovieInfo.peek(this, query) != null) || isSeriesGroup(options)) showMovieInfo(options, query, thumbId)
         else chooseVideoOption(options, query)
     }
 
