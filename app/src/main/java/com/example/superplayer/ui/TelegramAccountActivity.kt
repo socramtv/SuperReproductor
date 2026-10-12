@@ -934,6 +934,13 @@ class TelegramAccountActivity : AppCompatActivity() {
             val img = imageByName[k] ?: continue
             if (usedImages.add(img.messageId)) pairedByLeader[list[0].messageId] = img
         }
+        // Listas (.m3u…) con su imagen del mismo nombre.
+        val listImage = HashMap<Long, TgMessage>()
+        for (m in messages) {
+            if (!isListMsg(m)) continue
+            val img = imageByName[nameKey(titleOf(m))] ?: continue
+            if (usedImages.add(img.messageId)) listImage[m.messageId] = img
+        }
         val groupOf = HashMap<Long, String>()
         for ((k, list) in groups) for (v in list) groupOf[v.messageId] = k
         for (m in messages) { // de más nuevo a más antiguo
@@ -959,7 +966,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     badge = badge, messageId = m.messageId, query = q, options = options, pairedImage = img != null,
                     onLong = { toggleVideoFav(options, q, thumb) }) { onVideoClick(options, q, thumb) })
             } else if (isListMsg(m)) {
-                val img = paired[m.messageId]
+                val img = listImage[m.messageId]
                 val name = m.fileName ?: caption
                 items.add(MediaItem(key = "${m.messageId}:file", caption = cleanName(caption.ifEmpty { name }), meta = date, thumbFileId = img?.thumbId ?: 0,
                     iconRes = R.drawable.ic_tg_list, tileRes = R.drawable.bg_tg_tile_list,
