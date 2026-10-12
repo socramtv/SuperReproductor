@@ -81,6 +81,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         val messageId: Long = 0L,
         /** Título limpio para buscar la película en TMDb (vacío = no es una película). */
         val query: String = "",
+        /** Todas las versiones del mismo vídeo (mp4, mkv…); vacío si no es un vídeo. */
+        val options: List<TgMessage> = emptyList(),
+        /** true si la miniatura es una imagen del chat (esa gana sobre la carátula de TMDb). */
+        val pairedImage: Boolean = false,
         /** Fondo de la miniatura cuando no hay imagen (listas y enlaces). */
         val tileRes: Int = 0,
         val onLong: (() -> Unit)? = null,
@@ -917,13 +921,21 @@ class TelegramAccountActivity : AppCompatActivity() {
             val k = nameKey(titleOf(m))
             if (k.length >= 2) imageByName.putIfAbsent(k, m)
         }
-        val paired = HashMap<Long, TgMessage>() // id del vídeo -> su imagen
-        val usedImages = HashSet<Long>()
+        // Varias versiones del mismo vídeo (mismo nombre): una sola miniatura con todas las opciones.
+        val groups = LinkedHashMap<String, MutableList<TgMessage>>()
         for (m in messages) {
-            if (!isVideoMsg(m) && !isListMsg(m)) continue
-            val img = imageByName[nameKey(titleOf(m))] ?: continue
-            if (usedImages.add(img.messageId)) paired[m.messageId] = img
+            if (!isVideoMsg(m)) continue
+            val k = nameKey(titleOf(m)).let { if (it.length >= 2) it else "id${m.messageId}" }
+            groups.getOrPut(k) { ArrayList() }.add(m)
         }
+        val pairedByLeader = HashMap<Long, TgMessage>() // id del vídeo principal -> su imagen
+        val usedImages = HashSet<Long>()
+        for ((k, list) in groups) {
+            val img = imageByName[k] ?: continue
+            if (usedImages.add(img.messageId)) pairedByLeader[list[0].messageId] = img
+        }
+        val groupOf = HashMap<Long, String>()
+        for ((k, list) in groups) for (v in list) groupOf[v.messageId] = k
         for (m in messages) { // de más nuevo a más antiguo
             val caption = m.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
             val date = df.format(Date(m.date * 1000L))
@@ -934,13 +946,18 @@ class TelegramAccountActivity : AppCompatActivity() {
                 items.add(MediaItem(key = "${m.messageId}:img", caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
                     messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
             } else if (isVideo) {
-                val img = paired[m.messageId]
+                val k = groupOf[m.messageId]
+                val list = if (k != null) groups[k].orEmpty() else listOf(m)
+                if (list.isNotEmpty() && list[0].messageId != m.messageId) continue // ya salió con su grupo
+                val options = list.sortedBy { it.messageId }
+                val img = pairedByLeader[m.messageId]
                 val thumb = img?.thumbId?.takeIf { it != 0 } ?: m.thumbId
-                val q = if (isMovieFile(m)) cleanName(titleOf(m)).takeIf { it.length >= 2 }.orEmpty() else ""
-                val fav = TelegramAccountPrefs.isVideoFavorite(this, m.chatId, m.messageId)
+                val q = if (options.any { isMovieFile(it) }) cleanName(titleOf(m)).takeIf { it.length >= 2 }.orEmpty() else ""
+                val fav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
+                val badge = (if (options.size > 1) "▶ ×${options.size}" else "▶") + (if (fav) " ★" else "")
                 items.add(MediaItem(key = "${m.messageId}:vid", caption = (if (q.isNotEmpty()) q else caption.ifEmpty { m.fileName.orEmpty() }), meta = date, thumbFileId = thumb,
-                    badge = if (fav) "▶ ★" else "▶", messageId = m.messageId, query = q,
-                    onLong = { toggleVideoFav(m, q, thumb) }) { onVideoClick(m, q, thumb) })
+                    badge = badge, messageId = m.messageId, query = q, options = options, pairedImage = img != null,
+                    onLong = { toggleVideoFav(options, q, thumb) }) { onVideoClick(options, q, thumb) })
             } else if (isListMsg(m)) {
                 val img = paired[m.messageId]
                 val name = m.fileName ?: caption
@@ -1212,11 +1229,38 @@ class TelegramAccountActivity : AppCompatActivity() {
         info.genre
     ).joinToString(" · ")
 
-    /** Ficha de la película: carátula, datos y sinopsis, con "Ver" debajo (los mismos datos que en Cine). */
-    private fun showMovieInfo(m: TgMessage, query: String, thumbId: Int) {
+    private val reQualityTag = Regex("(?i)\\b(4K|2160p|1080p|720p|480p|UHD|HDR|HEVC|x265|x264|DUAL|CAST|LAT|VOSE|MULTI)\\b")
+
+    private fun formatSize(bytes: Long): String =
+        if (bytes >= 1_000_000_000L) String.format(java.util.Locale.US, "%.1f GB", bytes / 1_000_000_000.0)
+        else (bytes / 1_000_000L).toString() + " MB"
+
+    /** "MP4 · 1080p · 1.4 GB": formato, calidad (si el nombre la trae) y tamaño de una versión del vídeo. */
+    private fun optionInfo(m: TgMessage): String {
+        val ext = m.fileName?.substringAfterLast('.', "")?.takeIf { it.length in 2..4 }?.uppercase()
+            ?: (m.mime ?: "").substringAfter('/', "").let {
+                when {
+                    it.contains("matroska") -> "MKV"
+                    it.contains("mp4") -> "MP4"
+                    it.isNotBlank() -> it.uppercase().take(5)
+                    else -> null
+                }
+            }
+        val quality = reQualityTag.find(titleOf(m) + " " + (m.fileName ?: ""))?.value
+        return listOfNotNull(ext, quality, m.size.takeIf { it > 0 }?.let { formatSize(it) }).joinToString(" · ")
+    }
+
+    private fun optionLabel(m: TgMessage, n: Int, multiple: Boolean): String {
+        val base = if (multiple) getString(R.string.tgvid_option, n) else getString(R.string.tgvid_watch)
+        val info = optionInfo(m)
+        return if (info.isEmpty()) base else "$base · $info"
+    }
+
+    /** Ficha de la película: carátula, datos y sinopsis, con un botón "Ver" por cada versión (opción 1, opción 2…). */
+    private fun showMovieInfo(options: List<TgMessage>, query: String, thumbId: Int) {
         val info = MovieInfo.peek(this, query)
         if (info == null) {
-            playVideo(m)
+            chooseVideoOption(options, query)
             return
         }
         val density = resources.displayMetrics.density
@@ -1252,14 +1296,40 @@ class TelegramAccountActivity : AppCompatActivity() {
         tv.text = sb.toString()
         col.addView(poster)
         col.addView(tv)
+        var dialog: AlertDialog? = null
+        for ((i, m) in options.withIndex()) {
+            val btn = android.widget.Button(this).apply {
+                text = optionLabel(m, i + 1, options.size > 1)
+                isAllCaps = false
+                setOnClickListener {
+                    dialog?.dismiss()
+                    playVideo(m)
+                }
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins((16 * density).toInt(), (4 * density).toInt(), (16 * density).toInt(), (4 * density).toInt()) }
+            }
+            col.addView(btn)
+        }
         val scroll = android.widget.ScrollView(this).apply { addView(col) }
-        val isFav = TelegramAccountPrefs.isVideoFavorite(this, m.chatId, m.messageId)
-        AlertDialog.Builder(this)
+        val isFav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
+        dialog = AlertDialog.Builder(this)
             .setTitle(info.title)
             .setView(scroll)
-            .setPositiveButton(R.string.cine_watch) { _, _ -> playVideo(m) }
-            .setNeutralButton(if (isFav) R.string.tgvid_unfav_btn else R.string.tgvid_fav_btn) { _, _ -> toggleVideoFav(m, query, thumbId) }
+            .setNeutralButton(if (isFav) R.string.tgvid_unfav_btn else R.string.tgvid_fav_btn) { _, _ -> toggleVideoFav(options, query, thumbId) }
             .setNegativeButton(R.string.channel_check_close, null)
+            .show()
+    }
+
+    /** Sin ficha de TMDb: una sola versión se reproduce directa; si hay varias, se elige cuál ver. */
+    private fun chooseVideoOption(options: List<TgMessage>, query: String) {
+        if (options.size <= 1) {
+            options.firstOrNull()?.let { playVideo(it) }
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(query.ifEmpty { titleOf(options[0]) })
+            .setItems(options.mapIndexed { i, m -> optionLabel(m, i + 1, true) }.toTypedArray()) { _, which -> playVideo(options[which]) }
             .show()
     }
 
@@ -1272,32 +1342,47 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
-    /** Pulsar un vídeo: con información, ficha con carátula y "Ver"; sin ella, se reproduce directamente. */
-    private fun onVideoClick(m: TgMessage, query: String, thumbId: Int) {
-        if (query.isNotEmpty() && MovieInfo.peek(this, query) != null) showMovieInfo(m, query, thumbId) else playVideo(m)
+    /** Pulsar un vídeo: con información, ficha con carátula y "Ver"; sin ella, se reproduce directamente (o se elige versión). */
+    private fun onVideoClick(options: List<TgMessage>, query: String, thumbId: Int) {
+        if (query.isNotEmpty() && MovieInfo.peek(this, query) != null) showMovieInfo(options, query, thumbId)
+        else chooseVideoOption(options, query)
     }
 
-    /** Pulsación larga: guarda o quita el vídeo de la carpeta "Vídeos" (favoritos de vídeo). */
-    private fun toggleVideoFav(m: TgMessage, query: String, thumbId: Int) {
-        val now = TelegramAccountPrefs.toggleVideoFavorite(this, m, query, thumbId)
-        Toast.makeText(this, if (now) R.string.tgvid_fav_added else R.string.tgvid_fav_removed, Toast.LENGTH_SHORT).show()
+    /** Pulsación larga: guarda o quita el vídeo (con todas sus versiones) de la carpeta "Vídeos". */
+    private fun toggleVideoFav(options: List<TgMessage>, query: String, thumbId: Int) {
+        val wasFav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
+        for (m in options) {
+            val isFav = TelegramAccountPrefs.isVideoFavorite(this, m.chatId, m.messageId)
+            if (isFav == wasFav) TelegramAccountPrefs.toggleVideoFavorite(this, m, query, thumbId)
+        }
+        Toast.makeText(this, if (!wasFav) R.string.tgvid_fav_added else R.string.tgvid_fav_removed, Toast.LENGTH_SHORT).show()
         com.example.superplayer.widget.HomeWidgetProvider.refreshAll(this)
         if (currentChat == null && chatFilter == VIDEO_TAB && !searching) renderVideoFavs()
         else if (mediaMode && currentChat != null && !searching) renderMedia(auto = false)
     }
 
-    /** Pestaña "Vídeos": solo los vídeos marcados como favoritos, en miniaturas. */
+    /** Pestaña "Vídeos": solo los vídeos marcados como favoritos, en miniaturas (versiones del mismo vídeo juntas). */
     private fun renderVideoFavs() {
         useGrid()
         val items = ArrayList<MediaItem>()
+        val groups = LinkedHashMap<String, MutableList<Triple<TgMessage, Int, String>>>()
         for (o in TelegramAccountPrefs.videoFavorites(this)) {
             val m = TgMessage.fromJson(o)
-            val th = o.optInt("th", 0)
             val q = o.optString("q")
-            val name = q.ifEmpty { m.fileName ?: m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: m.chatTitle }
-            items.add(MediaItem(key = "fav:${m.chatId}:${m.messageId}", caption = name, meta = m.chatTitle, thumbFileId = th,
-                badge = "▶ ★", messageId = m.messageId, query = q,
-                onLong = { toggleVideoFav(m, q, th) }) { onVideoClick(m, q, th) })
+            val name = q.ifEmpty { titleOf(m).ifEmpty { m.chatTitle } }
+            val k = nameKey(name).ifEmpty { "id${m.messageId}" }
+            groups.getOrPut(k) { ArrayList() }.add(Triple(m, o.optInt("th", 0), q))
+        }
+        for ((k, list) in groups) {
+            val options = list.map { it.first }.sortedBy { it.messageId }
+            val th = list.firstOrNull { it.second != 0 }?.second ?: 0
+            val q = list[0].third
+            val lead = list[0].first
+            val name = q.ifEmpty { titleOf(lead).ifEmpty { lead.chatTitle } }
+            items.add(MediaItem(key = "fav:$k", caption = name, meta = lead.chatTitle, thumbFileId = th,
+                badge = if (options.size > 1) "▶ ×${options.size} ★" else "▶ ★", messageId = lead.messageId, query = q,
+                options = options, pairedImage = th != 0,
+                onLong = { toggleVideoFav(options, q, th) }) { onVideoClick(options, q, th) })
         }
         mediaAdapter.submit(items)
         binding.emptyView.text = getString(R.string.tgvid_empty)
@@ -1809,7 +1894,8 @@ class TelegramAccountActivity : AppCompatActivity() {
                     val a = old[o]
                     val b = list[n]
                     return a.caption == b.caption && a.meta == b.meta && a.thumbFileId == b.thumbFileId &&
-                        a.iconRes == b.iconRes && a.badge == b.badge && a.link == b.link
+                        a.iconRes == b.iconRes && a.badge == b.badge && a.link == b.link &&
+                        a.options.size == b.options.size && a.pairedImage == b.pairedImage
                 }
             })
             items = list
@@ -1886,12 +1972,16 @@ class TelegramAccountActivity : AppCompatActivity() {
             b.tgmBadge.visibility = if (item.badge.isEmpty()) View.GONE else View.VISIBLE
             val path = if (thumbId != 0) thumbPaths[thumbId] else null
             b.tgmFrame.setBackgroundResource(R.color.surface_dark)
-            if (path != null) {
+            if (posterUrl != null && !item.pairedImage) {
+                // Sin imagen en el chat: la carátula de TMDb (mejor que el fotograma del propio vídeo, que suele salir negro).
+                b.tgmIcon.visibility = View.GONE
+                b.tgmThumb.visibility = View.VISIBLE
+                b.tgmThumb.load(posterUrl)
+            } else if (path != null) {
                 b.tgmIcon.visibility = View.GONE
                 b.tgmThumb.visibility = View.VISIBLE
                 b.tgmThumb.load(File(path))
             } else if (posterUrl != null) {
-                // Sin imagen en el chat: la carátula de TMDb.
                 b.tgmIcon.visibility = View.GONE
                 b.tgmThumb.visibility = View.VISIBLE
                 b.tgmThumb.load(posterUrl)

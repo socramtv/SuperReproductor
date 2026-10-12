@@ -175,7 +175,7 @@ class HomeWidgetService : RemoteViewsService() {
                     m.chatTitle.takeIf { it.isNotBlank() }
                 ).joinToString(" · ")
                 Row(title, sub, info?.posterUrl, -1, tgChat = m.chatId, tgMsg = m.messageId)
-            }
+            }.distinctBy { it.title }
         }
 
         // ---- Logos ----
