@@ -273,10 +273,12 @@
     <!-- Widget completo -->
     <string name="app_widget_title">Socram TV+</string>
     <string name="app_widget_title_profile">Socram TV+ · %1$s</string>
-    <string name="app_widget_description">Favoritos, continuar viendo y partidos, con lista desplazable</string>
+    <string name="app_widget_description">Favoritos, continuar viendo, partidos y vídeos de Telegram, con lista desplazable</string>
     <string name="widget_tab_favorites">⭐</string>
     <string name="widget_tab_continue">▶</string>
     <string name="widget_tab_matches">⚽</string>
+    <string name="widget_tab_videos">🎬</string>
+    <string name="widget_home_empty_videos">Aún no tienes vídeos favoritos de Telegram (pulsación larga sobre un vídeo)</string>
     <string name="widget_home_empty_continue">No tienes nada a medias</string>
     <string name="widget_home_empty_matches">No hay partidos ahora mismo (o sin conexión). Toca ⟳</string>
 

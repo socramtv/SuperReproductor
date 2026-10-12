@@ -8,6 +8,7 @@ import com.example.superplayer.player.PlayerActivity
 import com.example.superplayer.player.ShortcutsHelper
 import com.example.superplayer.sports.GoalAlerts
 import com.example.superplayer.ui.MainActivity
+import com.example.superplayer.ui.TelegramAccountActivity
 
 /**
  * Pantalla invisible a la que apuntan las filas del widget (ver
@@ -23,7 +24,16 @@ class WidgetClickActivity : AppCompatActivity() {
         val streamJson = intent.getStringExtra(EXTRA_STREAM_JSON)
         val home = intent.getStringExtra(GoalAlerts.EXTRA_HOME)
         val away = intent.getStringExtra(GoalAlerts.EXTRA_AWAY)
+        val tgChat = intent.getLongExtra(EXTRA_TG_CHAT, 0L)
+        val tgMsg = intent.getLongExtra(EXTRA_TG_MSG, 0L)
         when {
+            tgChat != 0L -> {
+                // Vídeo favorito de Telegram: la pantalla de Telegram arranca la sesión y lo reproduce.
+                startActivity(Intent(this, TelegramAccountActivity::class.java).apply {
+                    putExtra(TelegramAccountActivity.EXTRA_PLAY_CHAT, tgChat)
+                    putExtra(TelegramAccountActivity.EXTRA_PLAY_MSG, tgMsg)
+                })
+            }
             streamJson != null && streamFromJson(streamJson) != null -> {
                 val play = Intent(this, PlayerActivity::class.java).apply {
                     action = Intent.ACTION_VIEW
@@ -48,5 +58,7 @@ class WidgetClickActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_STREAM_JSON = "widget_stream_json"
+        const val EXTRA_TG_CHAT = "widget_tg_chat"
+        const val EXTRA_TG_MSG = "widget_tg_msg"
     }
 }

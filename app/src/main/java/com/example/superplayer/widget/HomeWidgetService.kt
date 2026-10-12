@@ -11,6 +11,9 @@ import com.example.superplayer.R
 import com.example.superplayer.data.ContinueWatching
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.FavoritesStore
+import com.example.superplayer.data.MovieInfo
+import com.example.superplayer.telegram.TelegramAccountPrefs
+import com.example.superplayer.telegram.TgMessage
 import com.example.superplayer.model.toJson
 import com.example.superplayer.sports.GoalAlerts
 import com.example.superplayer.sports.MatchFeed
@@ -23,8 +26,8 @@ import java.util.Locale
 /**
  * Lista desplazable del widget "Socram TV+" (ver HomeWidgetProvider): según
  * la pestaña elegida enseña tus favoritos (con lo que echan ahora y su
- * barra de progreso), "Continuar viendo" (con por dónde vas) o los partidos
- * de fútbol de hoy (marcador y minuto). Cada fila, al tocarla, pasa por
+ * barra de progreso), "Continuar viendo" (con por dónde vas) los partidos
+ * de fútbol de hoy (marcador y minuto) o tus vídeos favoritos de Telegram. Cada fila, al tocarla, pasa por
  * WidgetClickActivity.
  */
 class HomeWidgetService : RemoteViewsService() {
@@ -39,7 +42,9 @@ class HomeWidgetService : RemoteViewsService() {
         val progress: Int,
         val streamJson: String? = null,
         val home: String? = null,
-        val away: String? = null
+        val away: String? = null,
+        val tgChat: Long = 0L,
+        val tgMsg: Long = 0L
     )
 
     private class Factory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
@@ -55,6 +60,7 @@ class HomeWidgetService : RemoteViewsService() {
                 when (HomeWidgetProvider.getMode(context)) {
                     HomeWidgetProvider.MODE_CONTINUE -> continueRows()
                     HomeWidgetProvider.MODE_MATCHES -> matchRows()
+                    HomeWidgetProvider.MODE_VIDEOS -> videoRows()
                     else -> favoriteRows()
                 }
             } catch (e: Exception) {
@@ -90,6 +96,10 @@ class HomeWidgetService : RemoteViewsService() {
             if (row.home != null && row.away != null) {
                 fill.putExtra(GoalAlerts.EXTRA_HOME, row.home)
                 fill.putExtra(GoalAlerts.EXTRA_AWAY, row.away)
+            }
+            if (row.tgChat != 0L) {
+                fill.putExtra(WidgetClickActivity.EXTRA_TG_CHAT, row.tgChat)
+                fill.putExtra(WidgetClickActivity.EXTRA_TG_MSG, row.tgMsg)
             }
             views.setOnClickFillInIntent(R.id.widgetItemRoot, fill)
             return views
@@ -149,6 +159,23 @@ class HomeWidgetService : RemoteViewsService() {
                     }
                     Row(title, "$status · ${m.league}", m.homeLogo, -1, home = m.home, away = m.away)
                 }
+        }
+
+        /** Vídeos de Telegram marcados como favoritos (carátula y datos de TMDb si ya se conocen). */
+        private fun videoRows(): List<Row> {
+            return TelegramAccountPrefs.videoFavorites(context).map { o ->
+                val m = TgMessage.fromJson(o)
+                val q = o.optString("q")
+                val info = if (q.isNotEmpty()) MovieInfo.peek(context, q) else null
+                val title = info?.let { it.title + (it.year?.let { y -> " ($y)" } ?: "") }
+                    ?: q.ifEmpty { m.fileName ?: m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: m.chatTitle }
+                val sub = listOfNotNull(
+                    info?.rating?.takeIf { it > 0.0 }?.let { "★ " + String.format(Locale.US, "%.1f", it) },
+                    info?.genre,
+                    m.chatTitle.takeIf { it.isNotBlank() }
+                ).joinToString(" · ")
+                Row(title, sub, info?.posterUrl, -1, tgChat = m.chatId, tgMsg = m.messageId)
+            }
         }
 
         // ---- Logos ----

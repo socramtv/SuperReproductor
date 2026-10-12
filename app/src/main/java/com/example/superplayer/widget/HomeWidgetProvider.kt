@@ -14,7 +14,7 @@ import com.example.superplayer.ui.MainActivity
 
 /**
  * Widget "Socram TV+" completo, de tamaño ajustable: una lista que se
- * desplaza con tres pestañas -⭐ Favoritos, ▶ Continuar viendo y ⚽ Partidos-
+ * desplaza con cuatro pestañas -⭐ Favoritos, ▶ Continuar viendo, ⚽ Partidos y 🎬 Vídeos de Telegram-
  * más un botón de refrescar. El contenido lo pone HomeWidgetService. La
  * pestaña elegida se recuerda (la misma para todos los widgets puestos).
  * El widget sencillo de 6 favoritos (FavoritesWidgetProvider) sigue ahí.
@@ -55,6 +55,7 @@ class HomeWidgetProvider : AppWidgetProvider() {
                 when (mode) {
                     MODE_CONTINUE -> R.string.widget_home_empty_continue
                     MODE_MATCHES -> R.string.widget_home_empty_matches
+                    MODE_VIDEOS -> R.string.widget_home_empty_videos
                     else -> R.string.widget_empty
                 }
             )
@@ -81,7 +82,8 @@ class HomeWidgetProvider : AppWidgetProvider() {
         val tabs = listOf(
             Triple(R.id.widgetTabFav, MODE_FAVORITES, 10),
             Triple(R.id.widgetTabContinue, MODE_CONTINUE, 11),
-            Triple(R.id.widgetTabMatches, MODE_MATCHES, 12)
+            Triple(R.id.widgetTabMatches, MODE_MATCHES, 12),
+            Triple(R.id.widgetTabVideos, MODE_VIDEOS, 14)
         )
         for ((viewId, tabMode, code) in tabs) {
             val intent = Intent(context, HomeWidgetProvider::class.java).apply {
@@ -111,6 +113,7 @@ class HomeWidgetProvider : AppWidgetProvider() {
         const val MODE_FAVORITES = 0
         const val MODE_CONTINUE = 1
         const val MODE_MATCHES = 2
+        const val MODE_VIDEOS = 3
         private const val ACTION_SET_MODE = "com.example.superplayer.widget.SET_MODE"
         private const val ACTION_REFRESH = "com.example.superplayer.widget.REFRESH"
         private const val EXTRA_MODE = "mode"

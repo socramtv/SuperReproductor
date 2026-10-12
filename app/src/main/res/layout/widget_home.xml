@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Widget "Socram TV+" completo: cabecera con el título (abre la app), tres
-    pestañas (Favoritos / Continuar / Partidos) y refrescar; debajo, la lista
+    Widget "Socram TV+" completo: cabecera con el título (abre la app), cuatro
+    pestañas (Favoritos / Continuar / Partidos / Vídeos de Telegram) y refrescar; debajo, la lista
     que se desplaza (ver HomeWidgetService). Solo vistas de RemoteViews.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -27,7 +27,7 @@
             android:paddingStart="4dp"
             android:text="@string/app_widget_title"
             android:textColor="#FF6B4A"
-            android:textSize="13sp"
+            android:textSize="12sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -36,41 +36,66 @@
             android:id="@+id/widgetTabFav"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp"
+            android:minWidth="46dp"
+            android:minHeight="46dp"
+            android:gravity="center"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="6dp"
             android:text="@string/widget_tab_favorites"
             android:textColor="#B0B0BC"
-            android:textSize="12sp" />
+            android:textSize="20sp" />
 
         <TextView
             android:id="@+id/widgetTabContinue"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp"
+            android:minWidth="46dp"
+            android:minHeight="46dp"
+            android:gravity="center"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="6dp"
             android:text="@string/widget_tab_continue"
             android:textColor="#B0B0BC"
-            android:textSize="12sp" />
+            android:textSize="20sp" />
 
         <TextView
             android:id="@+id/widgetTabMatches"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp"
+            android:minWidth="46dp"
+            android:minHeight="46dp"
+            android:gravity="center"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="6dp"
             android:text="@string/widget_tab_matches"
             android:textColor="#B0B0BC"
-            android:textSize="12sp" />
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/widgetTabVideos"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="46dp"
+            android:minHeight="46dp"
+            android:gravity="center"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="6dp"
+            android:text="@string/widget_tab_videos"
+            android:textColor="#B0B0BC"
+            android:textSize="20sp" />
 
         <TextView
             android:id="@+id/widgetRefresh"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp"
+            android:minWidth="46dp"
+            android:minHeight="46dp"
+            android:gravity="center"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="6dp"
             android:text="⟳"
             android:textColor="#FFFFFF"
-            android:textSize="16sp" />
+            android:textSize="24sp" />
 
     </LinearLayout>
 

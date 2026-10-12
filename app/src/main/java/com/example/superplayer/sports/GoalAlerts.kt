@@ -103,6 +103,31 @@ object GoalAlerts {
         }
     }
 
+    private val GENERIC_WORDS = setOf("club", "futbol", "football", "the", "del", "las", "los", "fc", "cf", "ud", "cd", "sc", "afc")
+
+    /** Palabras que identifican a un equipo ("Newcastle United" -> newcastle, united), sin tildes ni signos. */
+    private fun teamWords(team: String): List<String> {
+        val words = Normalizer.normalize(team, Normalizer.Form.NFD)
+            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+            .lowercase()
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.length >= 3 && it !in GENERIC_WORDS }
+        return words
+    }
+
+    /** true si el título de la guía nombra a [team]: su nombre entero, o todas sus palabras importantes. */
+    fun titleHasTeam(team: String, title: String): Boolean {
+        val nt = norm(title)
+        val nf = norm(team)
+        if (nf.length >= 3 && nt.contains(nf)) return true
+        val words = teamWords(team)
+        return words.isNotEmpty() && words.all { nt.contains(it) }
+    }
+
+    /** true solo si el título nombra a los DOS equipos (búsqueda exacta del canal de un partido). */
+    fun titleHasMatch(home: String, away: String, title: String): Boolean =
+        titleHasTeam(home, title) && titleHasTeam(away, title)
+
     private fun followsMatch(followed: List<String>, m: MatchFeed.Match) =
         matchesTeam(followed, m.home) || matchesTeam(followed, m.away)
 

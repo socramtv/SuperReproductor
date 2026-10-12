@@ -926,15 +926,12 @@ class MainActivity : AppCompatActivity() {
         }
         whenSearchIndexReady {
             val pool = (searchIndex?.map { it.stream } ?: playlist.categories.flatMap { it.streams }).distinctBy { it.id }
-            val strong = ArrayList<Stream>()
-            val weak = ArrayList<Stream>()
+            // Solo vale un canal cuyo programa actual nombre a LOS DOS equipos (si no, no se abre nada).
+            val found = ArrayList<Stream>()
             for (st in pool) {
                 val title = EpgRepository.schedule(st.tvgId).now?.title ?: continue
-                val hasHome = com.example.superplayer.sports.GoalAlerts.matchesTeam(listOf(home), title)
-                val hasAway = com.example.superplayer.sports.GoalAlerts.matchesTeam(listOf(away), title)
-                if (hasHome && hasAway) strong.add(st) else if (hasHome || hasAway) weak.add(st)
+                if (com.example.superplayer.sports.GoalAlerts.titleHasMatch(home, away, title)) found.add(st)
             }
-            val found = if (strong.isNotEmpty()) strong else weak
             when {
                 found.isEmpty() -> Toast.makeText(this, R.string.goal_match_not_found, Toast.LENGTH_LONG).show()
                 found.size == 1 -> {

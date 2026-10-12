@@ -1315,3 +1315,8 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 
 ## Telegram: listas subidas como archivo
 - Un .m3u que Telegram marca como "audio/…" ya se reconoce como lista (antes se tomaba por vídeo). Si hay una imagen con el mismo nombre (aunque ponga "url=42"), es su miniatura.
+
+## Widget y marcador
+- Widget: iconos de pestaña y refrescar más grandes (≥46 dp) y nueva pestaña 🎬 con tus vídeos favoritos de Telegram (con carátula y nota de TMDb); al tocar uno abre Telegram y lo reproduce.
+- Partidos: al tocar un partido (widget o aviso de gol) solo se abre un canal cuyo programa actual nombre a los DOS equipos en la guía; si no, avisa de que no lo encuentra.
+- El marcador flotante del reproductor está abajo a la izquierda.

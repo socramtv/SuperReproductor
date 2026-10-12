@@ -158,6 +158,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         applySystemBarInsets(top = binding.toolbar, bottom = binding.recyclerView)
         title = getString(R.string.tgacc_title)
 
+        // Abierto desde el widget con un vídeo favorito: se reproduce en cuanto la sesión esté lista.
+        val playChat = intent.getLongExtra(EXTRA_PLAY_CHAT, 0L)
+        val playMsg = intent.getLongExtra(EXTRA_PLAY_MSG, 0L)
+        if (playChat != 0L) {
+            pendingPlay = TelegramAccountPrefs.videoFavorites(this)
+                .firstOrNull { it.optLong("c") == playChat && it.optLong("m") == playMsg }
+                ?.let { TgMessage.fromJson(it) }
+        }
         adapter = RowAdapter()
         mediaAdapter = MediaAdapter()
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
@@ -207,6 +215,12 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private val isTvDevice by lazy { packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
     private var returnToChatId = 0L
+    private var pendingPlay: TgMessage? = null
+
+    companion object {
+        const val EXTRA_PLAY_CHAT = "play_chat"
+        const val EXTRA_PLAY_MSG = "play_msg"
+    }
 
     /** Cambia el contenido de la lista y devuelve el foco a la misma posición (si no, el mando salta arriba del todo). */
     private fun keepFocus(change: () -> Unit) {
@@ -364,6 +378,10 @@ class TelegramAccountActivity : AppCompatActivity() {
                     b.cleanCache()
                 }
                 loadChatList()
+                pendingPlay?.let {
+                    pendingPlay = null
+                    playVideo(it)
+                }
             }
             TgAuthState.CLOSED -> showMessage(getString(R.string.tgacc_closed))
         }
@@ -1263,6 +1281,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun toggleVideoFav(m: TgMessage, query: String, thumbId: Int) {
         val now = TelegramAccountPrefs.toggleVideoFavorite(this, m, query, thumbId)
         Toast.makeText(this, if (now) R.string.tgvid_fav_added else R.string.tgvid_fav_removed, Toast.LENGTH_SHORT).show()
+        com.example.superplayer.widget.HomeWidgetProvider.refreshAll(this)
         if (currentChat == null && chatFilter == VIDEO_TAB && !searching) renderVideoFavs()
         else if (mediaMode && currentChat != null && !searching) renderMedia(auto = false)
     }
