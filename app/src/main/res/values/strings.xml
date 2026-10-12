@@ -443,6 +443,11 @@
     <string name="tgacc_deleted">Mensaje eliminado</string>
     <string name="tgacc_delete_error">No se pudo eliminar</string>
     <string name="tgacc_attach_error">No se pudo leer el archivo</string>
+    <string name="tgacc_view_all">Ver todos los mensajes</string>
+    <string name="tgacc_view_media">Ver solo fotos, vídeos y listas</string>
+    <string name="tgacc_media_empty">No hay fotos, vídeos ni listas por aquí (prueba «Cargar más» o «Ver todos los mensajes»)</string>
+    <string name="tgacc_badge_list">LISTA</string>
+    <string name="tgacc_badge_link">ENLACE</string>
     <string name="tgacc_tab_forums">Foros</string>
     <string name="tgacc_kind_forum">Foro (con temas)</string>
     <string name="tgacc_menu_refresh">Actualizar mensajes</string>

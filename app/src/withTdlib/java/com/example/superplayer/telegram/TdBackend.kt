@@ -274,7 +274,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         chats[chat.id] = chat
         return TgChat(
             chat.id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L,
-            (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount
+            (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount, chat.photo?.small?.id ?: 0
         )
     }
 
@@ -373,7 +373,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             if (result is TdApi.Chats) {
                 val list = result.chatIds.toList().mapNotNull { id ->
                     val chat = chats[id] ?: return@mapNotNull null
-                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L, (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount)
+                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L, (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount, chat.photo?.small?.id ?: 0)
                 }
                 onDone(list)
             } else {
@@ -601,7 +601,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
                 onDone(ids.mapNotNull { id ->
                     val chat = chats[id] ?: return@mapNotNull null
                     TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L,
-                        (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount)
+                        (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount, chat.photo?.small?.id ?: 0)
                 })
             }
             if (missing.isEmpty()) {

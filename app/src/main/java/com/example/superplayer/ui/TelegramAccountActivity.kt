@@ -17,17 +17,20 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.SearchView
 import coil.load
+import coil.transform.CircleCropTransformation
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.superplayer.R
 import com.example.superplayer.data.PlaylistRepository
 import com.example.superplayer.databinding.ActivityTelegramBinding
 import com.example.superplayer.databinding.ItemTelegramBinding
+import com.example.superplayer.databinding.ItemTgMediaBinding
 import com.example.superplayer.model.Stream
 import com.example.superplayer.player.PlayerActivity
 import com.example.superplayer.telegram.TelegramAccountFactory
@@ -57,6 +60,21 @@ class TelegramAccountActivity : AppCompatActivity() {
         val onStar: (() -> Unit)? = null,
         val onLong: (() -> Unit)? = null,
         val thumbFileId: Int = 0,
+        val circle: Boolean = false,
+        val onClick: () -> Unit
+    )
+
+    /** Una miniatura de la galería: foto, vídeo, lista o enlace de Telegram. */
+    private class MediaItem(
+        val caption: String,
+        val meta: String = "",
+        val thumbFileId: Int = 0,
+        val iconRes: Int = 0,
+        val badge: String = "",
+        val link: String? = null,
+        val loadMore: Boolean = false,
+        val messageId: Long = 0L,
+        val onLong: (() -> Unit)? = null,
         val onClick: () -> Unit
     )
 
@@ -87,6 +105,13 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var jumpTarget = 0L
     private val thumbPaths = HashMap<Int, String>()
     private val thumbRequested = HashSet<Int>()
+    private lateinit var mediaAdapter: MediaAdapter
+    /** true = galería de fotos, vídeos, listas y enlaces (sin mensajes de texto); false = todos los mensajes. */
+    private var mediaMode = true
+    private var usingGrid = false
+    private var autoLoads = 0
+    private val linkChats = HashMap<String, TgChat>()
+    private val linkRequested = HashSet<String>()
     private var searchView: SearchView? = null
     private var menuRef: Menu? = null
     private val searchDebounce = Runnable { runSearchNow() }
@@ -108,6 +133,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 messages.clear()
                 lastBatchFull = false
                 scrollToEnd = true
+                autoLoads = 0
                 loadMore()
             }
         }
@@ -124,6 +150,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         title = getString(R.string.tgacc_title)
 
         adapter = RowAdapter()
+        mediaAdapter = MediaAdapter()
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
         binding.emptyView.setOnClickListener { promptForState() }
@@ -165,7 +192,28 @@ class TelegramAccountActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    private fun useList() {
+        if (!usingGrid && binding.recyclerView.adapter === adapter) return
+        usingGrid = false
+        binding.recyclerView.layoutManager = LinearLayoutManager(this)
+        binding.recyclerView.adapter = adapter
+    }
+
+    private fun useGrid() {
+        if (usingGrid && binding.recyclerView.adapter === mediaAdapter) return
+        usingGrid = true
+        val dp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+        val span = (dp / 170f).toInt().coerceIn(2, 6)
+        val lm = GridLayoutManager(this, span)
+        lm.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int) = if (mediaAdapter.isFull(position)) span else 1
+        }
+        binding.recyclerView.layoutManager = lm
+        binding.recyclerView.adapter = mediaAdapter
+    }
+
     private fun showMessage(text: String) {
+        useList()
         adapter.submit(emptyList())
         binding.emptyView.text = text
         binding.emptyView.visibility = View.VISIBLE
@@ -350,6 +398,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         val chat = currentChat
         val inChat = chat != null && !searching
         menu.findItem(R.id.action_tgacc_refresh)?.isVisible = !searching && state == TgAuthState.READY
+        menu.findItem(R.id.action_tgacc_view)?.let {
+            it.isVisible = inChat && !showingTopics
+            it.title = getString(if (mediaMode) R.string.tgacc_view_all else R.string.tgacc_view_media)
+        }
         menu.findItem(R.id.action_tgacc_fav)?.isVisible = inChat
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_kbd)?.isVisible = inChat && chat?.kind == "bot"
@@ -361,6 +413,13 @@ class TelegramAccountActivity : AppCompatActivity() {
         when (item.itemId) {
             android.R.id.home -> {
                 goBack()
+                return true
+            }
+            R.id.action_tgacc_view -> {
+                mediaMode = !mediaMode
+                autoLoads = 0
+                invalidateOptionsMenu()
+                if (currentChat != null && !showingTopics && !searching) renderMessages()
                 return true
             }
             R.id.action_tgacc_refresh -> {
@@ -475,6 +534,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun renderChats() {
+        useList()
         title = getString(R.string.tgacc_title)
         searchResults = null
         binding.inputBar.visibility = View.GONE
@@ -503,7 +563,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val nowFav = TelegramAccountPrefs.toggleFavorite(this, chat.id)
                 Toast.makeText(this, if (nowFav) R.string.tgacc_fav_added else R.string.tgacc_fav_removed, Toast.LENGTH_SHORT).show()
                 renderChats()
-            }) { openChat(chat) }
+            }, thumbFileId = chat.photoId, circle = true) { openChat(chat) }
         }
         adapter.submit(rows)
         binding.emptyView.text = getString(if (chatFilter == 0) R.string.tgacc_no_favs else R.string.tgacc_no_chats)
@@ -524,6 +584,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         messages.clear()
         lastBatchFull = false
         scrollToEnd = messageId == 0L
+        mediaMode = chat.kind == "channel" || chat.kind == "group" || chat.kind == "forum"
+        autoLoads = 0
         jumpTarget = messageId
         initialFrom = messageId
         setReply(null)
@@ -546,6 +608,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Lista de temas de un supergrupo con temas (foro). */
     private fun showTopics(chat: TgChat) {
+        useList()
         currentTopic = null
         showingTopics = true
         title = chat.title
@@ -581,6 +644,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         scrollToEnd = true
         initialFrom = 0L
         jumpTarget = 0L
+        autoLoads = 0
         setReply(null)
         title = chat.title + " › " + topic.name
         binding.inputBar.visibility = View.VISIBLE
@@ -629,6 +693,11 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.inputBar.visibility = View.VISIBLE
         binding.tgSearchTabs.visibility = View.GONE
         updateBack()
+        if (mediaMode) {
+            renderMedia()
+            return
+        }
+        useList()
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val rows = ArrayList<Row>()
         if (lastBatchFull) {
@@ -657,6 +726,90 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         scrollToEnd = false
         pendingScroll = -1
+    }
+
+    /** Galería: solo fotos, vídeos, listas (archivos y enlaces) y enlaces de Telegram, en miniaturas con su texto debajo. */
+    private fun renderMedia() {
+        useGrid()
+        val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+        val items = ArrayList<MediaItem>()
+        val seenLinks = HashSet<String>()
+        for (m in messages) { // de más nuevo a más antiguo
+            val caption = m.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+            val date = df.format(Date(m.date * 1000L))
+            val isImage = m.kind == "photo" || (m.kind == "document" && (m.mime ?: "").startsWith("image/"))
+            val isVideo = m.kind == "video" || m.kind == "animation" || (m.kind == "document" && looksLikeMedia(m))
+            if (isImage) {
+                items.add(MediaItem(caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
+                    messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
+            } else if (isVideo) {
+                items.add(MediaItem(caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
+                    badge = "▶", messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
+            } else if (m.kind == "document" && looksLikePlaylist(m)) {
+                items.add(MediaItem(caption = m.fileName ?: caption, meta = date, iconRes = R.drawable.ic_tg_list,
+                    badge = getString(R.string.tgacc_badge_list), messageId = m.messageId,
+                    onLong = { onMessageLong(m) }) { onMessageClick(m) })
+            }
+            for (link in m.links) {
+                if (!seenLinks.add(link)) continue
+                val shortLink = link.removePrefix("https://").removePrefix("http://")
+                if (isTgLink(link)) {
+                    items.add(MediaItem(caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_link,
+                        badge = getString(R.string.tgacc_badge_link), link = link, messageId = m.messageId,
+                        onLong = { onMessageLong(m) }) { openTgLink(link) })
+                } else if (TelegramImport.looksLikeListUrl(link)) {
+                    items.add(MediaItem(caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_list,
+                        badge = getString(R.string.tgacc_badge_list), messageId = m.messageId,
+                        onLong = { onMessageLong(m) }) { onMessageClick(m) })
+                }
+            }
+        }
+        val real = items.size
+        if (lastBatchFull) items.add(MediaItem(caption = getString(R.string.tgacc_load_more), loadMore = true) { loadMore() })
+        mediaAdapter.submit(items)
+        binding.emptyView.text = getString(R.string.tgacc_media_empty)
+        binding.emptyView.visibility = if (real == 0 && !lastBatchFull) View.VISIBLE else View.GONE
+        val jump = jumpTarget
+        if (jump != 0L && items.isNotEmpty()) {
+            val idx = items.indexOfFirst { it.messageId == jump }.coerceAtLeast(0)
+            binding.recyclerView.post { binding.recyclerView.scrollToPosition(idx) }
+            jumpTarget = 0L
+        } else if (scrollToEnd && items.isNotEmpty()) {
+            binding.recyclerView.post { binding.recyclerView.scrollToPosition(0) }
+        }
+        scrollToEnd = false
+        pendingScroll = -1
+        // Pocos medios en esta tanda: sigue cargando mensajes más antiguos (con tope).
+        if (lastBatchFull && real < 12 && autoLoads < 6) {
+            autoLoads++
+            loadMore()
+        }
+    }
+
+    private fun requestThumb(id: Int) {
+        if (id == 0 || !thumbRequested.add(id)) return
+        backend?.download(id, { _, _ -> }, { done ->
+            if (done != null) {
+                runOnUiThread {
+                    thumbPaths[id] = done
+                    adapter.thumbLoaded(id)
+                    mediaAdapter.thumbLoaded(id)
+                }
+            }
+        })
+    }
+
+    /** Resuelve un enlace de Telegram para mostrar el nombre y la foto del canal, grupo o bot al que lleva. */
+    private fun requestLink(link: String) {
+        if (linkRequested.size >= 80 || !linkRequested.add(link)) return
+        backend?.resolveLink(link, false) { target ->
+            if (target != null) {
+                runOnUiThread {
+                    linkChats[link] = target.chat
+                    mediaAdapter.linkResolved(link)
+                }
+            }
+        }
     }
 
     private fun kindIcon(m: TgMessage) = when (m.kind) {
@@ -781,6 +934,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun renderSearch() {
+        useList()
         title = getString(R.string.tgacc_search_results, searchQuery)
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val favs = TelegramAccountPrefs.favoriteChats(this)
@@ -790,7 +944,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             rows.add(Row(chat.title, sub, chat.id in favs, {
                 TelegramAccountPrefs.toggleFavorite(this, chat.id)
                 renderSearch()
-            }) { openChat(chat) })
+            }, thumbFileId = chat.photoId, circle = true) { openChat(chat) })
         }
         val global = currentChat == null
         searchResults?.forEach { m ->
@@ -1272,30 +1426,111 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
         }
 
+        fun thumbLoaded(id: Int) {
+            rows.forEachIndexed { i, r -> if (r.thumbFileId == id) notifyItemChanged(i) }
+        }
+
         private fun bindThumb(holder: VH, row: Row) {
             val id = row.thumbFileId
             val path = if (id != 0) thumbPaths[id] else null
             if (path == null) {
-                holder.b.tgThumb.setImageDrawable(null)
-                holder.b.tgThumb.visibility = View.GONE
-                if (id != 0 && thumbRequested.add(id)) {
-                    backend?.download(id, { _, _ -> }, { done ->
-                        if (done != null) {
-                            runOnUiThread {
-                                thumbPaths[id] = done
-                                rows.forEachIndexed { i, r -> if (r.thumbFileId == id) notifyItemChanged(i) }
-                            }
-                        }
-                    })
+                if (row.circle) {
+                    holder.b.tgThumb.visibility = View.VISIBLE
+                    holder.b.tgThumb.load(R.drawable.ic_placeholder) { transformations(CircleCropTransformation()) }
+                } else {
+                    holder.b.tgThumb.setImageDrawable(null)
+                    holder.b.tgThumb.visibility = View.GONE
                 }
+                requestThumb(id)
             } else {
                 holder.b.tgThumb.visibility = View.VISIBLE
-                holder.b.tgThumb.load(File(path))
+                if (row.circle) {
+                    holder.b.tgThumb.load(File(path)) { transformations(CircleCropTransformation()) }
+                } else {
+                    holder.b.tgThumb.load(File(path))
+                }
             }
         }
 
         override fun getItemCount() = rows.size
 
         inner class VH(val b: ItemTelegramBinding) : RecyclerView.ViewHolder(b.root)
+    }
+
+    private inner class MediaAdapter : RecyclerView.Adapter<MediaAdapter.VH>() {
+        private var items: List<MediaItem> = emptyList()
+
+        fun submit(list: List<MediaItem>) {
+            items = list
+            notifyDataSetChanged()
+        }
+
+        fun isFull(position: Int) = items.getOrNull(position)?.loadMore == true
+
+        fun thumbLoaded(id: Int) {
+            items.forEachIndexed { i, r -> if (r.thumbFileId == id) notifyItemChanged(i) }
+        }
+
+        fun linkResolved(link: String) {
+            items.forEachIndexed { i, r -> if (r.link == link) notifyItemChanged(i) }
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
+            VH(ItemTgMediaBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+
+        override fun onBindViewHolder(holder: VH, position: Int) {
+            val item = items[position]
+            val b = holder.b
+            b.root.setOnClickListener { item.onClick() }
+            val long = item.onLong
+            if (long != null) {
+                b.root.setOnLongClickListener { long(); true }
+            } else {
+                b.root.setOnLongClickListener(null)
+                b.root.isLongClickable = false
+            }
+            if (item.loadMore) {
+                b.tgmFrame.visibility = View.GONE
+                b.tgmCaption.text = item.caption
+                b.tgmCaption.gravity = android.view.Gravity.CENTER
+                b.tgmMeta.visibility = View.GONE
+                return
+            }
+            b.tgmFrame.visibility = View.VISIBLE
+            b.tgmCaption.gravity = android.view.Gravity.START
+            var caption = item.caption
+            var thumbId = item.thumbFileId
+            val link = item.link
+            if (link != null) {
+                val chat = linkChats[link]
+                if (chat != null) {
+                    caption = chat.title
+                    thumbId = chat.photoId
+                } else {
+                    requestLink(link)
+                }
+            }
+            b.tgmCaption.text = caption
+            b.tgmMeta.text = item.meta
+            b.tgmMeta.visibility = if (item.meta.isEmpty()) View.GONE else View.VISIBLE
+            b.tgmBadge.text = item.badge
+            b.tgmBadge.visibility = if (item.badge.isEmpty()) View.GONE else View.VISIBLE
+            val path = if (thumbId != 0) thumbPaths[thumbId] else null
+            if (path != null) {
+                b.tgmIcon.visibility = View.GONE
+                b.tgmThumb.visibility = View.VISIBLE
+                b.tgmThumb.load(File(path))
+            } else {
+                b.tgmThumb.setImageDrawable(null)
+                b.tgmThumb.visibility = View.GONE
+                b.tgmIcon.visibility = View.VISIBLE
+                b.tgmIcon.setImageResource(if (item.iconRes != 0) item.iconRes else R.drawable.ic_placeholder)
+                requestThumb(thumbId)
+            }
+        }
+
+        override fun getItemCount() = items.size
+
+        inner class VH(val b: ItemTgMediaBinding) : RecyclerView.ViewHolder(b.root)
     }
 }

@@ -5,7 +5,7 @@ import android.content.Context
 enum class TgAuthState { STARTING, WAIT_PHONE, WAIT_CODE, WAIT_PASSWORD, READY, CLOSED }
 
 /** [kind]: channel, group, bot o private. [userId]: el del otro usuario en chats privados y bots (0 si no aplica). */
-data class TgChat(val id: Long, val title: String, val kind: String, val lastDate: Long, val userId: Long = 0L, val unread: Int = 0)
+data class TgChat(val id: Long, val title: String, val kind: String, val lastDate: Long, val userId: Long = 0L, val unread: Int = 0, val photoId: Int = 0)
 
 /** Un tema de un supergrupo con temas (foro). */
 data class TgTopic(val id: Long, val name: String, val lastDate: Long = 0L, val unread: Int = 0)
