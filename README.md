@@ -1324,3 +1324,4 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 ## Marcador flotante móvil y vídeos de Telegram
 - El marcador del reproductor se arrastra por la pantalla (recuerda dónde lo dejas); al tocarlo va al canal que emite el partido (en la lista actual o buscando en todos los canales; si el partido es el que ves, avisa).
 - Vídeos MP4 de Telegram que se quedaban "conectando": el servidor local abandona las conexiones antiguas del mismo archivo (peleaban entre sí por la descarga al pedir primero el final del MP4 y luego el principio) y el reproductor espera hasta 45 s al primer dato de un trozo lejano.
+- Causa real de los MP4 de Telegram que no arrancaban: con la "pausa en directo" activada, el reproductor trataba el vídeo como un directo y lo grababa en un búfer (un MP4 con el índice al final no se puede reproducir así). Los vídeos de Telegram ya no entran en la pausa en directo.

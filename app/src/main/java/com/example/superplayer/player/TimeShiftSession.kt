@@ -604,6 +604,8 @@ class TimeShiftSession(
             if (stream.drm != null || stream.tokenUrl != null || stream.url.contains("{token}")) return false
             val url = stream.url.trim()
             if (!url.startsWith("http://", true) && !url.startsWith("https://", true)) return false
+            // Vídeos de Telegram (servidor local): son archivos, no un directo; grabarlos "como directo" los rompe (un MP4 con el índice al final no arranca).
+            if (Uri.parse(url).host == "127.0.0.1" || url.contains("/tg/")) return false
             val type = stream.type.trim().uppercase()
             if (type == "DASH" || type == "MPD" || type == "YOUTUBE") return false
             val path = Uri.parse(url).path.orEmpty().lowercase()
