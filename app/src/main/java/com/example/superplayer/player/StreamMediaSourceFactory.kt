@@ -70,9 +70,13 @@ class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) :
             if (mediaItem.localConfiguration?.uri?.scheme == "file") {
                 androidx.media3.datasource.FileDataSource.Factory()
             } else {
+                val local = mediaItem.localConfiguration?.uri?.host == "127.0.0.1"
                 DefaultHttpDataSource.Factory()
                     .setDefaultRequestProperties(requestProperties)
                     .setAllowCrossProtocolRedirects(true)
+                    // Vídeo de Telegram emitido por el servidor local: pedir un trozo lejano puede tardar más de los 8 s por defecto.
+                    .setConnectTimeoutMs(if (local) 45_000 else DefaultHttpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS)
+                    .setReadTimeoutMs(if (local) 45_000 else DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS)
             }
 
         val mimeType = when (type.trim().uppercase()) {

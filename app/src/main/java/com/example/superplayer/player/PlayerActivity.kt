@@ -214,7 +214,107 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    private var floatingScoreReady = false
+
+    /** Marcador flotante: se arrastra con el dedo (recuerda dónde lo dejas) y, al tocarlo, va al canal del partido. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun setupFloatingScore() {
+        val v = binding.floatingScore
+        val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+        var downRawX = 0f
+        var downRawY = 0f
+        var startX = 0f
+        var startY = 0f
+        var dragging = false
+        v.setOnTouchListener { view, ev ->
+            val parent = view.parent as? View ?: return@setOnTouchListener false
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = ev.rawX
+                    downRawY = ev.rawY
+                    startX = view.x
+                    startY = view.y
+                    dragging = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = ev.rawX - downRawX
+                    val dy = ev.rawY - downRawY
+                    if (!dragging && (Math.abs(dx) > slop || Math.abs(dy) > slop)) dragging = true
+                    if (dragging) {
+                        view.x = (startX + dx).coerceIn(0f, (parent.width - view.width).toFloat().coerceAtLeast(0f))
+                        view.y = (startY + dy).coerceIn(0f, (parent.height - view.height).toFloat().coerceAtLeast(0f))
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (dragging) {
+                        if (parent.width > 0 && parent.height > 0) {
+                            AppPrefs.setFloatingScorePos(this, view.x / parent.width, view.y / parent.height)
+                        }
+                    } else {
+                        openFloatingMatch()
+                    }
+                    true
+                }
+                else -> true
+            }
+        }
+        floatingScoreReady = true
+    }
+
+    /** Pone el marcador donde lo dejó el usuario (si lo movió). */
+    private fun restoreFloatingScorePos() {
+        val (fx, fy) = AppPrefs.getFloatingScorePos(this)
+        if (fx < 0f || fy < 0f) return
+        val v = binding.floatingScore
+        val parent = v.parent as? View ?: return
+        v.post {
+            if (parent.width > 0 && parent.height > 0) {
+                v.x = (fx * parent.width).coerceIn(0f, (parent.width - v.width).toFloat().coerceAtLeast(0f))
+                v.y = (fy * parent.height).coerceIn(0f, (parent.height - v.height).toFloat().coerceAtLeast(0f))
+            }
+        }
+    }
+
+    /** Toque en el marcador: va al canal que emite ese partido (en esta lista, o buscando en toda la guía). */
+    private fun openFloatingMatch() {
+        val teams = com.example.superplayer.sports.GoalAlerts.getTeams(this)
+        val live = com.example.superplayer.sports.MatchCache.liveFor(teams).take(2)
+        if (live.isEmpty()) return
+        if (live.size == 1) {
+            goToMatch(live[0])
+        } else {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setItems(live.map { "${it.home} ${it.homeScore}-${it.awayScore} ${it.away}" }.toTypedArray()) { _, which -> goToMatch(live[which]) }
+                .show()
+        }
+    }
+
+    private fun goToMatch(m: com.example.superplayer.sports.MatchFeed.Match) {
+        val inList = channelList.indexOfFirst { st ->
+            val t = EpgRepository.schedule(st.tvgId).now?.title ?: return@indexOfFirst false
+            com.example.superplayer.sports.GoalAlerts.titleHasMatch(m.home, m.away, t)
+        }
+        when {
+            inList >= 0 && inList == currentIndex -> Toast.makeText(this, R.string.floating_score_already, Toast.LENGTH_SHORT).show()
+            inList >= 0 -> switchToIndex(inList)
+            else -> {
+                // No está en esta lista: la pantalla principal busca en todos los canales (ver MainActivity.openMatchChannel).
+                startActivity(Intent(this, com.example.superplayer.ui.MainActivity::class.java).apply {
+                    putExtra(com.example.superplayer.sports.GoalAlerts.EXTRA_HOME, m.home)
+                    putExtra(com.example.superplayer.sports.GoalAlerts.EXTRA_AWAY, m.away)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                })
+            }
+        }
+    }
+
     private fun refreshFloatingScore() {
+        if (!floatingScoreReady) {
+            setupFloatingScore()
+            restoreFloatingScorePos()
+        }
         val teams = com.example.superplayer.sports.GoalAlerts.getTeams(this)
         if (!AppPrefs.isFloatingScore(this) || teams.isEmpty() || isInPictureInPictureMode) {
             binding.floatingScore.visibility = View.GONE

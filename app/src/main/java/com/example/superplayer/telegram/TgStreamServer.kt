@@ -17,6 +17,8 @@ object TgStreamServer {
     private var server: ServerSocket? = null
     private val pool = Executors.newCachedThreadPool()
     @Volatile private var backend: TgAccountBackend? = null
+    /** Última conexión abierta para cada archivo: las anteriores se abandonan (si no, pelean entre sí por la descarga y el vídeo se queda "conectando"). */
+    private val generations = java.util.concurrent.ConcurrentHashMap<Int, java.util.concurrent.atomic.AtomicLong>()
 
     /** Arranca el servidor si hace falta y devuelve la URL de reproducción. */
     @Synchronized
@@ -64,6 +66,9 @@ object TgStreamServer {
                     return
                 }
                 val mime = params["m"] ?: "video/mp4"
+                val counter = generations.getOrPut(fileId) { java.util.concurrent.atomic.AtomicLong() }
+                val gen = counter.incrementAndGet()
+                val cancelled = { counter.get() != gen }
 
                 var start = 0L
                 var end = total - 1
@@ -94,18 +99,18 @@ object TgStreamServer {
                 head.append("Connection: close\r\n\r\n")
                 out.write(head.toString().toByteArray())
                 out.flush()
-                copyRange(b, fileId, start, length, out)
+                copyRange(b, fileId, start, length, out, cancelled)
             } catch (e: Exception) {
                 // El reproductor cerró la conexión (saltar, parar...): normal.
             }
         }
     }
 
-    private fun copyRange(b: TgAccountBackend, fileId: Int, start: Long, length: Long, out: OutputStream) {
+    private fun copyRange(b: TgAccountBackend, fileId: Int, start: Long, length: Long, out: OutputStream, cancelled: () -> Boolean) {
         var pos = start
         var remaining = length
-        while (remaining > 0) {
-            val chunk = b.readBytes(fileId, pos, minOf(remaining, 512L * 1024L).toInt()) ?: return
+        while (remaining > 0 && !cancelled()) {
+            val chunk = b.readBytes(fileId, pos, minOf(remaining, 512L * 1024L).toInt(), cancelled) ?: return
             if (chunk.isEmpty()) return
             out.write(chunk)
             pos += chunk.size

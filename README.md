@@ -1320,3 +1320,7 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 - Widget: iconos de pestaña y refrescar más grandes (≥46 dp) y nueva pestaña 🎬 con tus vídeos favoritos de Telegram (con carátula y nota de TMDb); al tocar uno abre Telegram y lo reproduce.
 - Partidos: al tocar un partido (widget o aviso de gol) solo se abre un canal cuyo programa actual nombre a los DOS equipos en la guía; si no, avisa de que no lo encuentra.
 - El marcador flotante del reproductor está abajo a la izquierda.
+
+## Marcador flotante móvil y vídeos de Telegram
+- El marcador del reproductor se arrastra por la pantalla (recuerda dónde lo dejas); al tocarlo va al canal que emite el partido (en la lista actual o buscando en todos los canales; si el partido es el que ves, avisa).
+- Vídeos MP4 de Telegram que se quedaban "conectando": el servidor local abandona las conexiones antiguas del mismo archivo (peleaban entre sí por la descarga al pedir primero el final del MP4 y luego el principio) y el reproductor espera hasta 45 s al primer dato de un trozo lejano.

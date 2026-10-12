@@ -266,6 +266,14 @@ object AppPrefs {
     /** Marcador flotante de tus equipos sobre el reproductor (ver PlayerActivity.refreshFloatingScore). Por defecto sí. */
     fun isFloatingScore(context: Context): Boolean = prefs(context).getBoolean("floating_score", true)
 
+    /** Dónde dejó el usuario el marcador flotante (fracción del ancho y del alto; -1 = sitio por defecto, abajo a la izquierda). */
+    fun getFloatingScorePos(context: Context): Pair<Float, Float> =
+        prefs(context).getFloat("floating_score_x", -1f) to prefs(context).getFloat("floating_score_y", -1f)
+
+    fun setFloatingScorePos(context: Context, fx: Float, fy: Float) {
+        prefs(context).edit().putFloat("floating_score_x", fx).putFloat("floating_score_y", fy).apply()
+    }
+
     fun setFloatingScore(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean("floating_score", enabled).apply()
     }

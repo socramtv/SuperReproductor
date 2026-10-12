@@ -61,7 +61,7 @@ interface TgAccountBackend {
      * segundos, a que TDLib tenga el trozo que empieza en [pos]. Devuelve null si no llega.
      * Se llama desde hilos de fondo (el servidor local de streaming).
      */
-    fun readBytes(fileId: Int, pos: Long, maxLen: Int): ByteArray?
+    fun readBytes(fileId: Int, pos: Long, maxLen: Int, cancelled: () -> Boolean = { false }): ByteArray?
     /** Comandos (/start, /help...) que declara un bot: pares (comando sin barra, descripción). */
     /** Borra los archivos que Telegram ha ido descargando (vídeos, fotos…) menos los más recientes. */
     fun cleanCache()

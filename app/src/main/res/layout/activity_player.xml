@@ -193,14 +193,14 @@
 
     <!--
         Mini marcador flotante (ver PlayerActivity.refreshFloatingScore): los
-        partidos en juego de los equipos que sigues, abajo a la izquierda.
+        partidos en juego de los equipos que sigues, abajo a la izquierda (se puede arrastrar; al tocarlo va al canal del partido).
     -->
     <TextView
         android:id="@+id/floatingScore"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|start"
-        android:layout_marginStart="16dp"
+        android:layout_marginStart="30dp"
         android:layout_marginBottom="20dp"
         android:maxWidth="300dp"
         android:background="@drawable/bg_floating_score"

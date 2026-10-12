@@ -667,10 +667,10 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         return out
     }
 
-    override fun readBytes(fileId: Int, pos: Long, maxLen: Int): ByteArray? {
+    override fun readBytes(fileId: Int, pos: Long, maxLen: Int, cancelled: () -> Boolean): ByteArray? {
         val deadline = System.currentTimeMillis() + 40_000
         var requestedAt = -1L
-        while (System.currentTimeMillis() < deadline) {
+        while (System.currentTimeMillis() < deadline && !cancelled()) {
             val f = getFileBlocking(fileId) ?: return null
             val l = f.local
             val total = if (f.size > 0) f.size else f.expectedSize
