@@ -20,7 +20,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     private val chats = ConcurrentHashMap<Long, TdApi.Chat>()
     private val botIds: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val userNames = ConcurrentHashMap<Long, String>()
-    private val forumIds: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+    private val forumIds: MutableSet<Long> = ConcurrentHashMap.newKeySet<Long>()
 
     private class Download(val onProgress: (Long, Long) -> Unit, val onDone: (String?) -> Unit)
     private val downloads = ConcurrentHashMap<Int, Download>()
