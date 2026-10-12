@@ -1302,3 +1302,9 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 - Estrella de favorito más grande y con anillo de foco; mantener OK sobre un chat la marca/desmarca.
 - Al volver de un chat, el foco regresa a ese chat.
 - Filas de listas y botones de ranura muestran borde naranja con el foco.
+
+## Telegram: galería con películas, listas y atrás
+- Un vídeo y una imagen con el mismo nombre ("253-Peli (2025) -mkv" + "Peli (2025)") se unen: la imagen es la miniatura del vídeo.
+- Los vídeos muestran título, año, nota y género de TMDb (carátula de TMDb si no hay imagen en el chat). Pulsación larga = ficha con sinopsis y reparto.
+- Listas (m3u, json, txt…) y enlaces de Telegram sin foto tienen su propia imagen (morada / azul).
+- Al abrir un enlace a otro chat, "atrás" vuelve al chat anterior, en el mismo sitio.

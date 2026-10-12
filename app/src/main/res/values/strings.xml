@@ -436,6 +436,7 @@
     <string name="tgacc_search_hint_names">Nombre del canal, grupo o bot</string>
     <string name="tgacc_search_hint_messages">Texto en mensajes</string>
     <string name="tgacc_reply_to">↩ Respondiendo a %1$s (toca para cancelar)</string>
+    <string name="tgacc_act_info">ℹ Información de la película</string>
     <string name="tgacc_act_reply">↩ Responder</string>
     <string name="tgacc_act_copy">📋 Copiar texto</string>
     <string name="tgacc_act_delete">🗑 Eliminar</string>

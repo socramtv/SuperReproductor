@@ -29,6 +29,8 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.superplayer.R
+import android.widget.TextView
+import com.example.superplayer.data.MovieInfo
 import com.example.superplayer.data.PlaylistRepository
 import com.example.superplayer.databinding.ActivityTelegramBinding
 import com.example.superplayer.databinding.ItemTelegramBinding
@@ -77,9 +79,18 @@ class TelegramAccountActivity : AppCompatActivity() {
         val link: String? = null,
         val loadMore: Boolean = false,
         val messageId: Long = 0L,
+        /** Título limpio para buscar la película en TMDb (vacío = no es una película). */
+        val query: String = "",
+        /** Fondo de la miniatura cuando no hay imagen (listas y enlaces). */
+        val tileRes: Int = 0,
         val onLong: (() -> Unit)? = null,
         val onClick: () -> Unit
     )
+
+    /** Un paso atrás al saltar por un enlace a otro chat: dónde estabas. */
+    private class NavEntry(val chat: TgChat, val topic: TgTopic?, val anchor: Long)
+
+    private val navStack = ArrayList<NavEntry>()
 
     private lateinit var binding: ActivityTelegramBinding
     private lateinit var adapter: RowAdapter
@@ -571,6 +582,11 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun goBack() {
         if (searching) {
             searchItem?.collapseActionView()
+        } else if (navStack.isNotEmpty()) {
+            val e = navStack.removeAt(navStack.size - 1)
+            openChat(e.chat, e.anchor, keepStack = true)
+            val t = e.topic
+            if (t != null) openTopic(e.chat, t)
         } else if (currentTopic != null) {
             currentChat?.let { showTopics(it) }
         } else if (currentChat != null) {
@@ -653,7 +669,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
     }
 
-    private fun openChat(chat: TgChat, messageId: Long = 0L, startParam: String = "") {
+    private fun openChat(chat: TgChat, messageId: Long = 0L, startParam: String = "", keepStack: Boolean = false) {
+        if (!keepStack) navStack.clear()
         if (searching) {
             suppressExit = true
             searchItem?.collapseActionView()
@@ -740,7 +757,19 @@ class TelegramAccountActivity : AppCompatActivity() {
         loadMore()
     }
 
+    /** Id del primer mensaje visible, para volver justo ahí después de saltar a otro chat. */
+    private fun currentAnchor(): Long {
+        val lm = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return 0L
+        val pos = lm.findFirstVisibleItemPosition()
+        if (pos < 0) return 0L
+        if (mediaMode) return mediaAdapter.messageIdAt(pos)
+        val idx = pos - (if (lastBatchFull) 1 else 0)
+        val list = messages.reversed()
+        return list.getOrNull(idx)?.messageId ?: 0L
+    }
+
     private fun closeChat() {
+        navStack.clear()
         returnToChatId = currentChat?.id ?: 0L
         currentChat = null
         currentTopic = null
@@ -814,25 +843,76 @@ class TelegramAccountActivity : AppCompatActivity() {
         focusItemIfTv(last = true)
     }
 
+    private val reNumPrefix = Regex("^\\s*\\d{1,5}\\s*[-.)]\\s*")
+    private val reExtSuffix = Regex("(?i)[\\s.-]+(mkv|mp4|avi|mov|m4v|webm|ts|jpg|jpeg|png|webp)\\s*$")
+    private val reYearOpen = Regex("\\(((?:19|20)\\d{2})[^)]*$")
+
+    /** "253-Peli (2025-mkv" y "Peli (2025-" -> "Peli (2025)": el mismo nombre para el vídeo y su imagen. */
+    private fun cleanName(raw: String): String {
+        var t = raw.trim().replace(reNumPrefix, "")
+        t = t.replace(reExtSuffix, "")
+        t = t.replace(reYearOpen) { "(" + it.groupValues[1] + ")" }
+        return t.trim(' ', '-', '_', '.')
+    }
+
+    private fun nameKey(raw: String): String =
+        java.text.Normalizer.normalize(cleanName(raw).lowercase(), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
+
+    private fun isImageMsg(m: TgMessage) = m.kind == "photo" || (m.kind == "document" && (m.mime ?: "").startsWith("image/"))
+
+    private fun isVideoMsg(m: TgMessage) = m.kind == "video" || m.kind == "animation" || (m.kind == "document" && looksLikeMedia(m))
+
+    private fun isMovieFile(m: TgMessage): Boolean {
+        if (m.kind == "animation") return false
+        val mime = (m.mime ?: "").lowercase()
+        val name = (m.fileName ?: "").lowercase()
+        return m.kind == "video" || mime.startsWith("video/") ||
+            listOf(".mp4", ".mkv", ".avi", ".mov", ".webm", ".ts", ".m4v").any { name.endsWith(it) }
+    }
+
+    private fun titleOf(m: TgMessage): String =
+        m.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: m.fileName.orEmpty()
+
     /** Galería: solo fotos, vídeos, listas (archivos y enlaces) y enlaces de Telegram, en miniaturas con su texto debajo. */
-    private fun renderMedia() {
+    private fun renderMedia(auto: Boolean = true) {
         useGrid()
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val items = ArrayList<MediaItem>()
         val seenLinks = HashSet<String>()
+        // Imagen y vídeo con el mismo nombre: la imagen es la miniatura del vídeo y no se repite aparte.
+        val imageByName = HashMap<String, TgMessage>()
+        for (m in messages) {
+            if (!isImageMsg(m)) continue
+            val k = nameKey(titleOf(m))
+            if (k.length >= 2) imageByName.putIfAbsent(k, m)
+        }
+        val paired = HashMap<Long, TgMessage>() // id del vídeo -> su imagen
+        val usedImages = HashSet<Long>()
+        for (m in messages) {
+            if (!isVideoMsg(m)) continue
+            val img = imageByName[nameKey(titleOf(m))] ?: continue
+            if (usedImages.add(img.messageId)) paired[m.messageId] = img
+        }
         for (m in messages) { // de más nuevo a más antiguo
             val caption = m.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
             val date = df.format(Date(m.date * 1000L))
-            val isImage = m.kind == "photo" || (m.kind == "document" && (m.mime ?: "").startsWith("image/"))
-            val isVideo = m.kind == "video" || m.kind == "animation" || (m.kind == "document" && looksLikeMedia(m))
+            val isImage = isImageMsg(m)
+            val isVideo = isVideoMsg(m)
             if (isImage) {
+                if (m.messageId in usedImages) continue
                 items.add(MediaItem(key = "${m.messageId}:img", caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
                     messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
             } else if (isVideo) {
-                items.add(MediaItem(key = "${m.messageId}:vid", caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
-                    badge = "▶", messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
+                val img = paired[m.messageId]
+                val thumb = img?.thumbId?.takeIf { it != 0 } ?: m.thumbId
+                val q = if (isMovieFile(m)) cleanName(titleOf(m)).takeIf { it.length >= 2 }.orEmpty() else ""
+                items.add(MediaItem(key = "${m.messageId}:vid", caption = (if (q.isNotEmpty()) q else caption.ifEmpty { m.fileName.orEmpty() }), meta = date, thumbFileId = thumb,
+                    badge = "▶", messageId = m.messageId, query = q,
+                    onLong = { onMessageLong(m, q) }) { onMessageClick(m) })
             } else if (m.kind == "document" && looksLikePlaylist(m)) {
                 items.add(MediaItem(key = "${m.messageId}:file", caption = m.fileName ?: caption, meta = date, iconRes = R.drawable.ic_tg_list,
+                    tileRes = R.drawable.bg_tg_tile_list,
                     badge = getString(R.string.tgacc_badge_list), messageId = m.messageId,
                     onLong = { onMessageLong(m) }) { onMessageClick(m) })
             }
@@ -841,10 +921,12 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val shortLink = link.removePrefix("https://").removePrefix("http://")
                 if (isTgLink(link)) {
                     items.add(MediaItem(key = "${m.messageId}:tg:$link", caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_link,
+                        tileRes = R.drawable.bg_tg_tile_link,
                         badge = getString(R.string.tgacc_badge_link), link = link, messageId = m.messageId,
                         onLong = { onMessageLong(m) }) { openTgLink(link) })
                 } else if (TelegramImport.looksLikeListUrl(link)) {
                     items.add(MediaItem(key = "${m.messageId}:l:$link", caption = shortLink, meta = date, iconRes = R.drawable.ic_tg_list,
+                        tileRes = R.drawable.bg_tg_tile_list,
                         badge = getString(R.string.tgacc_badge_list), messageId = m.messageId,
                         onLong = { onMessageLong(m) }) { onMessageClick(m) })
                 }
@@ -867,7 +949,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         pendingScroll = -1
         focusItemIfTv()
         // Pocos medios en esta tanda: sigue cargando mensajes más antiguos (con tope).
-        if (lastBatchFull && real < 12 && autoLoads < 6) {
+        if (auto && lastBatchFull && real < 12 && autoLoads < 6) {
             autoLoads++
             loadMore()
         }
@@ -1076,9 +1158,84 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
-    private fun onMessageLong(m: TgMessage) {
+    private val infoRequested = HashSet<String>()
+
+    /** Pide los datos de TMDb de una película (una vez) y, al llegar, refresca las miniaturas sin mover la lista. */
+    private fun requestInfo(query: String) {
+        if (query.isEmpty() || !infoRequested.add(query)) return
+        if (!MovieInfo.needsFetch(this, query)) return
+        MovieInfo.request(this, query) { found ->
+            if (found != null) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    mediaAdapter.infoLoaded(query)
+                }
+            }
+        }
+    }
+
+    private fun infoMeta(info: MovieInfo.Info): String = listOfNotNull(
+        info.rating.takeIf { it > 0.0 }?.let { "★ " + String.format(java.util.Locale.US, "%.1f", it) },
+        info.genre
+    ).joinToString(" · ")
+
+    /** Ficha de la película: sinopsis, reparto, etc. (los mismos datos que en Cine). */
+    private fun showMovieInfo(m: TgMessage, query: String) {
+        val tv = TextView(this).apply {
+            setPadding(48, 24, 48, 8)
+            textSize = 14f
+        }
+        val scroll = android.widget.ScrollView(this).apply { addView(tv) }
+        fun fill(info: MovieInfo.Info?) {
+            if (info == null) {
+                tv.text = getString(R.string.cine_no_synopsis)
+                return
+            }
+            val head = listOfNotNull(
+                info.year,
+                info.runtimeMin.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
+                info.certification?.takeIf { it.isNotBlank() }
+            ).joinToString(" · ")
+            val sb = StringBuilder()
+            val line1 = listOf(infoMeta(info), head).filter { it.isNotEmpty() }.joinToString(" · ")
+            if (line1.isNotEmpty()) sb.append(line1).append("\n\n")
+            info.tagline?.takeIf { it.isNotBlank() }?.let { sb.append("“").append(it).append("”\n\n") }
+            sb.append(info.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis))
+            info.director?.takeIf { it.isNotBlank() }?.let {
+                sb.append("\n\n").append(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director)).append(": ").append(it)
+            }
+            if (info.cast.isNotEmpty()) sb.append("\n\n").append(getString(R.string.cine_cast)).append(": ").append(info.cast.joinToString(", "))
+            tv.text = sb.toString()
+        }
+        val cached = MovieInfo.peek(this, query)
+        fill(cached)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(cached?.title?.takeIf { it.isNotBlank() } ?: query)
+            .setView(scroll)
+            .setPositiveButton(R.string.cine_watch) { _, _ -> onMessageClick(m) }
+            .setNegativeButton(R.string.channel_check_close, null)
+            .show()
+        if (MovieInfo.needsFetch(this, query)) {
+            if (cached == null) tv.text = getString(R.string.cine_searching)
+            MovieInfo.request(this, query) { found ->
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed && dialog.isShowing) {
+                        fill(found)
+                        found?.title?.takeIf { it.isNotBlank() }?.let { dialog.setTitle(it) }
+                        mediaAdapter.infoLoaded(query)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun onMessageLong(m: TgMessage, movieQuery: String = "") {
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
+        if (movieQuery.isNotEmpty()) {
+            labels.add(getString(R.string.tgacc_act_info))
+            actions.add { showMovieInfo(m, movieQuery) }
+        }
         if (currentChat != null && !searching) {
             labels.add(getString(R.string.tgacc_act_reply))
             actions.add { setReply(m) }
@@ -1330,7 +1487,12 @@ class TelegramAccountActivity : AppCompatActivity() {
                         .setPositiveButton(android.R.string.ok) { _, _ -> openTgLink(link, true) }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
-                    else -> openChat(target.chat, target.messageId, target.startParam)
+                    else -> {
+                        val here = currentChat
+                        if (here != null && !showingTopics) navStack.add(NavEntry(here, currentTopic, currentAnchor()))
+                        else if (here != null) navStack.add(NavEntry(here, null, 0L))
+                        openChat(target.chat, target.messageId, target.startParam, keepStack = true)
+                    }
                 }
             }
         }
@@ -1588,6 +1750,12 @@ class TelegramAccountActivity : AppCompatActivity() {
             items.forEachIndexed { i, r -> if (r.thumbFileId == id) notifyItemChanged(i) }
         }
 
+        fun messageIdAt(position: Int) = items.getOrNull(position)?.messageId ?: 0L
+
+        fun infoLoaded(query: String) {
+            items.forEachIndexed { i, r -> if (r.query == query) notifyItemChanged(i) }
+        }
+
         fun linkResolved(link: String) {
             items.forEachIndexed { i, r -> if (r.link == link) notifyItemChanged(i) }
         }
@@ -1627,17 +1795,37 @@ class TelegramAccountActivity : AppCompatActivity() {
                     requestLink(link)
                 }
             }
+            var meta = item.meta
+            var posterUrl: String? = null
+            if (item.query.isNotEmpty()) {
+                val info = MovieInfo.peek(this@TelegramAccountActivity, item.query)
+                if (info != null) {
+                    caption = info.title + (info.year?.let { " ($it)" } ?: "")
+                    meta = listOf(infoMeta(info), item.meta).filter { it.isNotEmpty() }.joinToString(" · ")
+                    posterUrl = info.posterUrl
+                } else {
+                    requestInfo(item.query)
+                }
+            }
             b.tgmCaption.text = caption
-            b.tgmMeta.text = item.meta
-            b.tgmMeta.visibility = if (item.meta.isEmpty()) View.GONE else View.VISIBLE
+            b.tgmMeta.text = meta
+            b.tgmMeta.visibility = if (meta.isEmpty()) View.GONE else View.VISIBLE
             b.tgmBadge.text = item.badge
             b.tgmBadge.visibility = if (item.badge.isEmpty()) View.GONE else View.VISIBLE
             val path = if (thumbId != 0) thumbPaths[thumbId] else null
+            b.tgmFrame.setBackgroundResource(R.color.surface_dark)
             if (path != null) {
                 b.tgmIcon.visibility = View.GONE
                 b.tgmThumb.visibility = View.VISIBLE
                 b.tgmThumb.load(File(path))
+            } else if (posterUrl != null) {
+                // Sin imagen en el chat: la carátula de TMDb.
+                b.tgmIcon.visibility = View.GONE
+                b.tgmThumb.visibility = View.VISIBLE
+                b.tgmThumb.load(posterUrl)
+                requestThumb(thumbId)
             } else {
+                if (item.tileRes != 0) b.tgmFrame.setBackgroundResource(item.tileRes)
                 b.tgmThumb.setImageDrawable(null)
                 b.tgmThumb.visibility = View.GONE
                 b.tgmIcon.visibility = View.VISIBLE
