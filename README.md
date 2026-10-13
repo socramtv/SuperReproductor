@@ -1345,3 +1345,11 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 - Los botones en línea de los bots se ven directamente debajo del mensaje, en sus filas originales (`TgButton.row`); callback, enlaces (los de t.me se abren dentro) y los no compatibles avisan.
 - El teclado de respuesta del bot sale encima de la caja de texto; el botón ⌨ lo oculta/muestra.
 - Pulsar una burbuja con archivo o enlaces abre sus acciones (reproducir, ver foto…); mantener = responder/copiar/borrar.
+
+### Telegram: reenviar, más controles y lista de chats completa
+- **Lista de chats**: `TdBackend.loadChats` ahora pide a TDLib toda la lista (`LoadChats` hasta el final) de la lista principal y de los archivados (antes solo salía lo que ya estaba cargado, por eso faltaban canales/foros). Tiene un tope de 25 s para no dejar la pantalla vacía.
+- **Favoritos**: se guarda la ficha (nombre, tipo, foto) de cada chat favorito; si Telegram no lo trae en la lista, se muestra igualmente y se pide aparte (`loadChat`).
+- **Búsqueda de chats**: además de SearchChats/SearchPublicChats, SearchChatsOnServer y un filtro local sobre tu lista.
+- **Chat que no carga**: `loadHistory` reintenta (hasta 4 veces) cuando el primer pedido a un chat sin caché devuelve pocos mensajes.
+- **Reenviar** (`forwardMessage`): mantener pulsado un mensaje → "↪ Reenviar a…", o botón en la ficha del vídeo / lista de versiones. Selector con filtros (favoritos, canales, grupos y foros, personas y bots), buscador y, para foros, elección de tema.
+- Mantener pulsado un mensaje también: copiar enlace del mensaje y editar (si es tuyo). Menú del chat: marcar como leído y salir del canal/grupo.

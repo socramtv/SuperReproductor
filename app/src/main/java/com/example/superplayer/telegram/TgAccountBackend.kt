@@ -69,6 +69,18 @@ interface TgAccountBackend {
     fun loadBotCommands(userId: Long, onDone: (List<Pair<String, String>>) -> Unit)
     /** Pulsa un botón "cb" de un mensaje; [onDone] recibe el texto de respuesta y/o una URL, si el bot los da. */
     fun pressButton(chatId: Long, messageId: Long, data: String, onDone: (String?, String?) -> Unit)
+    /** Un chat concreto por su id (para favoritos que no salen en la lista). */
+    fun loadChat(chatId: Long, onDone: (TgChat?) -> Unit)
+    /** Reenvía un mensaje a otro chat (y tema, si [topicId] != 0). */
+    fun forwardMessage(fromChatId: Long, messageId: Long, toChatId: Long, topicId: Long, onDone: (Boolean) -> Unit)
+    /** Enlace público/privado de un mensaje (t.me/...), o null. */
+    fun messageLink(chatId: Long, messageId: Long, onDone: (String?) -> Unit)
+    /** Marca el chat como leído. */
+    fun markRead(chatId: Long, onDone: (Boolean) -> Unit)
+    /** Sale de un canal o grupo. */
+    fun leaveChat(chatId: Long, onDone: (Boolean) -> Unit)
+    /** Cambia el texto de un mensaje tuyo. */
+    fun editMessage(chatId: Long, messageId: Long, text: String, onDone: (Boolean) -> Unit)
 }
 
 object TelegramAccountPrefs {
@@ -124,12 +136,31 @@ object TelegramAccountPrefs {
     fun favoriteChats(context: Context): Set<Long> =
         prefs(context).getStringSet("fav_chats", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
 
-    /** Marca o quita un chat de favoritos; devuelve true si queda como favorito. */
-    fun toggleFavorite(context: Context, chatId: Long): Boolean {
+    /** Marca o quita un chat de favoritos; devuelve true si queda como favorito. Con [chat] se guarda su ficha para que no se pierda de la lista. */
+    fun toggleFavorite(context: Context, chatId: Long, chat: TgChat? = null): Boolean {
         val set = HashSet(prefs(context).getStringSet("fav_chats", emptySet())!!)
         val key = chatId.toString()
         val nowFav = if (set.contains(key)) { set.remove(key); false } else { set.add(key); true }
         prefs(context).edit().putStringSet("fav_chats", set).apply()
+        if (nowFav && chat != null) saveChatInfo(context, chat)
         return nowFav
+    }
+
+    /** Ficha guardada (nombre, tipo, foto) de los chats favoritos, para mostrarlos aunque Telegram no los traiga en la lista. */
+    fun saveChatInfo(context: Context, chat: TgChat) {
+        val o = try { JSONObject(prefs(context).getString("fav_chat_info", "{}")) } catch (e: Exception) { JSONObject() }
+        o.put(chat.id.toString(), JSONObject().put("t", chat.title).put("k", chat.kind).put("u", chat.userId).put("p", chat.photoId).put("d", chat.lastDate))
+        prefs(context).edit().putString("fav_chat_info", o.toString()).apply()
+    }
+
+    fun favoriteChatInfo(context: Context): Map<Long, TgChat> {
+        val o = try { JSONObject(prefs(context).getString("fav_chat_info", "{}")) } catch (e: Exception) { JSONObject() }
+        val out = HashMap<Long, TgChat>()
+        for (key in o.keys()) {
+            val id = key.toLongOrNull() ?: continue
+            val c = o.optJSONObject(key) ?: continue
+            out[id] = TgChat(id, c.optString("t"), c.optString("k", "private"), c.optLong("d"), c.optLong("u"), 0, c.optInt("p"))
+        }
+        return out
     }
 }

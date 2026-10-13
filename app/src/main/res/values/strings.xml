@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Lista 2</string>
+    <string name="list_slot_2">Acestream+</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -475,4 +475,26 @@
     <string name="tgacc_me">Tú</string>
     <string name="tgacc_btn_unsupported">Este botón no es compatible con la app</string>
     <string name="tgacc_no_text">(sin texto)</string>
+    <string name="tgfwd_action">↪ Reenviar a…</string>
+    <string name="tgfwd_title">Reenviar a…</string>
+    <string name="tgfwd_search">Buscar chat, canal o foro…</string>
+    <string name="tgfwd_f_favs">⭐ Favoritos</string>
+    <string name="tgfwd_f_all">Todos</string>
+    <string name="tgfwd_f_channels">📢 Canales</string>
+    <string name="tgfwd_f_groups">👥 Grupos y foros</string>
+    <string name="tgfwd_f_people">👤 Personas y bots</string>
+    <string name="tgfwd_general">General (sin tema)</string>
+    <string name="tgfwd_done">Reenviado a %1$s</string>
+    <string name="tgfwd_error">No se pudo reenviar (¿puedes escribir ahí?)</string>
+    <string name="tgfwd_link_first">Abre primero el vídeo para poder reenviarlo</string>
+    <string name="tgacc_act_link">🔗 Copiar enlace del mensaje</string>
+    <string name="tgacc_act_edit">✏ Editar</string>
+    <string name="tgacc_no_link">Este mensaje no tiene enlace</string>
+    <string name="tgacc_edited">Mensaje editado</string>
+    <string name="tgacc_marked_read">Marcado como leído</string>
+    <string name="tgacc_action_error">No se pudo hacer</string>
+    <string name="tgacc_menu_read">✓ Marcar como leído</string>
+    <string name="tgacc_menu_leave">🚪 Salir de este canal/grupo</string>
+    <string name="tgacc_leave_confirm">¿Salir de «%1$s»?</string>
+    <string name="tgacc_left">Has salido</string>
 </resources>

@@ -533,6 +533,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         menu.findItem(R.id.action_tgacc_fav)?.isVisible = inChat
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_kbd)?.isVisible = inChat && chat?.kind == "bot"
+        menu.findItem(R.id.action_tgacc_read)?.isVisible = inChat && !showingTopics
+        menu.findItem(R.id.action_tgacc_leave)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group" || chat?.kind == "forum")
         menu.findItem(R.id.action_tgacc_join)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group" || chat?.kind == "forum")
         return super.onPrepareOptionsMenu(menu)
     }
@@ -557,7 +559,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
             R.id.action_tgacc_fav -> {
                 currentChat?.let {
-                    val nowFav = TelegramAccountPrefs.toggleFavorite(this, it.id)
+                    val nowFav = TelegramAccountPrefs.toggleFavorite(this, it.id, it)
                     Toast.makeText(this, if (nowFav) R.string.tgacc_fav_added else R.string.tgacc_fav_removed, Toast.LENGTH_SHORT).show()
                 }
                 return true
@@ -577,6 +579,30 @@ class TelegramAccountActivity : AppCompatActivity() {
                         Toast.makeText(this, if (ok) R.string.tgacc_joined else R.string.tgacc_join_error, Toast.LENGTH_SHORT).show()
                     }
                 }
+                return true
+            }
+            R.id.action_tgacc_read -> {
+                val chat = currentChat ?: return true
+                backend?.markRead(chat.id) { ok ->
+                    runOnUiThread { Toast.makeText(this, if (ok) R.string.tgacc_marked_read else R.string.tgacc_action_error, Toast.LENGTH_SHORT).show() }
+                }
+                return true
+            }
+            R.id.action_tgacc_leave -> {
+                val chat = currentChat ?: return true
+                AlertDialog.Builder(this)
+                    .setMessage(getString(R.string.tgacc_leave_confirm, chat.title))
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        backend?.leaveChat(chat.id) { ok ->
+                            runOnUiThread {
+                                if (isFinishing || isDestroyed) return@runOnUiThread
+                                Toast.makeText(this, if (ok) R.string.tgacc_left else R.string.tgacc_action_error, Toast.LENGTH_SHORT).show()
+                                if (ok) closeChat()
+                            }
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
                 return true
             }
             R.id.action_tgacc_api -> {
@@ -603,7 +629,25 @@ class TelegramAccountActivity : AppCompatActivity() {
         backend?.loadChats { list ->
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                chats = list
+                val favs = TelegramAccountPrefs.favoriteChats(this)
+                val have = list.map { it.id }.toHashSet()
+                val info = TelegramAccountPrefs.favoriteChatInfo(this)
+                // Favoritos que Telegram no ha traído en la lista: se muestran con la ficha guardada y se piden aparte.
+                val extra = favs.filter { it !in have }.mapNotNull { info[it] }
+                for (c in list) if (c.id in favs) TelegramAccountPrefs.saveChatInfo(this, c)
+                chats = list + extra
+                for (id in favs) {
+                    if (id in have) continue
+                    backend?.loadChat(id) { c ->
+                        if (c == null) return@loadChat
+                        runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
+                            TelegramAccountPrefs.saveChatInfo(this, c)
+                            chats = chats.filter { it.id != c.id } + c
+                            if (!searching && currentChat == null) renderChats()
+                        }
+                    }
+                }
                 if (searching || currentChat != null) return@runOnUiThread
                 renderChats()
             }
@@ -698,7 +742,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 (if (chat.unread > 0) " · " + getString(R.string.tgacc_unread, chat.unread) else "") +
                 (if (chat.lastDate > 0) " · " + df.format(Date(chat.lastDate * 1000L)) else "")
             Row(chat.title, sub, chat.id in favs, {
-                val nowFav = TelegramAccountPrefs.toggleFavorite(this, chat.id)
+                val nowFav = TelegramAccountPrefs.toggleFavorite(this, chat.id, chat)
                 Toast.makeText(this, if (nowFav) R.string.tgacc_fav_added else R.string.tgacc_fav_removed, Toast.LENGTH_SHORT).show()
                 renderChats()
             }, thumbFileId = chat.photoId, circle = true) { openChat(chat) }
@@ -1194,7 +1238,9 @@ class TelegramAccountActivity : AppCompatActivity() {
             b.searchChats(q) { list ->
                 runOnUiThread {
                     if (isFinishing || isDestroyed || !searching || searchQuery.trim() != q || searchMode != 0 || currentChat != null) return@runOnUiThread
-                    searchChatResults = list
+                    val nq = normalize(q)
+                    val own = chats.filter { normalize(it.title).contains(nq) }
+                    searchChatResults = (own + list).distinctBy { it.id }
                     searchResults = null
                     renderSearch()
                 }
@@ -1220,7 +1266,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         searchChatResults.forEach { chat ->
             val sub = kindLabel(chat.kind) + (if (chat.unread > 0) " · " + getString(R.string.tgacc_unread, chat.unread) else "")
             rows.add(Row(chat.title, sub, chat.id in favs, {
-                TelegramAccountPrefs.toggleFavorite(this, chat.id)
+                TelegramAccountPrefs.toggleFavorite(this, chat.id, chat)
                 renderSearch()
             }, thumbFileId = chat.photoId, circle = true) { openChat(chat) })
         }
@@ -1409,6 +1455,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         } else {
             for ((i, m) in options.withIndex()) col.addView(optionButton(m, i + 1, options.size > 1) { play(m) })
         }
+        col.addView(android.widget.Button(this).apply {
+            text = getString(R.string.tgfwd_action)
+            isAllCaps = false
+            setOnClickListener { forwardVideoOptions(options, query) }
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(16), dp(10), dp(16), dp(8)) }
+        })
         val scroll = android.widget.ScrollView(this).apply { addView(col) }
         val isFav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
         dialog = AlertDialog.Builder(this)
@@ -1440,6 +1494,19 @@ class TelegramAccountActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(query.ifEmpty { titleOf(options[0]) })
             .setItems(options.mapIndexed { i, m -> optionLabel(m, i + 1, true) }.toTypedArray()) { _, which -> playVideo(options[which]) }
+            .setNeutralButton(R.string.tgfwd_action) { _, _ -> forwardVideoOptions(options, query) }
+            .show()
+    }
+
+    /** Reenviar un vídeo: si tiene varias versiones, primero se elige cuál. */
+    private fun forwardVideoOptions(options: List<TgMessage>, query: String) {
+        if (options.size <= 1) {
+            options.firstOrNull()?.let { forwardMessage(it) }
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(query.ifEmpty { titleOf(options[0]) })
+            .setItems(options.mapIndexed { i, m -> optionLabel(m, i + 1, true) }.toTypedArray()) { _, which -> forwardMessage(options[which]) }
             .show()
     }
 
@@ -1508,6 +1575,14 @@ class TelegramAccountActivity : AppCompatActivity() {
             labels.add(getString(R.string.tgacc_act_reply))
             actions.add { setReply(m) }
         }
+        labels.add(getString(R.string.tgfwd_action))
+        actions.add { forwardMessage(m) }
+        labels.add(getString(R.string.tgacc_act_link))
+        actions.add { copyMessageLink(m) }
+        if (m.outgoing && m.fileId == null && m.kind != "other" && currentChat != null && !searching) {
+            labels.add(getString(R.string.tgacc_act_edit))
+            actions.add { editOwnMessage(m) }
+        }
         if (m.text.isNotBlank()) {
             labels.add(getString(R.string.tgacc_act_copy))
             actions.add {
@@ -1532,6 +1607,189 @@ class TelegramAccountActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
             .show()
+    }
+
+    /** Mensaje real en Telegram (los vídeos "de enlace" son mensajes virtuales: se usa el que ya se resolvió). */
+    private fun realMessage(m: TgMessage): TgMessage? =
+        if (m.kind == "linkvideo") m.links.firstOrNull()?.let { linkVideoCache[it] } else m
+
+    private fun forwardMessage(m: TgMessage) {
+        val real = realMessage(m)
+        if (real == null) {
+            Toast.makeText(this, R.string.tgfwd_link_first, Toast.LENGTH_LONG).show()
+            return
+        }
+        pickDestination { chat, topicId ->
+            backend?.forwardMessage(real.chatId, real.messageId, chat.id, topicId) { ok ->
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (ok) Toast.makeText(this, getString(R.string.tgfwd_done, chat.title), Toast.LENGTH_LONG).show()
+                    else Toast.makeText(this, R.string.tgfwd_error, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun copyMessageLink(m: TgMessage) {
+        val real = realMessage(m) ?: return
+        backend?.messageLink(real.chatId, real.messageId) { link ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (link == null) {
+                    Toast.makeText(this, R.string.tgacc_no_link, Toast.LENGTH_SHORT).show()
+                } else {
+                    val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("telegram", link))
+                    Toast.makeText(this, R.string.tgacc_copied, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun editOwnMessage(m: TgMessage) {
+        val input = EditText(this).apply {
+            setText(m.text)
+            setSelection(text.length)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tgacc_act_edit)
+            .setView(input)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val text = input.text.toString().trim()
+                if (text.isEmpty() || text == m.text) return@setPositiveButton
+                backend?.editMessage(m.chatId, m.messageId, text) { ok ->
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        Toast.makeText(this, if (ok) R.string.tgacc_edited else R.string.tgacc_action_error, Toast.LENGTH_SHORT).show()
+                        if (ok) scheduleReload(500)
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Elegir a qué chat (canal, grupo, foro, persona o bot de tu cuenta) enviar algo. Con un foro pregunta también el tema.
+     * Se puede filtrar por tipo, buscar por nombre y, con 3+ letras, buscar también en Telegram.
+     */
+    private fun pickDestination(onPicked: (TgChat, Long) -> Unit) {
+        val favs = TelegramAccountPrefs.favoriteChats(this)
+        var filter = 1
+        var remote: List<TgChat> = emptyList()
+        var shown: List<TgChat> = emptyList()
+        val labels = ArrayList<String>()
+        val input = EditText(this).apply {
+            hint = getString(R.string.tgfwd_search)
+            isSingleLine = true
+            setPadding(dpPx(20), dpPx(8), dpPx(20), dpPx(8))
+        }
+        val chipNames = listOf(R.string.tgfwd_f_favs, R.string.tgfwd_f_all, R.string.tgfwd_f_channels, R.string.tgfwd_f_groups, R.string.tgfwd_f_people)
+        val chipFilter = listOf(0, 1, 2, 3, 4)
+        val chips = ArrayList<TextView>()
+        val chipRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val chipScroll = android.widget.HorizontalScrollView(this).apply { addView(chipRow); isHorizontalScrollBarEnabled = false }
+        val listView = android.widget.ListView(this)
+        val listAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_list_item_1, labels)
+        listView.adapter = listAdapter
+        fun icon(kind: String) = when (kind) {
+            "channel" -> "📢"; "group" -> "👥"; "forum" -> "🗂"; "bot" -> "🤖"; else -> "👤"
+        }
+        fun refresh() {
+            val q = normalize(input.text.toString().trim())
+            val base = (chats + remote).distinctBy { it.id }
+            shown = base.filter { c ->
+                val okType = when (filter) {
+                    0 -> c.id in favs
+                    2 -> c.kind == "channel"
+                    3 -> c.kind == "group" || c.kind == "forum"
+                    4 -> c.kind == "private" || c.kind == "bot"
+                    else -> true
+                }
+                okType && (q.isEmpty() || normalize(c.title).contains(q))
+            }.sortedWith(compareByDescending<TgChat> { it.id in favs }.thenByDescending { it.lastDate })
+            labels.clear()
+            labels.addAll(shown.map { icon(it.kind) + " " + it.title + (if (it.id in favs) "  ★" else "") })
+            listAdapter.notifyDataSetChanged()
+            chips.forEachIndexed { i, t ->
+                val sel = chipFilter[i] == filter
+                t.setTextColor(androidx.core.content.ContextCompat.getColor(this, if (sel) R.color.primary else R.color.on_background))
+                t.setTypeface(null, if (sel) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            }
+        }
+        for ((i, res) in chipNames.withIndex()) {
+            val t = TextView(this).apply {
+                setText(res)
+                textSize = 14f
+                setPadding(dpPx(14), dpPx(10), dpPx(14), dpPx(10))
+                isFocusable = true
+                isClickable = true
+                setBackgroundResource(R.drawable.bg_list_item)
+                setOnClickListener {
+                    filter = chipFilter[i]
+                    refresh()
+                }
+            }
+            chips.add(t)
+            chipRow.addView(t)
+        }
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(input)
+            addView(chipScroll)
+            addView(listView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpPx(320)))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.tgfwd_title)
+            .setView(col)
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        val debounce = Runnable {
+            val q = input.text.toString().trim()
+            if (q.length >= 3) {
+                backend?.searchChats(q) { found ->
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed || !dialog.isShowing) return@runOnUiThread
+                        remote = found
+                        refresh()
+                    }
+                }
+            }
+        }
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(e: android.text.Editable?) {
+                refresh()
+                input.removeCallbacks(debounce)
+                input.postDelayed(debounce, 500)
+            }
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+        })
+        listView.setOnItemClickListener { _, _, position, _ ->
+            val chat = shown.getOrNull(position) ?: return@setOnItemClickListener
+            dialog.dismiss()
+            if (chat.kind == "forum") pickTopic(chat, onPicked) else onPicked(chat, 0L)
+        }
+        refresh()
+    }
+
+    private fun pickTopic(chat: TgChat, onPicked: (TgChat, Long) -> Unit) {
+        backend?.loadTopics(chat.id) { topics ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (topics.isEmpty()) {
+                    onPicked(chat, 0L)
+                    return@runOnUiThread
+                }
+                val names = listOf(getString(R.string.tgfwd_general)) + topics.map { it.name }
+                AlertDialog.Builder(this)
+                    .setTitle(chat.title)
+                    .setItems(names.toTypedArray()) { _, which -> onPicked(chat, if (which == 0) 0L else topics[which - 1].id) }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
     }
 
     private fun sendAttachment(uri: Uri) {

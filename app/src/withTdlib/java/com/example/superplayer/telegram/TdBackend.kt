@@ -200,7 +200,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         c.send(function) { result -> onResult(result) }
     }
 
-    private fun applyTopic(request: TdApi.SendMessage, topicId: Long) {
+    private fun applyTopic(request: Any, topicId: Long) {
         if (topicId == 0L) return
         try {
             request.javaClass.getField("messageThreadId").set(request, topicId)
@@ -369,29 +369,138 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     }
 
     override fun loadChats(onDone: (List<TgChat>) -> Unit) {
-        send(TdApi.GetChats(TdApi.ChatListMain(), 200)) { result ->
-            if (result is TdApi.Chats) {
-                val list = result.chatIds.toList().mapNotNull { id ->
-                    val chat = chats[id] ?: return@mapNotNull null
-                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L, (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount, chat.photo?.small?.id ?: 0)
-                }
-                onDone(list)
-            } else {
-                onDone(emptyList())
+        val c = client
+        if (c == null) {
+            onDone(emptyList())
+            return
+        }
+        // Telegram solo manda los chats que se le piden: hay que ir cargando la lista (principal y archivados) hasta el final.
+        val all = java.util.LinkedHashMap<Long, TgChat>()
+        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun finish() {
+            if (!finished.compareAndSet(false, true)) return
+            onDone(all.values.toList())
+        }
+        fun snapshot(id: Long) {
+            val chat = chats[id] ?: return
+            if (!all.containsKey(id)) all[id] = tgChatOf(chat)
+        }
+        fun fetch(list: TdApi.ChatList, next: () -> Unit) {
+            c.send(TdApi.GetChats(list, 1000)) { r ->
+                if (r is TdApi.Chats) synchronized(all) { r.chatIds.forEach { snapshot(it) } }
+                next()
             }
         }
+        fun loadAll(list: TdApi.ChatList, round: Int, next: () -> Unit) {
+            if (round >= 30) {
+                fetch(list, next)
+                return
+            }
+            c.send(TdApi.LoadChats(list, 100)) { r ->
+                if (r is TdApi.Ok) loadAll(list, round + 1, next) else fetch(list, next)
+            }
+        }
+        // Si Telegram tarda demasiado, se enseña lo que ya haya (sin dejar la pantalla en blanco).
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (!finished.get()) {
+                synchronized(all) { chats.keys.toList().forEach { snapshot(it) } }
+                finish()
+            }
+        }, 25_000)
+        loadAll(TdApi.ChatListMain(), 0) {
+            loadAll(TdApi.ChatListArchive(), 0) { finish() }
+        }
+    }
+
+    override fun loadChat(chatId: Long, onDone: (TgChat?) -> Unit) {
+        val known = chats[chatId]
+        if (known != null) {
+            onDone(tgChatOf(known))
+            return
+        }
+        sendQuiet(TdApi.GetChat(chatId)) { r -> onDone(if (r is TdApi.Chat) tgChatOf(r) else null) }
+    }
+
+    override fun forwardMessage(fromChatId: Long, messageId: Long, toChatId: Long, topicId: Long, onDone: (Boolean) -> Unit) {
+        val req = newRequest(
+            "ForwardMessages",
+            "chatId" to toChatId, "fromChatId" to fromChatId, "messageIds" to longArrayOf(messageId),
+            "sendCopy" to false, "removeCaption" to false
+        )
+        if (req == null) {
+            onDone(false)
+            return
+        }
+        applyTopic(req, topicId)
+        send(req) { r -> onDone(r is TdApi.Messages) }
+    }
+
+    override fun messageLink(chatId: Long, messageId: Long, onDone: (String?) -> Unit) {
+        val req = newRequest(
+            "GetMessageLink",
+            "chatId" to chatId, "messageId" to messageId, "mediaTimestamp" to 0, "forAlbum" to false, "inMessageThread" to false
+        )
+        if (req == null) {
+            onDone(null)
+            return
+        }
+        sendQuiet(req) { r -> onDone((field(r, "link") as? String)?.ifEmpty { null }) }
+    }
+
+    override fun markRead(chatId: Long, onDone: (Boolean) -> Unit) {
+        val lastId = chats[chatId]?.lastMessage?.id ?: 0L
+        if (lastId == 0L) {
+            onDone(false)
+            return
+        }
+        val req = newRequest("ViewMessages", "chatId" to chatId, "messageIds" to longArrayOf(lastId), "forceRead" to true)
+        if (req == null) {
+            onDone(false)
+            return
+        }
+        sendQuiet(req) { r -> onDone(r is TdApi.Ok) }
+    }
+
+    override fun leaveChat(chatId: Long, onDone: (Boolean) -> Unit) {
+        send(TdApi.LeaveChat(chatId)) { r -> onDone(r is TdApi.Ok) }
+    }
+
+    override fun editMessage(chatId: Long, messageId: Long, text: String, onDone: (Boolean) -> Unit) {
+        val content = TdApi.InputMessageText()
+        content.text = TdApi.FormattedText(text, arrayOf<TdApi.TextEntity>())
+        val req = newRequest("EditMessageText", "chatId" to chatId, "messageId" to messageId, "inputMessageContent" to content)
+        if (req == null) {
+            onDone(false)
+            return
+        }
+        send(req) { r -> onDone(r is TdApi.Message) }
     }
 
     private val linkRegex = Regex("(?:https?://|tg://)[^\\s<>\"']+|(?<![\\w/@.])t\\.me/[^\\s<>\"']+")
 
     override fun loadHistory(chatId: Long, chatTitle: String, fromMessageId: Long, offset: Int, onDone: (List<TgMessage>) -> Unit) {
-        send(TdApi.GetChatHistory(chatId, fromMessageId, offset, 50, false)) { result ->
-            if (result is TdApi.Messages) {
-                onDone(result.messages.mapNotNull { toMessage(it, chatTitle) })
-            } else {
-                onDone(emptyList())
+        // La primera petición a un chat sin caché suele devolver muy pocos mensajes (o ninguno): se repite un poco.
+        val acc = ArrayList<TdApi.Message>()
+        fun attempt(n: Int, from: Long, off: Int) {
+            send(TdApi.GetChatHistory(chatId, from, off, 50, false)) { result ->
+                var gotAny = false
+                if (result is TdApi.Messages) {
+                    for (m in result.messages) {
+                        gotAny = true
+                        if (acc.none { it.id == m.id }) acc.add(m)
+                    }
+                }
+                val retry = acc.size < 20 && n < 3 && (gotAny || (acc.isEmpty() && n < 2 && fromMessageId == 0L))
+                if (retry) {
+                    val next = acc.lastOrNull()?.id ?: from
+                    val nextOff = if (acc.isEmpty()) off else 0
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ attempt(n + 1, next, nextOff) }, 400)
+                } else {
+                    onDone(acc.mapNotNull { toMessage(it, chatTitle) })
+                }
             }
         }
+        attempt(0, fromMessageId, offset)
     }
 
     private fun toMessage(m: TdApi.Message, chatTitle: String): TgMessage? {
@@ -593,7 +702,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
 
     override fun searchChats(query: String, onDone: (List<TgChat>) -> Unit) {
         val ids = java.util.LinkedHashSet<Long>()
-        val remaining = java.util.concurrent.atomic.AtomicInteger(2)
+        val remaining = java.util.concurrent.atomic.AtomicInteger(3)
         fun finish() {
             if (remaining.decrementAndGet() != 0) return
             val missing = ids.filter { chats[it] == null }
@@ -623,6 +732,15 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         send(searchOwn) { r ->
             if (r is TdApi.Chats) synchronized(ids) { r.chatIds.forEach { ids.add(it) } }
             finish()
+        }
+        val onServer = newRequest("SearchChatsOnServer", "query" to query, "limit" to 30)
+        if (onServer == null) {
+            finish()
+        } else {
+            sendQuiet(onServer) { r ->
+                if (r is TdApi.Chats) synchronized(ids) { r.chatIds.forEach { ids.add(it) } }
+                finish()
+            }
         }
         val searchPublic = TdApi.SearchPublicChats()
         searchPublic.query = query
