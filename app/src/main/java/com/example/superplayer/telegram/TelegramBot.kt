@@ -8,7 +8,8 @@ import java.net.URL
 import java.net.URLEncoder
 
 /** Botón de un bot: "cb" (de la botonera bajo el mensaje), "url" (enlace) o "txt" (teclado de respuesta). */
-data class TgButton(val text: String, val kind: String, val data: String)
+/** [row]: fila del teclado en la que va el botón (como en Telegram). */
+data class TgButton(val text: String, val kind: String, val data: String, val row: Int = 0)
 
 /** Un mensaje guardado de un canal o grupo donde está el bot. */
 data class TgMessage(

@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Acestream+</string>
+    <string name="list_slot_2">Lista 2</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -473,4 +473,6 @@
     <string name="tgacc_view_photo">🖼 Ver foto</string>
     <string name="tgacc_unread">%1$d sin leer</string>
     <string name="tgacc_me">Tú</string>
+    <string name="tgacc_btn_unsupported">Este botón no es compatible con la app</string>
+    <string name="tgacc_no_text">(sin texto)</string>
 </resources>

@@ -1339,3 +1339,9 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 ### Telegram MP4: streaming más robusto
 - `readBytes` ya no reinicia la descarga de TDLib en cada trozo de 512 KB (solo si la posición no está cubierta por la petición viva o ésta se paró), y si `GetFile` tarda no corta la conexión: reintenta.
 - Si no llegan datos en 40 s se muestra un aviso "Telegram sin datos: pos/tam/off/pref" para diagnosticar.
+
+### Telegram: chat estilo original
+- Los mensajes (bots, chats privados, grupos y "ver todos los mensajes" de canales) salen como burbujas: los tuyos a la derecha, los demás a la izquierda, con nombre (en grupos), foto/miniatura dentro, archivo, texto con enlaces en azul y hora.
+- Los botones en línea de los bots se ven directamente debajo del mensaje, en sus filas originales (`TgButton.row`); callback, enlaces (los de t.me se abren dentro) y los no compatibles avisan.
+- El teclado de respuesta del bot sale encima de la caja de texto; el botón ⌨ lo oculta/muestra.
+- Pulsar una burbuja con archivo o enlaces abre sus acciones (reproducir, ver foto…); mantener = responder/copiar/borrar.

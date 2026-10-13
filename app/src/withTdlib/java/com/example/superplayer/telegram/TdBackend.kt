@@ -444,15 +444,15 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         }
         val buttons = ArrayList<TgButton>()
         when (val rm = m.replyMarkup) {
-            is TdApi.ReplyMarkupInlineKeyboard -> for (row in rm.rows) for (b in row) {
+            is TdApi.ReplyMarkupInlineKeyboard -> rm.rows.forEachIndexed { ri, row -> for (b in row) {
                 when (val bt = b.type) {
                     is TdApi.InlineKeyboardButtonTypeCallback ->
-                        buttons.add(TgButton(b.text, "cb", android.util.Base64.encodeToString(bt.data, android.util.Base64.NO_WRAP)))
-                    is TdApi.InlineKeyboardButtonTypeUrl -> buttons.add(TgButton(b.text, "url", bt.url))
-                    else -> {}
+                        buttons.add(TgButton(b.text, "cb", android.util.Base64.encodeToString(bt.data, android.util.Base64.NO_WRAP), ri))
+                    is TdApi.InlineKeyboardButtonTypeUrl -> buttons.add(TgButton(b.text, "url", bt.url, ri))
+                    else -> buttons.add(TgButton(b.text, "na", "", ri))
                 }
-            }
-            is TdApi.ReplyMarkupShowKeyboard -> for (row in rm.rows) for (b in row) buttons.add(TgButton(b.text, "txt", b.text))
+            } }
+            is TdApi.ReplyMarkupShowKeyboard -> rm.rows.forEachIndexed { ri, row -> for (b in row) buttons.add(TgButton(b.text, "txt", b.text, ri)) }
             else -> {}
         }
         val chatKind = chats[m.chatId]?.let { kindOf(it) } ?: "private"

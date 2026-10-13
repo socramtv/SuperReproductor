@@ -34,6 +34,8 @@ import com.example.superplayer.data.MovieInfo
 import com.example.superplayer.data.PlaylistRepository
 import com.example.superplayer.databinding.ActivityTelegramBinding
 import com.example.superplayer.databinding.ItemTelegramBinding
+import com.example.superplayer.databinding.ItemTgBubbleBinding
+import com.example.superplayer.databinding.ItemTgLoadmoreBinding
 import com.example.superplayer.databinding.ItemTgMediaBinding
 import com.example.superplayer.model.Stream
 import com.example.superplayer.player.PlayerActivity
@@ -98,6 +100,8 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityTelegramBinding
     private lateinit var adapter: RowAdapter
+    private lateinit var chatAdapter: ChatAdapter
+    private var kbHidden = false
     private lateinit var backCallback: OnBackPressedCallback
     private var backend: TgAccountBackend? = null
     private var state = TgAuthState.STARTING
@@ -171,6 +175,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 ?.let { TgMessage.fromJson(it) }
         }
         adapter = RowAdapter()
+        chatAdapter = ChatAdapter()
         mediaAdapter = MediaAdapter()
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
@@ -190,6 +195,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         binding.tgSend.setOnClickListener { sendTyped() }
         binding.tgAttach.setOnClickListener { attachLauncher.launch("*/*") }
+        binding.tgKbdToggle.setOnClickListener {
+            kbHidden = !kbHidden
+            updateKeyboard()
+        }
         binding.tgReplyLabel.setOnClickListener { setReply(null) }
         setupSearchTabs()
 
@@ -299,13 +308,24 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun useList() {
         if (!usingGrid && binding.recyclerView.adapter === adapter) return
         usingGrid = false
+        binding.recyclerView.background = null
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
+    }
+
+    /** Conversación como burbujas, igual que en Telegram. */
+    private fun useChat() {
+        if (!usingGrid && binding.recyclerView.adapter === chatAdapter) return
+        usingGrid = false
+        binding.recyclerView.setBackgroundResource(R.color.tg_chat_bg)
+        binding.recyclerView.layoutManager = LinearLayoutManager(this)
+        binding.recyclerView.adapter = chatAdapter
     }
 
     private fun useGrid() {
         if (usingGrid && binding.recyclerView.adapter === mediaAdapter) return
         usingGrid = true
+        binding.recyclerView.background = null
         val dp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
         val span = (dp / 170f).toInt().coerceIn(2, 6)
         val lm = GridLayoutManager(this, span)
@@ -717,6 +737,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         jumpTarget = messageId
         initialFrom = messageId
         setReply(null)
+        kbHidden = false
+        updateKeyboard()
         title = chat.title
         searchResults = null
         if (startParam.isNotEmpty()) binding.tgInput.setText("/start $startParam")
@@ -833,26 +855,20 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun renderMessages() {
         binding.inputBar.visibility = View.VISIBLE
+        updateKeyboard()
         binding.tgSearchTabs.visibility = View.GONE
         updateBack()
         if (mediaMode) {
             renderMedia()
             return
         }
-        useList()
-        val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-        val rows = ArrayList<Row>()
-        if (lastBatchFull) {
-            rows.add(Row(getString(R.string.tgacc_load_more), "") { loadMore() })
-        }
+        useChat()
         // Como en Telegram: lo más antiguo arriba y lo más nuevo abajo.
-        messages.reversed().forEach { m ->
-            rows.add(Row(messageTitle(m), messageSubtitle(m, df), null, null, { onMessageLong(m) }, m.thumbId) { onMessageClick(m) })
-        }
-        adapter.submit(rows)
+        val ordered = messages.reversed()
+        keepFocus { chatAdapter.submit(ordered, lastBatchFull) }
         binding.emptyView.text = getString(R.string.tg_empty_chat)
-        binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
-        val last = rows.size - 1
+        binding.emptyView.visibility = if (ordered.isEmpty() && !lastBatchFull) View.VISIBLE else View.GONE
+        val last = ordered.size + (if (lastBatchFull) 1 else 0) - 1
         val jump = jumpTarget
         if (jump != 0L && last >= 0) {
             val idx = messages.reversed().indexOfFirst { it.messageId == jump }
@@ -1054,6 +1070,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 runOnUiThread {
                     thumbPaths[id] = done
                     adapter.thumbLoaded(id)
+                    chatAdapter.thumbLoaded(id)
                     mediaAdapter.thumbLoaded(id)
                 }
             }
@@ -1627,29 +1644,104 @@ class TelegramAccountActivity : AppCompatActivity() {
         val list = m.buttons
         AlertDialog.Builder(this)
             .setTitle(R.string.tgacc_buttons_title)
-            .setItems(list.map { it.text }.toTypedArray()) { _, which ->
-                val b = list[which]
-                when (b.kind) {
-                    "cb" -> backend?.pressButton(m.chatId, m.messageId, b.data) { answer, url ->
-                        runOnUiThread {
-                            if (isFinishing || isDestroyed) return@runOnUiThread
-                            if (url != null) openLink(url)
-                            if (answer != null) {
-                                AlertDialog.Builder(this)
-                                    .setTitle(R.string.tgacc_bot_answer)
-                                    .setMessage(answer)
-                                    .setPositiveButton(android.R.string.ok, null)
-                                    .show()
-                            }
-                            scheduleReload(1200)
-                        }
-                    }
-                    "url" -> openLink(b.data)
-                    else -> sendToCurrentChat(b.data)
-                }
-            }
+            .setItems(list.map { it.text }.toTypedArray()) { _, which -> pressInline(m, list[which]) }
             .setNegativeButton(R.string.channel_check_close, null)
             .show()
+    }
+
+    /** Pulsa un botón de un bot (en línea bajo el mensaje o de la lista de botones). */
+    private fun pressInline(m: TgMessage, b: com.example.superplayer.telegram.TgButton) {
+        when (b.kind) {
+            "cb" -> backend?.pressButton(m.chatId, m.messageId, b.data) { answer, url ->
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (url != null) { if (isTgLink(url)) openTgLink(url) else openLink(url) }
+                    if (answer != null) Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
+                    scheduleReload(1000)
+                }
+            }
+            "url" -> if (isTgLink(b.data)) openTgLink(b.data) else openLink(b.data)
+            "txt" -> sendToCurrentChat(b.data)
+            else -> Toast.makeText(this, R.string.tgacc_btn_unsupported, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun dpPx(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun makeBotButton(text: String): android.widget.Button = android.widget.Button(this).apply {
+        this.text = text
+        isAllCaps = false
+        textSize = 14f
+        maxLines = 2
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        minHeight = 0
+        minimumHeight = dpPx(40)
+        minWidth = 0
+        minimumWidth = 0
+        setPadding(dpPx(8), dpPx(6), dpPx(8), dpPx(6))
+        setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.on_background))
+        setBackgroundResource(R.drawable.bg_tg_inline_btn)
+        stateListAnimator = null
+        isFocusable = true
+    }
+
+    /** Pinta los botones en línea de un mensaje (filas como las manda el bot) debajo de la burbuja. */
+    private fun fillInlineButtons(container: LinearLayout, m: TgMessage) {
+        container.removeAllViews()
+        val inline = m.buttons.filter { it.kind != "txt" }
+        if (inline.isEmpty()) {
+            container.visibility = View.GONE
+            return
+        }
+        container.visibility = View.VISIBLE
+        for ((_, rowButtons) in inline.groupBy { it.row }.toSortedMap()) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            for (b in rowButtons) {
+                val label = when (b.kind) {
+                    "url" -> "↗ " + b.text
+                    else -> b.text
+                }
+                val btn = makeBotButton(label)
+                btn.setOnClickListener { pressInline(m, b) }
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                lp.setMargins(dpPx(2), dpPx(2), dpPx(2), dpPx(2))
+                row.addView(btn, lp)
+            }
+            container.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+    }
+
+    /** Teclado de respuesta del bot, encima de la caja de texto (como en Telegram), con el botón ⌨ para ocultarlo. */
+    private fun updateKeyboard() {
+        val kb = if (currentChat == null || searching) emptyList()
+        else messages.take(15).firstOrNull { m -> m.buttons.any { it.kind == "txt" } }?.buttons?.filter { it.kind == "txt" }.orEmpty()
+        binding.tgKbdToggle.visibility = if (kb.isEmpty()) View.GONE else View.VISIBLE
+        val panel = binding.tgKeyboard
+        if (kb.isEmpty() || kbHidden) {
+            binding.tgKeyboardScroll.visibility = View.GONE
+            panel.removeAllViews()
+            return
+        }
+        panel.removeAllViews()
+        val rows = kb.groupBy { it.row }.toSortedMap()
+        for ((_, rowButtons) in rows) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            for (b in rowButtons) {
+                val btn = makeBotButton(b.text)
+                btn.setOnClickListener {
+                    scrollToEnd = true
+                    sendToCurrentChat(b.data)
+                }
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                lp.setMargins(dpPx(2), dpPx(2), dpPx(2), dpPx(2))
+                row.addView(btn, lp)
+            }
+            panel.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val lp = binding.tgKeyboardScroll.layoutParams
+        lp.height = if (rows.size > 4) dpPx(4 * 46) else ViewGroup.LayoutParams.WRAP_CONTENT
+        binding.tgKeyboardScroll.layoutParams = lp
+        binding.tgKeyboardScroll.visibility = View.VISIBLE
     }
 
     private fun openLink(url: String) {
@@ -1664,10 +1756,10 @@ class TelegramAccountActivity : AppCompatActivity() {
     // Acciones
     // -----------------------------------------------------------------
 
-    private fun onMessageClick(m: TgMessage) {
+    private fun onMessageClick(m: TgMessage, withButtons: Boolean = true) {
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
-        if (m.buttons.isNotEmpty()) {
+        if (withButtons && m.buttons.isNotEmpty()) {
             labels.add(getString(R.string.tgacc_buttons, m.buttons.size))
             actions.add { showButtons(m) }
         }
@@ -1958,6 +2050,118 @@ class TelegramAccountActivity : AppCompatActivity() {
         PlayerActivity.pendingStream = stream
         PlayerActivity.pendingChannelList = emptyList()
         startActivity(Intent(this, PlayerActivity::class.java))
+    }
+
+    /** La conversación como burbujas: lo tuyo a la derecha, lo demás a la izquierda, con foto, hora y botones del bot debajo. */
+    private inner class ChatAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        private var items: List<TgMessage?> = emptyList() // null = "cargar mensajes más antiguos"
+        private val linkColor = android.graphics.Color.parseColor("#3D8BFF")
+
+        fun submit(list: List<TgMessage>, header: Boolean) {
+            val old = items
+            val now = ArrayList<TgMessage?>(list.size + 1)
+            if (header) now.add(null)
+            now.addAll(list)
+            if (old.isEmpty() || now.isEmpty()) {
+                items = now
+                notifyDataSetChanged()
+                return
+            }
+            val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+                override fun getOldListSize() = old.size
+                override fun getNewListSize() = now.size
+                override fun areItemsTheSame(o: Int, n: Int) = old[o]?.messageId == now[n]?.messageId
+                override fun areContentsTheSame(o: Int, n: Int) = old[o] == now[n]
+            })
+            items = now
+            diff.dispatchUpdatesTo(this)
+        }
+
+        fun thumbLoaded(id: Int) {
+            items.forEachIndexed { i, m -> if (m != null && m.thumbId == id) notifyItemChanged(i) }
+        }
+
+        override fun getItemViewType(position: Int) = if (items[position] == null) 0 else 1
+        override fun getItemCount() = items.size
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val inf = LayoutInflater.from(parent.context)
+            return if (viewType == 0) HeaderVH(ItemTgLoadmoreBinding.inflate(inf, parent, false))
+            else BubbleVH(ItemTgBubbleBinding.inflate(inf, parent, false))
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            val m = items[position]
+            if (holder is HeaderVH) {
+                holder.b.tgLoadMore.setText(R.string.tgacc_load_more)
+                holder.b.tgLoadMore.setOnClickListener { loadMore() }
+                return
+            }
+            if (m == null || holder !is BubbleVH) return
+            val b = holder.b
+            val out = m.outgoing
+            // Lado y color de la burbuja
+            val lp = b.tgbColumn.layoutParams as android.widget.FrameLayout.LayoutParams
+            lp.gravity = if (out) android.view.Gravity.END else android.view.Gravity.START
+            lp.marginStart = if (out) dpPx(48) else 0
+            lp.marginEnd = if (out) 0 else dpPx(48)
+            b.tgbColumn.layoutParams = lp
+            b.tgbBubble.setBackgroundResource(if (out) R.drawable.bg_tg_bubble_out else R.drawable.bg_tg_bubble_in)
+            // Quién lo dice (solo en grupos)
+            val kind = currentChat?.kind
+            val showSender = !out && m.sender.isNotEmpty() && (kind == "group" || kind == "forum")
+            b.tgbSender.visibility = if (showSender) View.VISIBLE else View.GONE
+            b.tgbSender.text = m.sender
+            // Imagen / miniatura
+            if (m.thumbId != 0) {
+                b.tgbImageFrame.visibility = View.VISIBLE
+                val path = thumbPaths[m.thumbId]
+                if (path != null) b.tgbImage.load(File(path)) else {
+                    b.tgbImage.setImageDrawable(null)
+                    requestThumb(m.thumbId)
+                }
+                b.tgbPlay.visibility = if (m.kind == "video" || m.kind == "animation") View.VISIBLE else View.GONE
+            } else {
+                b.tgbImageFrame.visibility = View.GONE
+                b.tgbImage.setImageDrawable(null)
+            }
+            // Archivo
+            val isImage = m.kind == "photo" || (m.mime ?: "").startsWith("image/")
+            if (m.fileId != null && !(isImage && m.thumbId != 0) && m.kind != "other") {
+                val name = m.fileName ?: when (m.kind) { "audio" -> "Audio"; "voice" -> "Nota de voz"; "video" -> "Vídeo"; else -> "Archivo" }
+                val size = if (m.size > 0) String.format(java.util.Locale.US, "  (%.1f MB)", m.size / 1048576.0) else ""
+                b.tgbFile.text = kindIcon(m) + " " + name + size
+                b.tgbFile.visibility = View.VISIBLE
+            } else {
+                b.tgbFile.visibility = View.GONE
+            }
+            // Texto, con los enlaces en azul
+            val text = m.text
+            if (text.isBlank()) {
+                b.tgbText.visibility = if (m.fileId == null && m.thumbId == 0) View.VISIBLE else View.GONE
+                b.tgbText.text = getString(R.string.tgacc_no_text)
+            } else {
+                val sp = android.text.SpannableString(text)
+                for (u in reUrlInText.findAll(text)) {
+                    sp.setSpan(android.text.style.ForegroundColorSpan(linkColor), u.range.first, u.range.last + 1, 0)
+                }
+                b.tgbText.text = sp
+                b.tgbText.visibility = View.VISIBLE
+            }
+            // Hora
+            val ms = m.date * 1000L
+            val f = if (android.text.format.DateUtils.isToday(ms)) "HH:mm" else "dd/MM HH:mm"
+            b.tgbTime.text = java.text.SimpleDateFormat(f, java.util.Locale.getDefault()).format(Date(ms))
+            // Pulsar / mantener
+            val hasAction = m.fileId != null || m.links.isNotEmpty()
+            b.tgbBubble.setOnClickListener { if (hasAction) onMessageClick(m, withButtons = false) }
+            b.tgbBubble.setOnLongClickListener { onMessageLong(m); true }
+            // Botones del bot, debajo
+            fillInlineButtons(b.tgbButtons, m)
+        }
+
+        inner class HeaderVH(val b: ItemTgLoadmoreBinding) : RecyclerView.ViewHolder(b.root)
+        inner class BubbleVH(val b: ItemTgBubbleBinding) : RecyclerView.ViewHolder(b.root)
     }
 
     private inner class RowAdapter : RecyclerView.Adapter<RowAdapter.VH>() {

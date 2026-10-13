@@ -69,6 +69,20 @@
         android:background="@color/surface_dark"
         android:visibility="gone">
 
+        <!-- Teclado de respuesta del bot (botones que escriben un texto) -->
+        <ScrollView
+            android:id="@+id/tgKeyboardScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/tgKeyboard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </ScrollView>
+
         <TextView
             android:id="@+id/tgReplyLabel"
             android:layout_width="match_parent"
@@ -93,6 +107,15 @@
                 android:layout_height="wrap_content"
                 android:minWidth="0dp"
                 android:text="📎" />
+
+            <Button
+                android:id="@+id/tgKbdToggle"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:text="⌨"
+                android:visibility="gone" />
 
             <EditText
                 android:id="@+id/tgInput"

@@ -12,4 +12,8 @@
     <color name="on_background">#F5F5F7</color>
     <color name="on_surface_muted">#9A9AB0</color>
     <color name="list_slot_border">#33FFFFFF</color>
+    <color name="tg_bubble_in">#232538</color>
+    <color name="tg_bubble_out">#5A2E25</color>
+    <color name="tg_chat_bg">#0B0C18</color>
+    <color name="tg_inline_btn">#40000000</color>
 </resources>

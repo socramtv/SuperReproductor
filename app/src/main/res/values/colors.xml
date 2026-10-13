@@ -38,4 +38,10 @@
          en claro, un poco de negro sobre el botón blanco; en oscuro (ver
          values-night) el blanco semitransparente de siempre. -->
     <color name="list_slot_border">#1F000000</color>
+
+    <!-- Burbujas del chat de Telegram -->
+    <color name="tg_bubble_in">#FFFFFF</color>
+    <color name="tg_bubble_out">#FFE3DA</color>
+    <color name="tg_chat_bg">#E9ECF3</color>
+    <color name="tg_inline_btn">#26000000</color>
 </resources>
