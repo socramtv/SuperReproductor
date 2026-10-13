@@ -667,11 +667,20 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         return out
     }
 
+    /** Última petición de descarga por archivo: [inicio, fin, instante]. Evita reiniciar la descarga de TDLib en cada trozo. */
+    private val lastRequest = java.util.concurrent.ConcurrentHashMap<Int, LongArray>()
+
     override fun readBytes(fileId: Int, pos: Long, maxLen: Int, cancelled: () -> Boolean): ByteArray? {
         val deadline = System.currentTimeMillis() + 40_000
-        var requestedAt = -1L
+        var last: TdApi.File? = null
         while (System.currentTimeMillis() < deadline && !cancelled()) {
-            val f = getFileBlocking(fileId) ?: return null
+            val f = getFileBlocking(fileId)
+            if (f == null) {
+                // TDLib ocupado: no cortar la conexión, reintentar.
+                try { Thread.sleep(200) } catch (e: InterruptedException) { return null }
+                continue
+            }
+            last = f
             val l = f.local
             val total = if (f.size > 0) f.size else f.expectedSize
             if (l.path.isNotEmpty()) {
@@ -683,7 +692,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
                 }
                 if (available > 0) {
                     val n = minOf(available, maxLen.toLong()).toInt()
-                    return try {
+                    val data = try {
                         java.io.RandomAccessFile(l.path, "r").use { raf ->
                             raf.seek(pos)
                             val buf = ByteArray(n)
@@ -698,14 +707,26 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
                     } catch (e: Exception) {
                         null
                     }
+                    if (data != null && data.isNotEmpty()) return data
                 }
             }
-            // Hay que pedir a TDLib que descargue desde esta posición (si no lo está haciendo ya).
-            if (requestedAt != pos || !l.isDownloadingActive) {
-                requestedAt = pos
+            // Pedir a TDLib que descargue desde aquí solo si no hay ya una petición viva que cubra esta posición.
+            val now = System.currentTimeMillis()
+            val req = lastRequest[fileId]
+            val covered = req != null && pos >= req[0] && pos < req[1]
+            val stale = req == null || now - req[2] > 2500
+            val need = !covered || (!l.isDownloadingActive && !l.isDownloadingCompleted && stale)
+            if (need) {
+                lastRequest[fileId] = longArrayOf(pos, pos + STREAM_WINDOW, now)
                 send(TdApi.DownloadFile(fileId, 32, pos, STREAM_WINDOW, false))
             }
             try { Thread.sleep(120) } catch (e: InterruptedException) { return null }
+        }
+        if (!cancelled()) {
+            val l = last?.local
+            TgStreamServer.reportProblem(
+                "pos=$pos tam=${last?.size} off=${l?.downloadOffset} pref=${l?.downloadedPrefixSize} act=${l?.isDownloadingActive} ok=${l?.canBeDownloaded}"
+            )
         }
         return null
     }

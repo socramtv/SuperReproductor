@@ -1866,6 +1866,11 @@ class TelegramAccountActivity : AppCompatActivity() {
         val audio = m.kind == "audio" || m.kind == "voice" || (m.mime ?: "").startsWith("audio/")
         val mime = m.mime ?: if (audio) "audio/mpeg" else "video/mp4"
         val url = TgStreamServer.urlFor(b, fileId, m.size, mime)
+        val appCtx = applicationContext
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        TgStreamServer.onProblem = { msg ->
+            handler.post { android.widget.Toast.makeText(appCtx, "Telegram sin datos: $msg", android.widget.Toast.LENGTH_LONG).show() }
+        }
         open(Stream(name = name, type = if (audio) "MP3" else "MP4", url = url, icon = null, category = "Telegram"))
     }
 

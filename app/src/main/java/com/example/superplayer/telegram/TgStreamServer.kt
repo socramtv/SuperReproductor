@@ -20,6 +20,13 @@ object TgStreamServer {
     /** Última conexión abierta para cada archivo: las anteriores se abandonan (si no, pelean entre sí por la descarga y el vídeo se queda "conectando"). */
     private val generations = java.util.concurrent.ConcurrentHashMap<Int, java.util.concurrent.atomic.AtomicLong>()
 
+    /** Aviso de diagnóstico cuando no llegan datos de Telegram (lo muestra la pantalla de Telegram). */
+    @Volatile var onProblem: ((String) -> Unit)? = null
+
+    fun reportProblem(msg: String) {
+        try { onProblem?.invoke(msg) } catch (e: Exception) { }
+    }
+
     /** Arranca el servidor si hace falta y devuelve la URL de reproducción. */
     @Synchronized
     fun urlFor(b: TgAccountBackend, fileId: Int, size: Long, mime: String?): String {

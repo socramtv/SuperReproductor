@@ -1335,3 +1335,7 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 
 ## Telegram: vídeos referenciados por enlace
 - Una imagen (o un texto) con un enlace a otro mensaje de Telegram (t.me/c/<chat>/<mensaje>, t.me/c/<chat>/<tema>/<mensaje>, t.me/nombre/<mensaje>) se trata como un vídeo: la imagen es la miniatura, se agrupa con sus versiones o capítulos y, al pulsar Ver, la app busca el mensaje enlazado y reproduce su vídeo (hay que estar unido a ese canal o grupo).
+
+### Telegram MP4: streaming más robusto
+- `readBytes` ya no reinicia la descarga de TDLib en cada trozo de 512 KB (solo si la posición no está cubierta por la petición viva o ésta se paró), y si `GetFile` tarda no corta la conexión: reintenta.
+- Si no llegan datos en 40 s se muestra un aviso "Telegram sin datos: pos/tam/off/pref" para diagnosticar.
