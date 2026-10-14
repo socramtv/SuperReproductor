@@ -143,6 +143,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** Pestaña de la lista de chats: 0 favoritos, 1 todos, 2 canales, 3 grupos, 4 bots, 5 personas. */
     private var chatFilter = 1
     private val VIDEO_TAB = 7
+    /** Pestaña Vídeos: null = lista de carpetas, "" = favoritos, otro = carpeta propia. */
+    private var videoFolder: String? = null
     private val reloadRunnable = Runnable { refreshNow() }
 
     /** Vuelve a pedir lo que se está viendo: chats, temas o mensajes (también lo usa el botón de actualizar). */
@@ -663,7 +665,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun updateBack() {
-        backCallback.isEnabled = searching || currentChat != null
+        backCallback.isEnabled = searching || currentChat != null || (chatFilter == VIDEO_TAB && videoFolder != null)
     }
 
     private fun goBack() {
@@ -678,6 +680,9 @@ class TelegramAccountActivity : AppCompatActivity() {
             currentChat?.let { showTopics(it) }
         } else if (currentChat != null) {
             closeChat()
+        } else if (chatFilter == VIDEO_TAB && videoFolder != null) {
+            videoFolder = null
+            renderChats()
         } else {
             finish()
         }
@@ -697,6 +702,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
                 if (chatFilter != tab.position) {
                     chatFilter = tab.position
+                    videoFolder = null
                     if (currentChat == null && !searching) renderChats()
                 }
             }
@@ -1410,9 +1416,17 @@ class TelegramAccountActivity : AppCompatActivity() {
             col.addView(tv)
         }
         var dialog: AlertDialog? = null
+        // Capítulos en orden (una versión por capítulo; la elegida si hay varias): para el "siguiente capítulo" automático.
+        fun queueFor(m: TgMessage): List<TgMessage> {
+            if (!series) return emptyList()
+            val byEp = options.mapNotNull { x -> parseEpisode(titleOf(x))?.let { Triple(it.season, it.episode, x) } }
+                .groupBy { it.first to it.second }
+            return byEp.toSortedMap(compareBy<Pair<Int, Int>>({ it.first }, { it.second }))
+                .map { (_, v) -> v.firstOrNull { it.third.messageId == m.messageId }?.third ?: v.first().third }
+        }
         fun play(m: TgMessage) {
             dialog?.dismiss()
-            playVideo(m)
+            playVideo(m, queueFor(m))
         }
         if (series) {
             // Capítulos por temporada: T1, T2…; cada número es un botón.
@@ -1463,6 +1477,14 @@ class TelegramAccountActivity : AppCompatActivity() {
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(dp(16), dp(10), dp(16), dp(8)) }
         })
+        col.addView(android.widget.Button(this).apply {
+            text = getString(R.string.tgfold_add_btn)
+            isAllCaps = false
+            setOnClickListener { addToFolder(options, query, thumbId) }
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(16), 0, dp(16), dp(8)) }
+        })
         val scroll = android.widget.ScrollView(this).apply { addView(col) }
         val isFav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
         dialog = AlertDialog.Builder(this)
@@ -1511,11 +1533,11 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     /** Reproduce siempre directamente (sin descargar antes). */
-    private fun playVideo(m: TgMessage) {
+    private fun playVideo(m: TgMessage, queue: List<TgMessage> = emptyList()) {
         when {
             m.kind == "linkvideo" -> m.links.firstOrNull()?.let { playLinkVideo(it) }
             m.fileId == null -> Toast.makeText(this, R.string.tg_nothing_to_play, Toast.LENGTH_SHORT).show()
-            m.size > 0 -> streamPlay(m)
+            m.size > 0 -> streamPlay(m, queue)
             else -> downloadAndPlay(m) // Telegram no dio el tamaño: no se puede emitir, se descarga solo en este caso
         }
     }
@@ -1541,10 +1563,44 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Pestaña "Vídeos": solo los vídeos marcados como favoritos, en miniaturas (versiones del mismo vídeo juntas). */
     private fun renderVideoFavs() {
+        val f = videoFolder
+        updateBack()
+        if (f == null) renderVideoFolders() else renderVideoCollection(f)
+    }
+
+    /** Inicio de la pestaña Vídeos: favoritos, tus carpetas y "nueva carpeta". */
+    private fun renderVideoFolders() {
+        useList()
+        val rows = ArrayList<Row>()
+        val favCount = TelegramAccountPrefs.videoFavorites(this).size
+        rows.add(Row(getString(R.string.tgfold_favs), getString(R.string.tgfold_count, favCount)) {
+            videoFolder = ""
+            renderVideoFavs()
+        })
+        for (name in TelegramAccountPrefs.videoFolders(this)) {
+            val n = TelegramAccountPrefs.folderVideos(this, name).size
+            rows.add(Row("📁 $name", getString(R.string.tgfold_count, n), null, null, { manageFolder(name) }) {
+                videoFolder = name
+                renderVideoFavs()
+            })
+        }
+        rows.add(Row(getString(R.string.tgfold_new), getString(R.string.tgfold_new_hint)) {
+            promptNewFolder { }
+        })
+        adapter.submit(rows)
+        binding.emptyView.visibility = View.GONE
+        focusItemIfTv()
+    }
+
+    /** Miniaturas de los vídeos de favoritos ([folder] == "") o de una carpeta propia. */
+    private fun renderVideoCollection(folder: String) {
         useGrid()
+        val isFav = folder.isEmpty()
+        title = if (isFav) getString(R.string.tgfold_favs) else "📁 $folder"
+        val entries = if (isFav) TelegramAccountPrefs.videoFavorites(this) else TelegramAccountPrefs.folderVideos(this, folder)
         val items = ArrayList<MediaItem>()
         val groups = LinkedHashMap<String, MutableList<Triple<TgMessage, Int, String>>>()
-        for (o in TelegramAccountPrefs.videoFavorites(this)) {
+        for (o in entries) {
             val m = TgMessage.fromJson(o)
             val q = o.optString("q")
             val name = q.ifEmpty { titleOf(m).ifEmpty { m.chatTitle } }
@@ -1557,16 +1613,126 @@ class TelegramAccountActivity : AppCompatActivity() {
             val q = list[0].third
             val lead = list[0].first
             val name = q.ifEmpty { titleOf(lead).ifEmpty { lead.chatTitle } }
-            items.add(MediaItem(key = "fav:$k", caption = name, meta = lead.chatTitle, thumbFileId = th,
-                badge = if (options.size > 1) "▶ ×${options.size} ★" else "▶ ★", messageId = lead.messageId, query = q,
+            val mark = if (isFav) "★" else "📁"
+            items.add(MediaItem(key = "fav:$folder:$k", caption = name, meta = lead.chatTitle, thumbFileId = th,
+                badge = if (options.size > 1) "▶ ×${options.size} $mark" else "▶ $mark", messageId = lead.messageId, query = q,
                 options = options, pairedImage = th != 0,
-                onLong = { toggleVideoFav(options, q, th) }) { onVideoClick(options, q, th) })
+                onLong = { if (isFav) toggleVideoFav(options, q, th) else removeFromFolder(folder, options, q, th) }) { onVideoClick(options, q, th) })
         }
         mediaAdapter.submit(items)
         binding.emptyView.text = getString(R.string.tgvid_empty)
         binding.emptyView.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
         focusItemIfTv()
     }
+
+    private fun removeFromFolder(folder: String, options: List<TgMessage>, query: String, thumbId: Int) {
+        for (m in options) {
+            if (TelegramAccountPrefs.isInFolder(this, folder, m.chatId, m.messageId)) {
+                TelegramAccountPrefs.toggleInFolder(this, folder, m, query, thumbId)
+            }
+        }
+        Toast.makeText(this, getString(R.string.tgfold_removed, folder), Toast.LENGTH_SHORT).show()
+        if (currentChat == null && chatFilter == VIDEO_TAB && !searching) renderVideoFavs()
+    }
+
+    private fun promptNewFolder(onCreated: (String) -> Unit) {
+        val input = EditText(this).apply {
+            hint = getString(R.string.tgfold_name_hint)
+            isSingleLine = true
+            setPadding(dpPx(20), dpPx(12), dpPx(20), dpPx(12))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tgfold_new)
+            .setView(input)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val name = input.text.toString().trim()
+                if (TelegramAccountPrefs.createVideoFolder(this, name)) {
+                    onCreated(name)
+                    if (currentChat == null && chatFilter == VIDEO_TAB && !searching && videoFolder == null) renderVideoFavs()
+                } else {
+                    Toast.makeText(this, R.string.tgfold_name_error, Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun manageFolder(name: String) {
+        AlertDialog.Builder(this)
+            .setTitle("📁 $name")
+            .setItems(arrayOf(getString(R.string.tgfold_rename), getString(R.string.tgfold_delete))) { _, which ->
+                if (which == 0) {
+                    val input = EditText(this).apply {
+                        setText(name)
+                        setSelection(text.length)
+                        isSingleLine = true
+                        setPadding(dpPx(20), dpPx(12), dpPx(20), dpPx(12))
+                    }
+                    AlertDialog.Builder(this)
+                        .setTitle(R.string.tgfold_rename)
+                        .setView(input)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            if (!TelegramAccountPrefs.renameVideoFolder(this, name, input.text.toString())) {
+                                Toast.makeText(this, R.string.tgfold_name_error, Toast.LENGTH_LONG).show()
+                            }
+                            renderVideoFavs()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                } else {
+                    AlertDialog.Builder(this)
+                        .setMessage(getString(R.string.tgfold_delete_confirm, name))
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            TelegramAccountPrefs.deleteVideoFolder(this, name)
+                            if (videoFolder == name) videoFolder = null
+                            renderVideoFavs()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                }
+            }
+            .show()
+    }
+
+    /** Elegir en qué carpetas está un vídeo (con todas sus versiones); "Nueva…" crea una y lo mete. */
+    private fun addToFolder(options: List<TgMessage>, query: String, thumbId: Int) {
+        val folders = TelegramAccountPrefs.videoFolders(this)
+        fun setMember(folder: String, member: Boolean) {
+            for (m in options) {
+                val present = TelegramAccountPrefs.isInFolder(this, folder, m.chatId, m.messageId)
+                if (member != present) TelegramAccountPrefs.toggleInFolder(this, folder, m, query, thumbId)
+            }
+        }
+        if (folders.isEmpty()) {
+            promptNewFolder { name ->
+                setMember(name, true)
+                Toast.makeText(this, getString(R.string.tgfold_added, name), Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        val initial = BooleanArray(folders.size) { i ->
+            options.any { TelegramAccountPrefs.isInFolder(this, folders[i], it.chatId, it.messageId) }
+        }
+        val checked = initial.copyOf()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tgfold_add_title)
+            .setMultiChoiceItems(folders.toTypedArray(), checked) { _, which, isChecked -> checked[which] = isChecked }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                for (i in folders.indices) if (checked[i] != initial[i]) setMember(folders[i], checked[i])
+                Toast.makeText(this, R.string.tgfold_saved, Toast.LENGTH_SHORT).show()
+                if (currentChat == null && chatFilter == VIDEO_TAB && !searching) renderVideoFavs()
+            }
+            .setNeutralButton(R.string.tgfold_new) { _, _ ->
+                for (i in folders.indices) if (checked[i] != initial[i]) setMember(folders[i], checked[i])
+                promptNewFolder { name ->
+                    setMember(name, true)
+                    Toast.makeText(this, getString(R.string.tgfold_added, name), Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
 
     private fun onMessageLong(m: TgMessage) {
         val labels = ArrayList<String>()
@@ -1577,6 +1743,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         labels.add(getString(R.string.tgfwd_action))
         actions.add { forwardMessage(m) }
+        if (isVideoMsg(m) && realMessage(m) != null) {
+            labels.add(getString(R.string.tgfold_add_btn))
+            actions.add { addToFolder(listOf(realMessage(m)!!), cleanName(titleOf(m)), m.thumbId) }
+        }
         labels.add(getString(R.string.tgacc_act_link))
         actions.add { copyMessageLink(m) }
         if (m.outgoing && m.fileId == null && m.kind != "other" && currentChat != null && !searching) {
@@ -2209,19 +2379,28 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     /** Reproduce sin descargar el archivo entero: un servidor local pide a TDLib solo los trozos necesarios. */
-    private fun streamPlay(m: TgMessage) {
-        val b = backend ?: return
-        val fileId = m.fileId?.toIntOrNull() ?: return
+    /** Stream de reproducción directa de un mensaje con archivo, o null si no se puede emitir (sin id o sin tamaño). */
+    private fun streamFor(m: TgMessage): Stream? {
+        val b = backend ?: return null
+        val fileId = m.fileId?.toIntOrNull() ?: return null
+        if (m.size <= 0) return null
         val name = m.fileName ?: m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: m.chatTitle
         val audio = m.kind == "audio" || m.kind == "voice" || (m.mime ?: "").startsWith("audio/")
         val mime = m.mime ?: if (audio) "audio/mpeg" else "video/mp4"
         val url = TgStreamServer.urlFor(b, fileId, m.size, mime)
+        return Stream(name = name, type = if (audio) "MP3" else "MP4", url = url, icon = null, category = "Telegram")
+    }
+
+    /** [queue]: los capítulos de la serie en orden; al acabar uno, el reproductor salta al siguiente con cuenta atrás. */
+    private fun streamPlay(m: TgMessage, queue: List<TgMessage> = emptyList()) {
+        val stream = streamFor(m) ?: return
         val appCtx = applicationContext
         val handler = android.os.Handler(android.os.Looper.getMainLooper())
         TgStreamServer.onProblem = { msg ->
             handler.post { android.widget.Toast.makeText(appCtx, "Telegram sin datos: $msg", android.widget.Toast.LENGTH_LONG).show() }
         }
-        open(Stream(name = name, type = if (audio) "MP3" else "MP4", url = url, icon = null, category = "Telegram"))
+        val list = if (queue.size > 1) queue.mapNotNull { streamFor(it) } else emptyList()
+        open(stream, if (list.any { it.id == stream.id }) list else emptyList())
     }
 
     private fun downloadAndPlay(m: TgMessage) {
@@ -2304,9 +2483,9 @@ class TelegramAccountActivity : AppCompatActivity() {
         open(Stream(name = name.take(80), type = type, url = url, icon = null, category = "Telegram"))
     }
 
-    private fun open(stream: Stream) {
+    private fun open(stream: Stream, list: List<Stream> = emptyList()) {
         PlayerActivity.pendingStream = stream
-        PlayerActivity.pendingChannelList = emptyList()
+        PlayerActivity.pendingChannelList = list
         startActivity(Intent(this, PlayerActivity::class.java))
     }
 

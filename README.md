@@ -1357,3 +1357,7 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 ### Widget y "Continuar viendo" sin Telegram
 - El widget solo tiene dos pestañas: ⭐ favoritos y ⚽ fútbol (quitadas "seguir viendo" y la de vídeos de Telegram; una pestaña vieja guardada vuelve a favoritos).
 - `ContinueWatching` ignora lo que viene de Telegram (categoría "Telegram" o URL local `127.0.0.1/tg/`): no se guarda y lo ya guardado deja de mostrarse (app, Android TV y copia de seguridad).
+
+### Siguiente capítulo automático y carpetas propias (Telegram)
+- **Siguiente capítulo**: al reproducir un capítulo desde la ficha de una serie, los capítulos (uno por número, en orden de temporada y capítulo) pasan al reproductor como lista (`pendingChannelList`). Al acabar uno (`STATE_ENDED`, solo streams de categoría "Telegram"), aparece un cuadro abajo a la derecha con cuenta atrás de 10 s ("Ver ya" / "Cancelar") y salta al siguiente con `switchToIndex`. Cualquier cambio de capítulo o volver atrás en el vídeo cancela la cuenta atrás.
+- **Carpetas propias**: la pestaña 🎬 Vídeos ahora empieza con la lista "⭐ Favoritos", tus carpetas y "➕ Nueva carpeta" (mantener pulsada una carpeta = cambiar nombre / borrar). Dentro de una carpeta, mantener pulsado un vídeo lo quita de ella. Para meter un vídeo: botón "📁 Añadir a carpeta…" en la ficha, o mantener pulsado un mensaje de vídeo en "ver todos los mensajes". Datos en `TelegramAccountPrefs` (`video_folders`).

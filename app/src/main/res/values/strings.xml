@@ -497,4 +497,21 @@
     <string name="tgacc_menu_leave">🚪 Salir de este canal/grupo</string>
     <string name="tgacc_leave_confirm">¿Salir de «%1$s»?</string>
     <string name="tgacc_left">Has salido</string>
+    <string name="player_next_text">Siguiente: %1$s\nEmpieza en %2$d s</string>
+    <string name="player_next_now">Ver ya</string>
+    <string name="player_next_cancel">Cancelar</string>
+    <string name="tgfold_favs">⭐ Favoritos</string>
+    <string name="tgfold_count">%1$d vídeos</string>
+    <string name="tgfold_new">➕ Nueva carpeta</string>
+    <string name="tgfold_new_hint">Por ejemplo: Pelis de fin de semana</string>
+    <string name="tgfold_name_hint">Nombre de la carpeta</string>
+    <string name="tgfold_name_error">Ese nombre está vacío o ya existe</string>
+    <string name="tgfold_rename">✏ Cambiar nombre</string>
+    <string name="tgfold_delete">🗑 Borrar carpeta</string>
+    <string name="tgfold_delete_confirm">¿Borrar la carpeta «%1$s»? Los vídeos no se borran de Telegram.</string>
+    <string name="tgfold_add_btn">📁 Añadir a carpeta…</string>
+    <string name="tgfold_add_title">Carpetas</string>
+    <string name="tgfold_added">Añadido a «%1$s»</string>
+    <string name="tgfold_removed">Quitado de «%1$s»</string>
+    <string name="tgfold_saved">Carpetas guardadas</string>
 </resources>

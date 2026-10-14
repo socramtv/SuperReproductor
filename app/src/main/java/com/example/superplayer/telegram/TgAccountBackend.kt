@@ -133,6 +133,83 @@ object TelegramAccountPrefs {
         return now
     }
 
+    // ---- Carpetas propias de vídeos (además de favoritos): cada carpeta guarda los mismos datos que un favorito ----
+
+    private fun foldersJson(context: Context): JSONArray =
+        try { JSONArray(prefs(context).getString("video_folders", "[]")) } catch (e: Exception) { JSONArray() }
+
+    private fun saveFolders(context: Context, arr: JSONArray) {
+        prefs(context).edit().putString("video_folders", arr.toString()).apply()
+    }
+
+    private fun findFolder(arr: JSONArray, name: String): JSONObject? =
+        (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.firstOrNull { it.optString("n") == name }
+
+    fun videoFolders(context: Context): List<String> {
+        val arr = foldersJson(context)
+        return (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.optString("n") }.filter { it.isNotEmpty() }
+    }
+
+    /** Crea una carpeta; false si el nombre está vacío o ya existe. */
+    fun createVideoFolder(context: Context, name: String): Boolean {
+        val n = name.trim()
+        val arr = foldersJson(context)
+        if (n.isEmpty() || findFolder(arr, n) != null) return false
+        arr.put(JSONObject().put("n", n).put("v", JSONArray()))
+        saveFolders(context, arr)
+        return true
+    }
+
+    fun renameVideoFolder(context: Context, old: String, name: String): Boolean {
+        val n = name.trim()
+        val arr = foldersJson(context)
+        val f = findFolder(arr, old) ?: return false
+        if (n.isEmpty() || (n != old && findFolder(arr, n) != null)) return false
+        f.put("n", n)
+        saveFolders(context, arr)
+        return true
+    }
+
+    fun deleteVideoFolder(context: Context, name: String) {
+        val arr = foldersJson(context)
+        val out = JSONArray()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            if (o.optString("n") != name) out.put(o)
+        }
+        saveFolders(context, out)
+    }
+
+    fun folderVideos(context: Context, name: String): List<JSONObject> {
+        val v = findFolder(foldersJson(context), name)?.optJSONArray("v") ?: return emptyList()
+        return (0 until v.length()).mapNotNull { v.optJSONObject(it) }
+    }
+
+    fun isInFolder(context: Context, name: String, chatId: Long, messageId: Long): Boolean =
+        folderVideos(context, name).any { it.optLong("c") == chatId && it.optLong("m") == messageId }
+
+    /** Mete o saca un vídeo de una carpeta; devuelve true si queda dentro. */
+    fun toggleInFolder(context: Context, name: String, m: TgMessage, query: String, thumbId: Int): Boolean {
+        val arr = foldersJson(context)
+        val f = findFolder(arr, name) ?: return false
+        val old = f.optJSONArray("v") ?: JSONArray()
+        val list = (0 until old.length()).mapNotNull { old.optJSONObject(it) }.toMutableList()
+        val idx = list.indexOfFirst { it.optLong("c") == m.chatId && it.optLong("m") == m.messageId }
+        val now: Boolean
+        if (idx >= 0) {
+            list.removeAt(idx)
+            now = false
+        } else {
+            list.add(0, m.toJson().put("th", thumbId).put("q", query))
+            now = true
+        }
+        val v = JSONArray()
+        for (o in list) v.put(o)
+        f.put("v", v)
+        saveFolders(context, arr)
+        return now
+    }
+
     fun favoriteChats(context: Context): Set<Long> =
         prefs(context).getStringSet("fav_chats", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
 

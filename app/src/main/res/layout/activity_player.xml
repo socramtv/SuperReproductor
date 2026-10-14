@@ -211,6 +211,50 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
+    <!-- Siguiente capítulo automático (series de Telegram): cuenta atrás de 10 s al acabar uno -->
+    <LinearLayout
+        android:id="@+id/nextEpisodeBox"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="90dp"
+        android:maxWidth="360dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_floating_score"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/nextEpisodeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxLines="3"
+            android:textColor="@color/player_text"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/nextEpisodeNow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/player_next_now" />
+
+            <Button
+                android:id="@+id/nextEpisodeCancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/player_next_cancel" />
+        </LinearLayout>
+    </LinearLayout>
+
     <!--
         Pausa en directo (ver TimeShiftSession / PlayerActivity): cuánto va
         por detrás del directo y botones para retroceder, adelantar y volver

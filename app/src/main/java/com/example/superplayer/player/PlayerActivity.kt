@@ -493,9 +493,66 @@ class PlayerActivity : AppCompatActivity() {
         stuckControlsWatchdogHandler.postDelayed(runnable, STUCK_CONTROLS_FIRST_CHECK_DELAY_MS)
     }
 
+    // -----------------------------------------------------------------
+    // Siguiente capítulo automático: al acabar un capítulo de una serie de
+    // Telegram (la lista de canales trae los capítulos en orden), cuenta
+    // atrás de 10 s y salta al siguiente. "Cancelar" lo deja como está.
+    // -----------------------------------------------------------------
+
+    private val nextEpisodeHandler = Handler(Looper.getMainLooper())
+    private var nextEpisodeSeconds = 0
+    private val nextEpisodeTick = object : Runnable {
+        override fun run() {
+            nextEpisodeSeconds--
+            if (nextEpisodeSeconds <= 0) {
+                playNextEpisodeNow()
+            } else {
+                updateNextEpisodeText()
+                nextEpisodeHandler.postDelayed(this, 1000)
+            }
+        }
+    }
+
+    private fun nextEpisodeStream(): Stream? {
+        val s = currentStream ?: return null
+        if (s.category != "Telegram" || currentIndex < 0) return null
+        return channelList.getOrNull(currentIndex + 1)
+    }
+
+    private fun updateNextEpisodeText() {
+        val next = nextEpisodeStream() ?: return
+        binding.nextEpisodeText.text = getString(R.string.player_next_text, next.name, nextEpisodeSeconds)
+    }
+
+    private fun startNextEpisodeCountdown() {
+        if (nextEpisodeStream() == null || binding.nextEpisodeBox.visibility == View.VISIBLE) return
+        nextEpisodeSeconds = 10
+        updateNextEpisodeText()
+        binding.nextEpisodeBox.visibility = View.VISIBLE
+        binding.nextEpisodeNow.setOnClickListener { playNextEpisodeNow() }
+        binding.nextEpisodeCancel.setOnClickListener { cancelNextEpisode() }
+        binding.nextEpisodeNow.requestFocus()
+        nextEpisodeHandler.removeCallbacks(nextEpisodeTick)
+        nextEpisodeHandler.postDelayed(nextEpisodeTick, 1000)
+    }
+
+    private fun cancelNextEpisode() {
+        nextEpisodeHandler.removeCallbacks(nextEpisodeTick)
+        if (::binding.isInitialized) binding.nextEpisodeBox.visibility = View.GONE
+    }
+
+    private fun playNextEpisodeNow() {
+        cancelNextEpisode()
+        if (nextEpisodeStream() != null) switchToIndex(currentIndex + 1)
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             scheduleAutoReconnectOrShowError(error)
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) startNextEpisodeCountdown() else cancelNextEpisode()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -778,6 +835,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun switchToIndex(newIndex: Int) {
         if (newIndex !in channelList.indices || newIndex == currentIndex) return
         val newStream = channelList[newIndex]
+        cancelNextEpisode()
         saveContinueWatching() // posición del canal/película que se deja
         currentIndex = newIndex
 
@@ -1116,6 +1174,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         tsHandler.removeCallbacks(tsUiRunnable)
+        nextEpisodeHandler.removeCallbacks(nextEpisodeTick)
         if (isFinishing) stopTimeShift()
         pendingStream = null
         pendingChannelList = emptyList()
