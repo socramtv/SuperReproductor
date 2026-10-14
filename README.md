@@ -1372,3 +1372,5 @@ Menú ⋮ de la pantalla principal → "🌐 Web" (`ui/WebActivity`): navegador 
 ## Prueba: librería de llamadas de Telegram (ntgcalls)
 
 Se ha añadido la dependencia `io.github.pytgcalls:ntgcalls:3.0.2` solo para comprobar que compila junto al resto (ABIs, TDLib). Aún no se usa: el siguiente paso sería recibir los directos de Telegram (la librería tiene recepción de fotogramas y de "broadcast parts").
+
+Menú de Telegram → «Diagnóstico de llamadas (ntgcalls)»: muestra (y permite copiar) la lista real de clases y métodos de la librería, para escribir después la recepción de directos con los nombres exactos.
