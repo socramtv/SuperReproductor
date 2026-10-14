@@ -47,6 +47,8 @@ class WebActivity : AppCompatActivity() {
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var desktop = false
     private var defaultUa = ""
+    /** Página actual, guardada desde el hilo principal: shouldInterceptRequest corre en otro hilo y no puede preguntarle la URL al WebView. */
+    @Volatile private var currentPage = ""
     private val detected: MutableMap<String, String> =
         java.util.Collections.synchronizedMap(LinkedHashMap<String, String>()) // url -> página en la que apareció
 
@@ -92,7 +94,7 @@ class WebActivity : AppCompatActivity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url.toString()
                 if (isMediaUrl(url)) {
-                    val page = view.url ?: url
+                    val page = currentPage.ifEmpty { url }
                     val added = synchronized(detected) {
                         if (detected.size < 30 && !detected.containsKey(url)) { detected[url] = page; true } else false
                     }
@@ -102,6 +104,7 @@ class WebActivity : AppCompatActivity() {
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                currentPage = url
                 detected.clear()
                 updateVideosButton()
                 binding.webProgress.visibility = View.VISIBLE
@@ -109,6 +112,7 @@ class WebActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                currentPage = url
                 binding.webProgress.visibility = View.GONE
                 if (!binding.webUrl.hasFocus()) binding.webUrl.setText(url)
                 updateNavButtons()
