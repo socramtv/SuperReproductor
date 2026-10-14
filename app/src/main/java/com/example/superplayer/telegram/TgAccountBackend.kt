@@ -81,6 +81,15 @@ interface TgAccountBackend {
     fun leaveChat(chatId: Long, onDone: (Boolean) -> Unit)
     /** Cambia el texto de un mensaje tuyo. */
     fun editMessage(chatId: Long, messageId: Long, text: String, onDone: (Boolean) -> Unit)
+
+    // ---- Directos / chats de vídeo (solo señalización y trozos del directo; el vídeo lo decodifica ntgcalls) ----
+    /** Se une al directo del chat con el [payload] de ntgcalls. [onDone]: (respuesta JSON o null, texto de diagnóstico). */
+    fun liveJoin(chatId: Long, audioSource: Int, payload: String, onDone: (String?, String) -> Unit)
+    /** Estado del directo: [tiempo, escala, canal] o null. */
+    fun liveStreams(chatId: Long, onDone: (LongArray?, String) -> Unit)
+    /** Un trozo del directo. [quality]: 0 ninguna, 1 miniatura, 2 media, 3 completa. [onDone]: (bytes o null, error). */
+    fun liveSegment(chatId: Long, timeOffset: Long, scale: Int, channelId: Int, quality: Int, onDone: (ByteArray?, String) -> Unit)
+    fun liveLeave(chatId: Long)
 }
 
 object TelegramAccountPrefs {
@@ -241,12 +250,4 @@ object TelegramAccountPrefs {
         return out
     }
 
-    // ---- Directos / chats de vídeo (solo señalización y trozos del directo; el vídeo lo decodifica ntgcalls) ----
-    /** Se une al directo del chat con el [payload] de ntgcalls. [onDone]: (respuesta JSON o null, texto de diagnóstico). */
-    fun liveJoin(chatId: Long, audioSource: Int, payload: String, onDone: (String?, String) -> Unit)
-    /** Estado del directo: [tiempo, escala, canal] o null. */
-    fun liveStreams(chatId: Long, onDone: (LongArray?, String) -> Unit)
-    /** Un trozo del directo. [quality]: 0 ninguna, 1 miniatura, 2 media, 3 completa. [onDone]: (bytes o null, error). */
-    fun liveSegment(chatId: Long, timeOffset: Long, scale: Int, channelId: Int, quality: Int, onDone: (ByteArray?, String) -> Unit)
-    fun liveLeave(chatId: Long)
 }
