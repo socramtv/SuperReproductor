@@ -1374,3 +1374,7 @@ Menú ⋮ de la pantalla principal → "🌐 Web" (`ui/WebActivity`): navegador 
 Se ha añadido la dependencia `io.github.pytgcalls:ntgcalls:3.0.2` solo para comprobar que compila junto al resto (ABIs, TDLib). Aún no se usa: el siguiente paso sería recibir los directos de Telegram (la librería tiene recepción de fotogramas y de "broadcast parts").
 
 Menú de Telegram → «Diagnóstico de llamadas (ntgcalls)»: muestra (y permite copiar) la lista real de clases y métodos de la librería, para escribir después la recepción de directos con los nombres exactos.
+
+## Ver directos de Telegram dentro de la app (experimental)
+
+En un chat con directo activo, menú ⋮ → «Ver el directo aquí (prueba)» (`LiveActivity`). TDLib se une al chat de vídeo y sirve los trozos del directo; ntgcalls los decodifica y la app pinta el vídeo (I420 → imagen) y reproduce el audio (`AudioTrack`). Toca la imagen para ocultar/mostrar el registro de depuración de abajo.

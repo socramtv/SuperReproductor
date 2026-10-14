@@ -871,6 +871,152 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         return null
     }
 
+    // -----------------------------------------------------------------
+    // Directos (chats de vídeo). Todo por reflexión: los nombres cambian entre versiones de TDLib.
+    // -----------------------------------------------------------------
+
+    private fun newObj(name: String, vararg fields: Pair<String, Any?>): Any? {
+        return try {
+            val cls = Class.forName("org.drinkless.tdlib.TdApi\$" + name)
+            val o = cls.getDeclaredConstructor().newInstance()
+            for ((f, v) in fields) {
+                try {
+                    cls.getField(f).set(o, v)
+                } catch (e: Exception) { }
+            }
+            o
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    private fun groupCallIdOf(chatId: Long): Int {
+        val chat = chats[chatId] ?: return 0
+        val vc = field(chat, "videoChat", "voiceChat") ?: return 0
+        return (field(vc, "groupCallId") as? Number)?.toInt() ?: 0
+    }
+
+    /** Prueba varias peticiones (según versión de TDLib) hasta que una dé resultado que no sea error. */
+    private fun tryRequests(requests: List<Pair<String, TdApi.Function<*>?>>, onDone: (TdApi.Object?, String) -> Unit) {
+        val log = StringBuilder()
+        fun step(i: Int) {
+            if (i >= requests.size) {
+                onDone(null, log.toString())
+                return
+            }
+            val (name, req) = requests[i]
+            if (req == null) {
+                log.append(name).append(": no existe en esta versión\n")
+                step(i + 1)
+                return
+            }
+            sendQuiet(req) { r ->
+                if (r is TdApi.Error) {
+                    log.append(name).append(": ").append(r.code).append(' ').append(r.message).append('\n')
+                    step(i + 1)
+                } else {
+                    onDone(r, log.append(name).append(": ok\n").toString())
+                }
+            }
+        }
+        step(0)
+    }
+
+    override fun liveJoin(chatId: Long, audioSource: Int, payload: String, onDone: (String?, String) -> Unit) {
+        val gc = groupCallIdOf(chatId)
+        if (gc == 0) {
+            onDone(null, "este chat no tiene directo activo")
+            return
+        }
+        val vc = field(chats[chatId], "videoChat", "voiceChat")
+        fun go(participant: Any?) {
+            val params = newObj(
+                "GroupCallJoinParameters",
+                "audioSourceId" to audioSource, "payload" to payload, "isMuted" to true, "isMyVideoEnabled" to false
+            )
+            val reqs = listOf(
+                "JoinVideoChat" to newRequest(
+                    "JoinVideoChat",
+                    "groupCallId" to gc, "participantId" to (participant ?: return onDone(null, "sin participante")),
+                    "joinParameters" to (params ?: return onDone(null, "sin GroupCallJoinParameters")), "inviteHash" to ""
+                ),
+                "JoinGroupCall" to newRequest(
+                    "JoinGroupCall",
+                    "groupCallId" to gc, "participantId" to participant, "audioSourceId" to audioSource,
+                    "payload" to payload, "isMuted" to true, "isMyVideoEnabled" to false, "inviteHash" to ""
+                )
+            )
+            tryRequests(reqs) { r, log ->
+                val text = field(r, "text") as? String
+                onDone(text, log + (if (r != null && text == null) "respuesta sin texto: ${r.javaClass.simpleName}\n" else ""))
+            }
+        }
+        val existing = field(vc, "defaultParticipantId")
+        if (existing != null) {
+            go(existing)
+        } else {
+            sendQuiet(TdApi.GetMe()) { me ->
+                val uid = (field(me, "id") as? Number)?.toLong() ?: 0L
+                go(newObj("MessageSenderUser", "userId" to uid))
+            }
+        }
+    }
+
+    override fun liveStreams(chatId: Long, onDone: (LongArray?, String) -> Unit) {
+        val gc = groupCallIdOf(chatId)
+        val reqs = listOf(
+            "GetVideoChatStreams" to newRequest("GetVideoChatStreams", "groupCallId" to gc),
+            "GetGroupCallStreams" to newRequest("GetGroupCallStreams", "groupCallId" to gc)
+        )
+        tryRequests(reqs) { r, log ->
+            val arr = field(r, "streams") as? Array<*>
+            val first = arr?.firstOrNull()
+            if (first == null) {
+                onDone(null, log + "sin streams")
+            } else {
+                val t = (field(first, "timeOffset") as? Number)?.toLong() ?: 0L
+                val sc = (field(first, "scale") as? Number)?.toLong() ?: 0L
+                val ch = (field(first, "channelId") as? Number)?.toLong() ?: 0L
+                onDone(longArrayOf(t, sc, ch), log)
+            }
+        }
+    }
+
+    override fun liveSegment(chatId: Long, timeOffset: Long, scale: Int, channelId: Int, quality: Int, onDone: (ByteArray?, String) -> Unit) {
+        val gc = groupCallIdOf(chatId)
+        val q = newObj(
+            when (quality) {
+                2 -> "GroupCallVideoQualityMedium"
+                3 -> "GroupCallVideoQualityFull"
+                else -> "GroupCallVideoQualityThumbnail"
+            }
+        )
+        val reqs = listOf(
+            "GetVideoChatStreamSegment" to newRequest(
+                "GetVideoChatStreamSegment",
+                "groupCallId" to gc, "timeOffset" to timeOffset, "scale" to scale, "channelId" to channelId, "videoQuality" to (q ?: return onDone(null, "sin calidad"))
+            ),
+            "GetGroupCallStreamSegment" to newRequest(
+                "GetGroupCallStreamSegment",
+                "groupCallId" to gc, "timeOffset" to timeOffset, "scale" to scale, "channelId" to channelId, "videoQuality" to q
+            )
+        )
+        tryRequests(reqs) { r, log ->
+            val data = field(r, "data") as? ByteArray
+            onDone(data, if (data == null) log else "")
+        }
+    }
+
+    override fun liveLeave(chatId: Long) {
+        val gc = groupCallIdOf(chatId)
+        if (gc == 0) return
+        val reqs = listOf(
+            "LeaveVideoChat" to newRequest("LeaveVideoChat", "groupCallId" to gc),
+            "LeaveGroupCall" to newRequest("LeaveGroupCall", "groupCallId" to gc)
+        )
+        tryRequests(reqs) { _, _ -> }
+    }
+
     companion object {
         /** Cuánto pide a TDLib de una vez al reproducir sin descargar (así no baja el vídeo entero). */
         private const val STREAM_WINDOW = 32L * 1024 * 1024

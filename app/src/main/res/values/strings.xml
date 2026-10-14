@@ -538,6 +538,7 @@
     <string name="tgweb_open">🌐 Abrir en la web: %1$s</string>
     <string name="tgweb_play_link">▶ Reproducir el enlace en el reproductor</string>
     <string name="tgacc_menu_ntg">Diagnóstico de llamadas (ntgcalls)</string>
+    <string name="tgacc_menu_watch">Ver el directo aquí (prueba)</string>
     <string name="tgacc_live_badge">🔴 En directo</string>
     <string name="tgacc_menu_live">🔴 Ver el directo en Telegram</string>
     <string name="tgacc_live_error">No se pudo abrir la app de Telegram</string>

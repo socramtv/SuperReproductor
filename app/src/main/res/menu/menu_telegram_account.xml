@@ -37,6 +37,10 @@
         android:title="@string/tgacc_menu_live"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_tgacc_watch"
+        android:title="@string/tgacc_menu_watch"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tgacc_read"
         android:title="@string/tgacc_menu_read"
         app:showAsAction="never" />
