@@ -140,4 +140,6 @@ dependencies {
 
     // Carga de iconos/miniaturas desde URL
     implementation("io.coil-kt:coil:2.6.0")
+    // Prueba: llamadas/directos de Telegram (ntgcalls). Solo se añade la librería, aún no se usa.
+    implementation("io.github.pytgcalls:ntgcalls:3.0.2")
 }

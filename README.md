@@ -1368,3 +1368,7 @@ Menú ⋮ de la pantalla principal → "🌐 Web" (`ui/WebActivity`): navegador 
 ### Telegram: webs en el apartado Web y directos
 - Las páginas web que aparezcan en Telegram (mensajes, botones de bots) se abren en el apartado Web de la app (`WebActivity`); los enlaces internos (t.me, tg://) siguen abriéndose con Telegram (`isTgLink`). Los enlaces directos a vídeo (.m3u8, .mp4…) siguen ofreciendo "▶ reproducir"; para reproducir en el reproductor una página web: mantener pulsado el mensaje → "▶ Reproducir el enlace".
 - Directos: los chats con una llamada de vídeo/directo activa salen con "🔴 En directo" en la lista y en el menú del chat hay "🔴 Ver el directo en Telegram", que abre ese chat en la app oficial. Ver el directo dentro de esta app no está soportado (necesita la librería de llamadas de Telegram, que TDLib no incluye).
+
+## Prueba: librería de llamadas de Telegram (ntgcalls)
+
+Se ha añadido la dependencia `io.github.pytgcalls:ntgcalls:3.0.2` solo para comprobar que compila junto al resto (ABIs, TDLib). Aún no se usa: el siguiente paso sería recibir los directos de Telegram (la librería tiene recepción de fotogramas y de "broadcast parts").
