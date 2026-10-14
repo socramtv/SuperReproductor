@@ -8,12 +8,8 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.example.superplayer.R
-import com.example.superplayer.data.ContinueWatching
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.FavoritesStore
-import com.example.superplayer.data.MovieInfo
-import com.example.superplayer.telegram.TelegramAccountPrefs
-import com.example.superplayer.telegram.TgMessage
 import com.example.superplayer.model.toJson
 import com.example.superplayer.sports.GoalAlerts
 import com.example.superplayer.sports.MatchFeed
@@ -42,9 +38,7 @@ class HomeWidgetService : RemoteViewsService() {
         val progress: Int,
         val streamJson: String? = null,
         val home: String? = null,
-        val away: String? = null,
-        val tgChat: Long = 0L,
-        val tgMsg: Long = 0L
+        val away: String? = null
     )
 
     private class Factory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
@@ -58,9 +52,7 @@ class HomeWidgetService : RemoteViewsService() {
         override fun onDataSetChanged() {
             rows = try {
                 when (HomeWidgetProvider.getMode(context)) {
-                    HomeWidgetProvider.MODE_CONTINUE -> continueRows()
                     HomeWidgetProvider.MODE_MATCHES -> matchRows()
-                    HomeWidgetProvider.MODE_VIDEOS -> videoRows()
                     else -> favoriteRows()
                 }
             } catch (e: Exception) {
@@ -97,10 +89,6 @@ class HomeWidgetService : RemoteViewsService() {
                 fill.putExtra(GoalAlerts.EXTRA_HOME, row.home)
                 fill.putExtra(GoalAlerts.EXTRA_AWAY, row.away)
             }
-            if (row.tgChat != 0L) {
-                fill.putExtra(WidgetClickActivity.EXTRA_TG_CHAT, row.tgChat)
-                fill.putExtra(WidgetClickActivity.EXTRA_TG_MSG, row.tgMsg)
-            }
             views.setOnClickFillInIntent(R.id.widgetItemRoot, fill)
             return views
         }
@@ -128,20 +116,6 @@ class HomeWidgetService : RemoteViewsService() {
             }
         }
 
-        private fun continueRows(): List<Row> {
-            return ContinueWatching.getAll(context).map { entry ->
-                val progress = if (entry.durationMs > 0) {
-                    (entry.positionMs * 100 / entry.durationMs).toInt().coerceIn(0, 100)
-                } else -1
-                val sub = context.getString(
-                    R.string.continue_progress,
-                    ContinueWatching.formatClock(entry.positionMs),
-                    ContinueWatching.formatClock(entry.durationMs)
-                )
-                Row(entry.stream.name, sub, entry.stream.icon, progress, streamJson = entry.stream.toJson())
-            }
-        }
-
         private fun matchRows(): List<Row> {
             val result = MatchFeed.fetchAll()
             val order = mapOf("in" to 0, "pre" to 1, "post" to 2)
@@ -159,23 +133,6 @@ class HomeWidgetService : RemoteViewsService() {
                     }
                     Row(title, "$status · ${m.league}", m.homeLogo, -1, home = m.home, away = m.away)
                 }
-        }
-
-        /** Vídeos de Telegram marcados como favoritos (carátula y datos de TMDb si ya se conocen). */
-        private fun videoRows(): List<Row> {
-            return TelegramAccountPrefs.videoFavorites(context).map { o ->
-                val m = TgMessage.fromJson(o)
-                val q = o.optString("q")
-                val info = if (q.isNotEmpty()) MovieInfo.peek(context, q) else null
-                val title = info?.let { it.title + (it.year?.let { y -> " ($y)" } ?: "") }
-                    ?: q.ifEmpty { m.fileName ?: m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: m.chatTitle }
-                val sub = listOfNotNull(
-                    info?.rating?.takeIf { it > 0.0 }?.let { "★ " + String.format(Locale.US, "%.1f", it) },
-                    info?.genre,
-                    m.chatTitle.takeIf { it.isNotBlank() }
-                ).joinToString(" · ")
-                Row(title, sub, info?.posterUrl, -1, tgChat = m.chatId, tgMsg = m.messageId)
-            }.distinctBy { it.title }
         }
 
         // ---- Logos ----

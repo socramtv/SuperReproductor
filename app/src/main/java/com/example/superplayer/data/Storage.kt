@@ -362,6 +362,10 @@ object ContinueWatching {
 
     private fun prefs(context: Context) = Profiles.prefs(context, PREFS_NAME)
 
+    /** Lo que se ve desde Telegram no entra en "Continuar viendo" (ni en la app, ni en el widget, ni en Android TV). */
+    private fun isTelegram(stream: Stream): Boolean =
+        stream.category == "Telegram" || (stream.url.contains("127.0.0.1") && stream.url.contains("/tg/"))
+
     fun getAll(context: Context): List<Entry> {
         val raw = prefs(context).getString(KEY_ENTRIES, null) ?: return emptyList()
         return try {
@@ -370,6 +374,7 @@ object ContinueWatching {
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
                 val stream = streamFromJson(obj.getJSONObject("stream").toString()) ?: continue
+                if (isTelegram(stream)) continue
                 result.add(Entry(stream, obj.getLong("pos"), obj.getLong("dur"), obj.optLong("at", 0L)))
             }
             result.sortedByDescending { it.updatedAt }
@@ -398,7 +403,7 @@ object ContinueWatching {
 
     /** Guarda (o actualiza) la posición; si se acaba de empezar o ya se vio casi entero, lo quita de la lista en vez de guardarlo. */
     fun save(context: Context, stream: Stream, positionMs: Long, durationMs: Long) {
-        if (durationMs <= 0L) return
+        if (durationMs <= 0L || isTelegram(stream)) return
         val finished = durationMs - positionMs < FINISHED_MARGIN_MS
         if (positionMs < MIN_WATCHED_MS || finished) {
             remove(context, stream.id)
@@ -443,11 +448,5 @@ object ContinueWatching {
         prefs(context).edit().putString(KEY_ENTRIES, arr.toString()).apply()
         // Inicio de Android TV: la fila "Continuar viendo" del sistema se mantiene al día (solo en TV).
         com.example.superplayer.tv.WatchNextSync.sync(context)
-        // Widget completo, si está en la pestaña "Continuar".
-        try {
-            if (com.example.superplayer.widget.HomeWidgetProvider.getMode(context) ==
-                com.example.superplayer.widget.HomeWidgetProvider.MODE_CONTINUE
-            ) com.example.superplayer.widget.HomeWidgetProvider.refreshAll(context)
-        } catch (e: Exception) { }
     }
 }

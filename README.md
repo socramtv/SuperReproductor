@@ -1353,3 +1353,7 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 - **Chat que no carga**: `loadHistory` reintenta (hasta 4 veces) cuando el primer pedido a un chat sin caché devuelve pocos mensajes.
 - **Reenviar** (`forwardMessage`): mantener pulsado un mensaje → "↪ Reenviar a…", o botón en la ficha del vídeo / lista de versiones. Selector con filtros (favoritos, canales, grupos y foros, personas y bots), buscador y, para foros, elección de tema.
 - Mantener pulsado un mensaje también: copiar enlace del mensaje y editar (si es tuyo). Menú del chat: marcar como leído y salir del canal/grupo.
+
+### Widget y "Continuar viendo" sin Telegram
+- El widget solo tiene dos pestañas: ⭐ favoritos y ⚽ fútbol (quitadas "seguir viendo" y la de vídeos de Telegram; una pestaña vieja guardada vuelve a favoritos).
+- `ContinueWatching` ignora lo que viene de Telegram (categoría "Telegram" o URL local `127.0.0.1/tg/`): no se guarda y lo ya guardado deja de mostrarse (app, Android TV y copia de seguridad).

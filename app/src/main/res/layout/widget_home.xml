@@ -45,18 +45,6 @@
             android:textColor="#B0B0BC"
             android:textSize="20sp" />
 
-        <TextView
-            android:id="@+id/widgetTabContinue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="46dp"
-            android:minHeight="46dp"
-            android:gravity="center"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="6dp"
-            android:text="@string/widget_tab_continue"
-            android:textColor="#B0B0BC"
-            android:textSize="20sp" />
 
         <TextView
             android:id="@+id/widgetTabMatches"
@@ -71,18 +59,6 @@
             android:textColor="#B0B0BC"
             android:textSize="20sp" />
 
-        <TextView
-            android:id="@+id/widgetTabVideos"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="46dp"
-            android:minHeight="46dp"
-            android:gravity="center"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="6dp"
-            android:text="@string/widget_tab_videos"
-            android:textColor="#B0B0BC"
-            android:textSize="20sp" />
 
         <TextView
             android:id="@+id/widgetRefresh"

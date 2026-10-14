@@ -53,9 +53,7 @@ class HomeWidgetProvider : AppWidgetProvider() {
             R.id.widgetListEmpty,
             context.getString(
                 when (mode) {
-                    MODE_CONTINUE -> R.string.widget_home_empty_continue
                     MODE_MATCHES -> R.string.widget_home_empty_matches
-                    MODE_VIDEOS -> R.string.widget_home_empty_videos
                     else -> R.string.widget_empty
                 }
             )
@@ -81,9 +79,7 @@ class HomeWidgetProvider : AppWidgetProvider() {
 
         val tabs = listOf(
             Triple(R.id.widgetTabFav, MODE_FAVORITES, 10),
-            Triple(R.id.widgetTabContinue, MODE_CONTINUE, 11),
-            Triple(R.id.widgetTabMatches, MODE_MATCHES, 12),
-            Triple(R.id.widgetTabVideos, MODE_VIDEOS, 14)
+            Triple(R.id.widgetTabMatches, MODE_MATCHES, 12)
         )
         for ((viewId, tabMode, code) in tabs) {
             val intent = Intent(context, HomeWidgetProvider::class.java).apply {
@@ -111,16 +107,17 @@ class HomeWidgetProvider : AppWidgetProvider() {
 
     companion object {
         const val MODE_FAVORITES = 0
-        const val MODE_CONTINUE = 1
         const val MODE_MATCHES = 2
-        const val MODE_VIDEOS = 3
         private const val ACTION_SET_MODE = "com.example.superplayer.widget.SET_MODE"
         private const val ACTION_REFRESH = "com.example.superplayer.widget.REFRESH"
         private const val EXTRA_MODE = "mode"
         private const val PREFS = "home_widget"
 
-        fun getMode(context: Context): Int =
-            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("mode", MODE_FAVORITES)
+        /** Solo hay dos pestañas (favoritos y fútbol): un valor viejo guardado de otra pestaña vuelve a favoritos. */
+        fun getMode(context: Context): Int {
+            val saved = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("mode", MODE_FAVORITES)
+            return if (saved == MODE_MATCHES) MODE_MATCHES else MODE_FAVORITES
+        }
 
         private fun setMode(context: Context, mode: Int) {
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("mode", mode).apply()
