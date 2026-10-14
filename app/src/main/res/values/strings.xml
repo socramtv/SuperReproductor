@@ -514,4 +514,25 @@
     <string name="tgfold_added">Añadido a «%1$s»</string>
     <string name="tgfold_removed">Quitado de «%1$s»</string>
     <string name="tgfold_saved">Carpetas guardadas</string>
+    <string name="action_web">🌐 Web</string>
+    <string name="web_title">Web</string>
+    <string name="web_url_hint">Buscar o escribir una dirección</string>
+    <string name="web_cant_open">No se puede abrir este enlace</string>
+    <string name="web_play_title">Vídeo directo: ¿verlo en el reproductor?</string>
+    <string name="web_play_yes">▶ Reproducir</string>
+    <string name="web_no_videos">No se ha detectado ningún vídeo en esta página (pulsa play en el vídeo y vuelve a mirar)</string>
+    <string name="web_videos_title">Vídeos de esta página</string>
+    <string name="web_videos_menu">🎬 Vídeos detectados (%1$d)</string>
+    <string name="web_bookmarks">⭐ Marcadores</string>
+    <string name="web_add_bookmark">➕ Guardar esta página</string>
+    <string name="web_no_bookmarks">Aún no tienes marcadores (menú ⋮ → Guardar esta página)</string>
+    <string name="web_bookmark_added">Página guardada</string>
+    <string name="web_bookmark_exists">Ya está en tus marcadores</string>
+    <string name="web_bookmark_delete">¿Borrar el marcador «%1$s»?</string>
+    <string name="web_desktop">🖥 Versión de escritorio</string>
+    <string name="web_home">🏠 Página de inicio</string>
+    <string name="web_open_external">↗ Abrir en otro navegador</string>
+    <string name="web_clear">🧹 Borrar datos de navegación</string>
+    <string name="web_clear_confirm">¿Borrar caché, historial, cookies y datos de las webs?</string>
+    <string name="web_cleared">Datos borrados</string>
 </resources>

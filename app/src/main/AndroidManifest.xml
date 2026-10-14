@@ -99,6 +99,13 @@
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- Navegador web con marcadores y detección de vídeos (ver WebActivity) -->
+        <activity
+            android:name=".ui.WebActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
+
         <!-- Cine: carátulas y sinopsis (ver CineActivity) -->
         <activity
             android:name=".ui.CineActivity"

@@ -46,6 +46,12 @@
         android:title="@string/action_now_live"
         app:showAsAction="never" />
 
+    <!-- Navegador web dentro de la app (ver ui/WebActivity) -->
+    <item
+        android:id="@+id/action_web"
+        android:title="@string/action_web"
+        app:showAsAction="never" />
+
     <!-- Móvil como mando de la tele (ver ui/RemoteActivity) y ajustes de control remoto de esta pantalla (ver remote/RemoteServer) -->
     <item
         android:id="@+id/action_remote_control"

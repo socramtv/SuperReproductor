@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Navegador web dentro de la app (ver WebActivity): barra de direcciones, marcadores y detección de vídeos de la página -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_dark">
+
+    <LinearLayout
+        android:id="@+id/webContent"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/webBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="4dp"
+            android:paddingVertical="2dp"
+            android:background="@color/surface_dark">
+
+            <TextView
+                android:id="@+id/webBack"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:text="◀"
+                android:textSize="18sp"
+                android:textColor="@color/on_background"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+
+            <TextView
+                android:id="@+id/webForward"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:text="▶"
+                android:textSize="18sp"
+                android:textColor="@color/on_background"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+
+            <TextView
+                android:id="@+id/webReload"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:text="⟳"
+                android:textSize="22sp"
+                android:textColor="@color/on_background"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+
+            <EditText
+                android:id="@+id/webUrl"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/web_url_hint"
+                android:imeOptions="actionGo"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:selectAllOnFocus="true"
+                android:textColor="@color/on_background"
+                android:textColorHint="@color/on_surface_muted"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/webVideos"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:text="🎬"
+                android:textSize="20sp"
+                android:focusable="true"
+                android:clickable="true"
+                android:visibility="gone"
+                android:background="@drawable/bg_tg_star" />
+
+            <TextView
+                android:id="@+id/webMenu"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:text="⋮"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:textColor="@color/on_background"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/webProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:max="100"
+            android:visibility="gone" />
+
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <!-- Vídeo de la página a pantalla completa -->
+    <FrameLayout
+        android:id="@+id/webFullscreen"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:visibility="gone" />
+</FrameLayout>

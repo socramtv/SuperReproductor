@@ -993,6 +993,10 @@ class MainActivity : AppCompatActivity() {
                 openEpgGrid()
                 true
             }
+            R.id.action_web -> {
+                startActivity(Intent(this, WebActivity::class.java))
+                true
+            }
             R.id.action_theme_toggle -> {
                 toggleTheme()
                 true
