@@ -33,6 +33,10 @@
         android:title="@string/tgacc_menu_join"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_tgacc_live"
+        android:title="@string/tgacc_menu_live"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tgacc_read"
         android:title="@string/tgacc_menu_read"
         app:showAsAction="never" />

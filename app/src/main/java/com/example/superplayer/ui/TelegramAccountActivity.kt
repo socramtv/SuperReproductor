@@ -535,6 +535,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         menu.findItem(R.id.action_tgacc_fav)?.isVisible = inChat
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_kbd)?.isVisible = inChat && chat?.kind == "bot"
+        menu.findItem(R.id.action_tgacc_live)?.isVisible = inChat && chat?.live == true
         menu.findItem(R.id.action_tgacc_read)?.isVisible = inChat && !showingTopics
         menu.findItem(R.id.action_tgacc_leave)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group" || chat?.kind == "forum")
         menu.findItem(R.id.action_tgacc_join)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group" || chat?.kind == "forum")
@@ -581,6 +582,10 @@ class TelegramAccountActivity : AppCompatActivity() {
                         Toast.makeText(this, if (ok) R.string.tgacc_joined else R.string.tgacc_join_error, Toast.LENGTH_SHORT).show()
                     }
                 }
+                return true
+            }
+            R.id.action_tgacc_live -> {
+                currentChat?.let { openLiveInTelegram(it) }
                 return true
             }
             R.id.action_tgacc_read -> {
@@ -744,7 +749,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
         }
         val rows = shown.map { chat ->
-            val sub = kindLabel(chat.kind) +
+            val sub = (if (chat.live) getString(R.string.tgacc_live_badge) + " · " else "") + kindLabel(chat.kind) +
                 (if (chat.unread > 0) " · " + getString(R.string.tgacc_unread, chat.unread) else "") +
                 (if (chat.lastDate > 0) " · " + df.format(Date(chat.lastDate * 1000L)) else "")
             Row(chat.title, sub, chat.id in favs, {
@@ -1743,6 +1748,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         labels.add(getString(R.string.tgfwd_action))
         actions.add { forwardMessage(m) }
+        m.links.firstOrNull { !isTgLink(it) && !isDirectMedia(it) }?.let { link ->
+            labels.add(getString(R.string.tgweb_play_link))
+            actions.add { playUrl(link, m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: link) }
+        }
         if (isVideoMsg(m) && realMessage(m) != null) {
             labels.add(getString(R.string.tgfold_add_btn))
             actions.add { addToFolder(listOf(realMessage(m)!!), cleanName(titleOf(m)), m.thumbId) }
@@ -2172,7 +2181,36 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.tgKeyboardScroll.visibility = View.VISIBLE
     }
 
+    /** Una web va al apartado Web de la app; los enlaces internos de Telegram (t.me, tg://) siguen con Telegram. */
+    private fun openWeb(url: String) {
+        startActivity(Intent(this, WebActivity::class.java).setData(Uri.parse(url)))
+    }
+
+    private fun isDirectMedia(url: String): Boolean {
+        val path = url.substringBefore('?').substringBefore('#').lowercase()
+        return listOf(".m3u8", ".mpd", ".mp4", ".mkv", ".m4v", ".mp3", ".aac", ".ts").any { path.endsWith(it) }
+    }
+
+    /** El directo (llamada de vídeo del chat) se ve en la app oficial de Telegram: se abre el chat ahí, donde sale el aviso del directo. */
+    private fun openLiveInTelegram(chat: TgChat) {
+        val id = chat.id
+        val uri = when {
+            id <= -1_000_000_000_000L -> "https://t.me/c/${-id - 1_000_000_000_000L}/1"
+            id < 0 -> "tg://openmessage?chat_id=${-id}"
+            else -> "tg://openmessage?user_id=$id"
+        }
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(null))
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.tgacc_live_error, Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun openLink(url: String) {
+        if (!isTgLink(url) && (url.startsWith("http://", true) || url.startsWith("https://", true))) {
+            openWeb(url)
+            return
+        }
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         } catch (e: Exception) {
@@ -2219,8 +2257,15 @@ class TelegramAccountActivity : AppCompatActivity() {
                 labels.add(getString(R.string.tg_link_as_list, link.removePrefix("https://").removePrefix("http://").take(40)))
                 actions.add { loadPlaylistUrl(link) }
             }
-            labels.add("▶ " + link.removePrefix("https://").removePrefix("http://").take(60))
-            actions.add { playUrl(link, m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: link) }
+            val short = link.removePrefix("https://").removePrefix("http://").take(60)
+            if (isDirectMedia(link)) {
+                labels.add("▶ $short")
+                actions.add { playUrl(link, m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: link) }
+            } else {
+                // Una página web: se abre en el apartado Web (el reproductor queda en la pulsación larga).
+                labels.add(getString(R.string.tgweb_open, short))
+                actions.add { openWeb(link) }
+            }
         }
         when {
             actions.isEmpty() -> if (m.text.isNotBlank()) {

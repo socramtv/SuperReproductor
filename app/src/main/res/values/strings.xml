@@ -63,7 +63,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Acestream+</string>
+    <string name="list_slot_2">Lista 2</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
@@ -535,4 +535,9 @@
     <string name="web_clear">🧹 Borrar datos de navegación</string>
     <string name="web_clear_confirm">¿Borrar caché, historial, cookies y datos de las webs?</string>
     <string name="web_cleared">Datos borrados</string>
+    <string name="tgweb_open">🌐 Abrir en la web: %1$s</string>
+    <string name="tgweb_play_link">▶ Reproducir el enlace en el reproductor</string>
+    <string name="tgacc_live_badge">🔴 En directo</string>
+    <string name="tgacc_menu_live">🔴 Ver el directo en Telegram</string>
+    <string name="tgacc_live_error">No se pudo abrir la app de Telegram</string>
 </resources>

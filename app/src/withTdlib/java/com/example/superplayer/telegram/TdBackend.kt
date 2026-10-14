@@ -77,8 +77,34 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
                     d.onDone(file.local.path)
                 }
             }
-            else -> {}
+            else -> onOtherUpdate(obj)
         }
+    }
+
+    /** Actualizaciones que cambian de nombre según la versión de TDLib (directos/chats de vídeo): se leen sin nombrar la clase. */
+    private fun onOtherUpdate(obj: TdApi.Object) {
+        val n = obj.javaClass.simpleName
+        if (n == "UpdateChatVideoChat" || n == "UpdateChatVoiceChat") {
+            try {
+                val chatId = field(obj, "chatId") as? Long ?: return
+                val chat = chats[chatId] ?: return
+                val value = field(obj, "videoChat", "voiceChat") ?: return
+                for (name in listOf("videoChat", "voiceChat")) {
+                    try {
+                        chat.javaClass.getField(name).set(chat, value)
+                        break
+                    } catch (e: Exception) { }
+                }
+            } catch (e: Exception) { }
+        }
+    }
+
+    /** true si el chat tiene ahora un directo / chat de vídeo con gente. */
+    private fun isLive(chat: TdApi.Chat): Boolean {
+        val vc = field(chat, "videoChat", "voiceChat") ?: return false
+        val id = (field(vc, "groupCallId") as? Number)?.toInt() ?: 0
+        val has = field(vc, "hasParticipants") as? Boolean ?: false
+        return id != 0 && has
     }
 
     private fun handleAuth(auth: TdApi.AuthorizationState) {
@@ -274,7 +300,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         chats[chat.id] = chat
         return TgChat(
             chat.id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L,
-            (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount, chat.photo?.small?.id ?: 0
+            (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount, chat.photo?.small?.id ?: 0, isLive(chat)
         )
     }
 
@@ -707,11 +733,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             if (remaining.decrementAndGet() != 0) return
             val missing = ids.filter { chats[it] == null }
             val finalize = {
-                onDone(ids.mapNotNull { id ->
-                    val chat = chats[id] ?: return@mapNotNull null
-                    TgChat(id, chat.title, kindOf(chat), chat.lastMessage?.date?.toLong() ?: 0L,
-                        (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L, chat.unreadCount, chat.photo?.small?.id ?: 0)
-                })
+                onDone(ids.mapNotNull { id -> chats[id]?.let { tgChatOf(it) } })
             }
             if (missing.isEmpty()) {
                 finalize()

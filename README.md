@@ -1364,3 +1364,7 @@ Telegram v5, **galería**: en canales, grupos y foros el chat se ve como una cua
 
 ## Navegador web integrado
 Menú ⋮ de la pantalla principal → "🌐 Web" (`ui/WebActivity`): navegador con barra de direcciones (si escribes palabras, busca en Google), atrás/adelante/recargar, marcadores propios (mantener pulsado = borrar), versión de escritorio, abrir en otro navegador y borrar datos. Si una página carga un vídeo (.m3u8, .mpd, .mp4…), aparece el botón 🎬 con los vídeos detectados y se pueden reproducir en el reproductor de la app (con el Referer de la página). Los enlaces directos a vídeo preguntan si abrirlos en el reproductor. El vídeo de la página se ve a pantalla completa.
+
+### Telegram: webs en el apartado Web y directos
+- Las páginas web que aparezcan en Telegram (mensajes, botones de bots) se abren en el apartado Web de la app (`WebActivity`); los enlaces internos (t.me, tg://) siguen abriéndose con Telegram (`isTgLink`). Los enlaces directos a vídeo (.m3u8, .mp4…) siguen ofreciendo "▶ reproducir"; para reproducir en el reproductor una página web: mantener pulsado el mensaje → "▶ Reproducir el enlace".
+- Directos: los chats con una llamada de vídeo/directo activa salen con "🔴 En directo" en la lista y en el menú del chat hay "🔴 Ver el directo en Telegram", que abre ese chat en la app oficial. Ver el directo dentro de esta app no está soportado (necesita la librería de llamadas de Telegram, que TDLib no incluye).
