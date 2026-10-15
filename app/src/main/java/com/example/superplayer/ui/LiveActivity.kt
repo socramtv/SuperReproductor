@@ -81,6 +81,8 @@ class LiveActivity : AppCompatActivity() {
     @Volatile private var joinSsrc = 0
     @Volatile private var joinPayload = ""
     private val rejoining = AtomicBoolean(false)
+    private val seenChannels = java.util.Collections.synchronizedSet(HashSet<String>())
+    private val seenDevices = java.util.Collections.synchronizedSet(HashSet<String>())
     @Volatile private var closed = false
     private val segCache = LinkedHashMap<String, ByteArray>()
     private val segLock = Any()
@@ -199,6 +201,7 @@ class LiveActivity : AppCompatActivity() {
     private fun answerPart(b: TgAccountBackend, n: NTgCalls, req: io.github.pytgcalls.models.SegmentPartRequest) {
         if (closed) return
         val n0 = reqCount.incrementAndGet()
+        if (seenChannels.add("${req.channel_id}/${req.quality}")) log("NUEVO canal pedido: ${req.channel_id} calidad ${req.quality}")
         if (n0 <= 4) log("pide trozo seg=${req.segment_id} parte=${req.part_id} límite=${req.limit} canal=${req.channel_id} calidad=${req.quality}")
         val quality = when (req.quality) {
             MediaSegmentQuality.FULL -> 3
@@ -270,6 +273,7 @@ class LiveActivity : AppCompatActivity() {
         if (closed) return
         for (f in frames) {
             val data = fld(f, "data") as? ByteArray ?: continue
+            if (seenDevices.add(device.toString())) log("frames de $device: ${data.size} bytes, ssrc=${fld(f, "ssrc")}")
             if (device == StreamDevice.SPEAKER || device == StreamDevice.MICROPHONE) {
                 playAudio(data)
             } else {
