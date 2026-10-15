@@ -1378,3 +1378,7 @@ Menú de Telegram → «Diagnóstico de llamadas (ntgcalls)»: muestra (y permit
 ## Ver directos de Telegram dentro de la app (experimental)
 
 En un chat con directo activo, menú ⋮ → «Ver el directo aquí (prueba)» (`LiveActivity`). TDLib se une al chat de vídeo y sirve los trozos del directo; ntgcalls los decodifica y la app pinta el vídeo (I420 → imagen) y reproduce el audio (`AudioTrack`). Toca la imagen para ocultar/mostrar el registro de depuración de abajo.
+
+### Directo: unirse desde el chat
+
+En un chat con directo activo aparece arriba el aviso rojo «🔴 Directo en vivo · Unirme» (como en Telegram). La pantalla del directo es a pantalla completa, gira con el móvil (botón ⟳ para forzarlo), muestra una barra superior (cerrar, título) al tocar y oculta el registro de depuración (pulsación larga sobre la imagen para verlo).

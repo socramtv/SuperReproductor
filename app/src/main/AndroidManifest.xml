@@ -110,6 +110,7 @@
         <activity
             android:name=".ui.LiveActivity"
             android:exported="false"
+            android:screenOrientation="fullSensor"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
 
         <!-- Cine: carátulas y sinopsis (ver CineActivity) -->

@@ -837,6 +837,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.emptyView.text = getString(R.string.tg_loading)
         binding.emptyView.visibility = View.VISIBLE
         loadMore()
+        refreshLive()
     }
 
     /** Lista de temas de un supergrupo con temas (foro). */
@@ -901,10 +902,45 @@ class TelegramAccountActivity : AppCompatActivity() {
         return list.getOrNull(idx)?.messageId ?: 0L
     }
 
+    /** Aviso rojo «Directo en vivo · Unirme» arriba del chat, como en Telegram. */
+    private fun updateLiveBanner() {
+        val chat = currentChat
+        val show = chat != null && !searching && chat.live
+        binding.tgLiveBanner.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) {
+            binding.tgLiveBanner.setOnClickListener {
+                currentChat?.let {
+                    startActivity(Intent(this, LiveActivity::class.java).putExtra("chatId", it.id).putExtra("title", it.title))
+                }
+            }
+        }
+    }
+
+    /** Vuelve a consultar si el chat abierto tiene un directo activo. */
+    private fun refreshLive() {
+        val chat = currentChat ?: return
+        backend?.loadChat(chat.id) { c ->
+            runOnUiThread {
+                val cur = currentChat
+                if (c != null && cur != null && cur.id == chat.id && c.live != cur.live) {
+                    currentChat = cur.copy(live = c.live)
+                    updateLiveBanner()
+                    invalidateOptionsMenu()
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshLive()
+    }
+
     private fun closeChat() {
         navStack.clear()
         returnToChatId = currentChat?.id ?: 0L
         currentChat = null
+        updateLiveBanner()
         currentTopic = null
         showingTopics = false
         binding.root.removeCallbacks(reloadRunnable)
@@ -2178,6 +2214,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Teclado de respuesta del bot, encima de la caja de texto (como en Telegram), con el botón ⌨ para ocultarlo. */
     private fun updateKeyboard() {
+        updateLiveBanner()
         val kb = if (currentChat == null || searching) emptyList()
         else messages.take(15).firstOrNull { m -> m.buttons.any { it.kind == "txt" } }?.buttons?.filter { it.kind == "txt" }.orEmpty()
         binding.tgKbdToggle.visibility = if (kb.isEmpty()) View.GONE else View.VISIBLE

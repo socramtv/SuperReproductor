@@ -53,6 +53,8 @@ class LiveActivity : AppCompatActivity() {
 
     private lateinit var image: ImageView
     private lateinit var logView: TextView
+    private lateinit var controls: View
+    private val hideControls = Runnable { controls.visibility = View.GONE }
     private val logLines = ArrayDeque<String>()
 
     private val rendering = AtomicBoolean(false)
@@ -93,20 +95,67 @@ class LiveActivity : AppCompatActivity() {
         chatId = intent.getLongExtra("chatId", 0L)
         title = intent.getStringExtra("title") ?: "Directo"
 
-        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); fitsSystemWindows = true }
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         image = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
         root.addView(image, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+        // Registro de depuración: oculto; se muestra con una pulsación larga sobre la imagen.
         logView = TextView(this).apply {
             setTextColor(Color.WHITE)
             setBackgroundColor(0x99000000.toInt())
             textSize = 11f
             setPadding(16, 8, 16, 8)
+            visibility = View.GONE
             setOnClickListener { visibility = View.GONE }
         }
         root.addView(logView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
-        // Tocar la imagen muestra u oculta el registro.
-        image.setOnClickListener { logView.visibility = if (logView.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+
+        // Barra superior (cerrar, título, girar): aparece al tocar y se oculta sola.
+        val dp = resources.displayMetrics.density
+        fun barButton(text: String, onClick: () -> Unit) = TextView(this).apply {
+            this.text = text
+            setTextColor(Color.WHITE)
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setPadding((16 * dp).toInt(), (10 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
+            isFocusable = true
+            isClickable = true
+            setOnClickListener { onClick(); showControls() }
+        }
+        controls = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(0x99000000.toInt())
+            addView(barButton("✕") { finish() })
+            addView(TextView(this@LiveActivity).apply {
+                text = "🔴 " + title
+                setTextColor(Color.WHITE)
+                textSize = 15f
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }, android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(barButton("⟳") {
+                requestedOrientation = if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE)
+                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            })
+        }
+        root.addView(controls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        image.isFocusable = true
+        image.setOnClickListener { if (controls.visibility == View.VISIBLE) controls.visibility = View.GONE else showControls() }
+        image.setOnLongClickListener {
+            logView.visibility = if (logView.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            true
+        }
         setContentView(root)
+
+        // Pantalla completa (se ocultan las barras del sistema; se recuperan deslizando desde el borde).
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        androidx.core.view.WindowInsetsControllerCompat(window, root).apply {
+            hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        showControls()
 
         val b = TelegramAccountFactory.create(this)
         backend = b
@@ -116,6 +165,12 @@ class LiveActivity : AppCompatActivity() {
         }
         control.execute { start(b) }
         ui.postDelayed(heartbeat, 4000)
+    }
+
+    private fun showControls() {
+        controls.visibility = View.VISIBLE
+        ui.removeCallbacks(hideControls)
+        ui.postDelayed(hideControls, 3500)
     }
 
     private fun log(msg: String) {
@@ -361,6 +416,7 @@ class LiveActivity : AppCompatActivity() {
     override fun onDestroy() {
         closed = true
         ui.removeCallbacks(heartbeat)
+        ui.removeCallbacks(hideControls)
         val n = ntg
         val b = backend
         val cid = chatId
