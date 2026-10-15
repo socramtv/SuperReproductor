@@ -32,6 +32,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import android.os.Handler
+import android.os.Looper
 
 /**
  * Ver dentro de la app el directo (chat de vídeo) de un canal o grupo de Telegram.
@@ -59,6 +61,22 @@ class LiveActivity : AppCompatActivity() {
     private var framesVideo = 0
     private var framesAudio = 0
 
+    private val reqCount = AtomicInteger(0)
+    private val okCount = AtomicInteger(0)
+    private val failCount = AtomicInteger(0)
+    private val ui = Handler(Looper.getMainLooper())
+    private var lastStatus = ""
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            val st = "partes: pedidas ${reqCount.get()}, ok ${okCount.get()}, fallos ${failCount.get()} | audio $framesAudio, vídeo $framesVideo"
+            if (st != lastStatus) {
+                lastStatus = st
+                log(st)
+            }
+            if (!closed) ui.postDelayed(this, 4000)
+        }
+    }
+
     @Volatile private var scale = 0
     @Volatile private var closed = false
     private val segCache = LinkedHashMap<String, ByteArray>()
@@ -70,7 +88,7 @@ class LiveActivity : AppCompatActivity() {
         chatId = intent.getLongExtra("chatId", 0L)
         title = intent.getStringExtra("title") ?: "Directo"
 
-        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); fitsSystemWindows = true }
         image = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
         root.addView(image, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         logView = TextView(this).apply {
@@ -92,6 +110,7 @@ class LiveActivity : AppCompatActivity() {
             return
         }
         control.execute { start(b) }
+        ui.postDelayed(heartbeat, 4000)
     }
 
     private fun log(msg: String) {
@@ -174,6 +193,8 @@ class LiveActivity : AppCompatActivity() {
 
     private fun answerPart(b: TgAccountBackend, n: NTgCalls, req: io.github.pytgcalls.models.SegmentPartRequest) {
         if (closed) return
+        val n0 = reqCount.incrementAndGet()
+        if (n0 <= 4) log("pide trozo seg=${req.segment_id} parte=${req.part_id} límite=${req.limit} canal=${req.channel_id} calidad=${req.quality}")
         val quality = when (req.quality) {
             MediaSegmentQuality.FULL -> 3
             MediaSegmentQuality.MEDIUM -> 2
@@ -201,12 +222,14 @@ class LiveActivity : AppCompatActivity() {
             val d = data
             if (d == null) {
                 val status = if (err.contains("TOO_SMALL", true)) MediaSegmentPartStatus.RESYNC_NEEDED else MediaSegmentPartStatus.NOT_READY
-                if (!err.contains("TOO_BIG", true)) log("trozo ${req.segment_id}: $status ${err.trim().take(120)}")
+                val f = failCount.incrementAndGet()
+                if (f <= 6) log("trozo ${req.segment_id}: $status ${err.trim().take(160)}")
                 n.sendBroadcastPart(KEY, req.segment_id, req.part_id, status, req.quality_update, null)
             } else {
                 val from = minOf(req.part_id.toLong() * req.limit, d.size.toLong()).toInt()
                 val to = minOf(from.toLong() + req.limit, d.size.toLong()).toInt()
                 n.sendBroadcastPart(KEY, req.segment_id, req.part_id, MediaSegmentPartStatus.SUCCESS, req.quality_update, d.copyOfRange(from, to))
+                if (okCount.incrementAndGet() <= 3) log("trozo ok: ${d.size} bytes (parte ${req.part_id})")
             }
         } catch (e: Throwable) {
             log("sendBroadcastPart: $e")
@@ -305,6 +328,7 @@ class LiveActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         closed = true
+        ui.removeCallbacks(heartbeat)
         val n = ntg
         val b = backend
         val cid = chatId
