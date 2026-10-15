@@ -1,6 +1,13 @@
 package com.example.superplayer.player
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.media3.cast.CastPlayer
@@ -89,6 +96,38 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /**
+     * Si el sistema arranca el servicio con startForegroundService() (Fire TV /
+     * Android TV lo hacen al conectarse un MediaController o al pulsar teclas
+     * multimedia) y no hay nada sonando, Media3 no publica notificación y
+     * Android mata la app con "did not then call Service.startForeground()".
+     * Se cumple siempre con una notificación mínima y, si no hay
+     * reproducción, se quita enseguida (el servicio sigue vivo y enlazado).
+     */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        try {
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(FALLBACK_CHANNEL) == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel(FALLBACK_CHANNEL, "Reproducción", NotificationManager.IMPORTANCE_LOW)
+                )
+            }
+            val n: Notification = NotificationCompat.Builder(this, FALLBACK_CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .setContentTitle("Socram TV+")
+                .setOngoing(true)
+                .build()
+            val type = if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+            ServiceCompat.startForeground(this, FALLBACK_ID, n, type)
+            val p = mediaSession?.player
+            if (p == null || !(p.playWhenReady && p.mediaItemCount > 0)) {
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            }
+        } catch (_: Exception) {
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -110,5 +149,10 @@ class PlaybackService : MediaSessionService() {
         localPlayer = null
         mediaSession = null
         super.onDestroy()
+    }
+
+    private companion object {
+        const val FALLBACK_CHANNEL = "playback_fallback"
+        const val FALLBACK_ID = 4711
     }
 }

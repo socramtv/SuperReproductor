@@ -1386,3 +1386,7 @@ En un chat con directo activo aparece arriba el aviso rojo «🔴 Directo en viv
 ### Directo: GPU y mando de TV
 
 El vídeo del directo se pinta con OpenGL (`YuvView`, shader YUV→RGB) en vez de convertir en la CPU: más fluido y menos batería. En TV, el aviso «Unirme» recibe el foco al abrir el chat y se resalta con borde blanco; dentro del directo, cualquier tecla del mando muestra la barra (✕ cerrar, 🔊 silenciar, ⟳ girar), con la selección resaltada; play/pausa o mute del mando silencian.
+
+## Corrección: cierre por `startForeground()` en TV
+
+`PlaybackService` ahora llama siempre a `startForeground()` con una notificación mínima al recibir `startForegroundService()` (y la quita si no hay reproducción), evitando el `RemoteServiceException` en Fire TV / Android TV.
