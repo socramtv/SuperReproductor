@@ -152,10 +152,10 @@ class LiveActivity : AppCompatActivity() {
 
             val payload = n.createCall(KEY)
             log("createCall ok (${payload.length} bytes)")
-            // Las fuentes se configuran DESPUÉS de crear la llamada (antes da "Connection not found").
+            // En reproducción, el audio recibido va por "microphone" (ntgcalls lo activa solo si existe). Las fuentes se configuran DESPUÉS de crear la llamada (antes da "Connection not found").
             val audio = AudioDescription(MediaSource.EXTERNAL, SAMPLE_RATE, CHANNELS, "", false)
             val video = VideoDescription(MediaSource.EXTERNAL, VIDEO_W, VIDEO_H, 30, "", false)
-            n.setStreamSources(KEY, StreamMode.PLAYBACK, MediaDescription(null, audio, video, video))
+            n.setStreamSources(KEY, StreamMode.PLAYBACK, MediaDescription(audio, null, video, video))
             log("fuentes de reproducción configuradas")
             val ssrc = try { JSONObject(payload).optLong("ssrc").toInt() } catch (e: Exception) { 0 }
             joinSsrc = ssrc
