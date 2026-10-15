@@ -1382,3 +1382,7 @@ En un chat con directo activo, menú ⋮ → «Ver el directo aquí (prueba)» (
 ### Directo: unirse desde el chat
 
 En un chat con directo activo aparece arriba el aviso rojo «🔴 Directo en vivo · Unirme» (como en Telegram). La pantalla del directo es a pantalla completa, gira con el móvil (botón ⟳ para forzarlo), muestra una barra superior (cerrar, título) al tocar y oculta el registro de depuración (pulsación larga sobre la imagen para verlo).
+
+### Directo: GPU y mando de TV
+
+El vídeo del directo se pinta con OpenGL (`YuvView`, shader YUV→RGB) en vez de convertir en la CPU: más fluido y menos batería. En TV, el aviso «Unirme» recibe el foco al abrir el chat y se resalta con borde blanco; dentro del directo, cualquier tecla del mando muestra la barra (✕ cerrar, 🔊 silenciar, ⟳ girar), con la selección resaltada; play/pausa o mute del mando silencian.

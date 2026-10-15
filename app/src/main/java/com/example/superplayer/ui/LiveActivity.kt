@@ -1,6 +1,5 @@
 package com.example.superplayer.ui
 
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.media.AudioAttributes
 import android.media.AudioFormat
@@ -12,7 +11,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.superplayer.telegram.TelegramAccountFactory
@@ -48,16 +46,16 @@ class LiveActivity : AppCompatActivity() {
 
     private val control = Executors.newSingleThreadExecutor()
     private val net = Executors.newCachedThreadPool()
-    private val render = Executors.newSingleThreadExecutor()
     private val audioExec = Executors.newSingleThreadExecutor()
 
-    private lateinit var image: ImageView
+    private lateinit var image: YuvView
+    private var muted = false
+    private lateinit var firstButton: View
     private lateinit var logView: TextView
     private lateinit var controls: View
     private val hideControls = Runnable { controls.visibility = View.GONE }
     private val logLines = ArrayDeque<String>()
 
-    private val rendering = AtomicBoolean(false)
     private val audioBacklog = AtomicInteger(0)
     private var audioTrack: AudioTrack? = null
     private var framesVideo = 0
@@ -96,7 +94,7 @@ class LiveActivity : AppCompatActivity() {
         title = intent.getStringExtra("title") ?: "Directo"
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
-        image = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+        image = YuvView(this)
         root.addView(image, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         // Registro de depuración: oculto; se muestra con una pulsación larga sobre la imagen.
@@ -120,13 +118,24 @@ class LiveActivity : AppCompatActivity() {
             setPadding((16 * dp).toInt(), (10 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
             isFocusable = true
             isClickable = true
+            // Resaltado visible al seleccionar con el mando (TV).
+            background = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0x66FFFFFF)
+                    setStroke((3 * dp).toInt(), Color.WHITE)
+                    cornerRadius = 8 * dp
+                })
+                addState(intArrayOf(), android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+            }
             setOnClickListener { onClick(); showControls() }
         }
         controls = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(0x99000000.toInt())
-            addView(barButton("✕") { finish() })
+            val closeBtn = barButton("✕") { finish() }
+            firstButton = closeBtn
+            addView(closeBtn)
             addView(TextView(this@LiveActivity).apply {
                 text = "🔴 " + title
                 setTextColor(Color.WHITE)
@@ -134,6 +143,14 @@ class LiveActivity : AppCompatActivity() {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }, android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(barButton("🔊") { }.also { btn ->
+                btn.setOnClickListener { v ->
+                    muted = !muted
+                    (v as TextView).text = if (muted) "🔇" else "🔊"
+                    audioTrack?.setVolume(if (muted) 0f else 1f)
+                    showControls()
+                }
+            })
             addView(barButton("⟳") {
                 requestedOrientation = if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE)
                     android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
@@ -170,7 +187,7 @@ class LiveActivity : AppCompatActivity() {
     private fun showControls() {
         controls.visibility = View.VISIBLE
         ui.removeCallbacks(hideControls)
-        ui.postDelayed(hideControls, 3500)
+        ui.postDelayed(hideControls, 6000)
     }
 
     private fun log(msg: String) {
@@ -356,6 +373,7 @@ class LiveActivity : AppCompatActivity() {
                         .setAudioFormat(AudioFormat.Builder().setSampleRate(SAMPLE_RATE).setChannelMask(channelMask).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
                         .setBufferSizeInBytes(maxOf(min, SAMPLE_RATE * CHANNELS * 2 / 2))
                         .build()
+                    t.setVolume(if (muted) 0f else 1f)
                     t.play()
                     audioTrack = t
                 }
@@ -371,46 +389,40 @@ class LiveActivity : AppCompatActivity() {
     private fun showVideo(data: ByteArray, w: Int, h: Int) {
         framesVideo++
         if (framesVideo == 1) log("llega vídeo ${w}x$h (${data.size} bytes)")
-        if (w <= 0 || h <= 0 || data.size < w * h * 3 / 2) return
-        if (!rendering.compareAndSet(false, true)) return // si va atrasado, se salta el fotograma
-        render.execute {
-            try {
-                val bmp = i420ToBitmap(data, w, h)
-                runOnUiThread { if (!closed) image.setImageBitmap(bmp) }
-            } catch (e: Throwable) {
-                log("vídeo: $e")
-            } finally {
-                rendering.set(false)
-            }
-        }
+        image.setFrame(data, w, h)
     }
 
-    private fun i420ToBitmap(d: ByteArray, w: Int, h: Int): Bitmap {
-        val px = IntArray(w * h)
-        val ySize = w * h
-        val cw = w / 2
-        val uOff = ySize
-        val vOff = ySize + cw * (h / 2)
-        for (j in 0 until h) {
-            val yRow = j * w
-            val cRow = (j shr 1) * cw
-            for (i in 0 until w) {
-                val c = (d[yRow + i].toInt() and 0xFF) - 16
-                val u = (d[uOff + cRow + (i shr 1)].toInt() and 0xFF) - 128
-                val v = (d[vOff + cRow + (i shr 1)].toInt() and 0xFF) - 128
-                val y298 = 298 * c + 128
-                var r = (y298 + 409 * v) shr 8
-                var g = (y298 - 100 * u - 208 * v) shr 8
-                var b = (y298 + 516 * u) shr 8
-                if (r < 0) r = 0 else if (r > 255) r = 255
-                if (g < 0) g = 0 else if (g > 255) g = 255
-                if (b < 0) b = 0 else if (b > 255) b = 255
-                px[yRow + i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+    // Mando de TV: cualquier tecla de dirección o OK muestra los controles y los selecciona.
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        when (keyCode) {
+            android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER -> {
+                if (controls.visibility != View.VISIBLE) {
+                    showControls()
+                    firstButton.requestFocus()
+                    return true
+                }
+                showControls()
+            }
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, android.view.KeyEvent.KEYCODE_MUTE -> {
+                muted = !muted
+                audioTrack?.setVolume(if (muted) 0f else 1f)
+                log(if (muted) "silenciado" else "con sonido")
+                return true
             }
         }
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        bmp.setPixels(px, 0, w, 0, 0, w, h)
-        return bmp
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        image.onResume()
+    }
+
+    override fun onPause() {
+        image.onPause()
+        super.onPause()
     }
 
     override fun onDestroy() {

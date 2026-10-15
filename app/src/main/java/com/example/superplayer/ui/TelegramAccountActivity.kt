@@ -906,7 +906,10 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun updateLiveBanner() {
         val chat = currentChat
         val show = chat != null && !searching && chat.live
+        val wasVisible = binding.tgLiveBanner.visibility == View.VISIBLE
         binding.tgLiveBanner.visibility = if (show) View.VISIBLE else View.GONE
+        // En TV (mando) el foco va directo al aviso para poder unirse con OK.
+        if (show && !wasVisible) binding.tgLiveBanner.post { binding.tgLiveBanner.requestFocus() }
         if (show) {
             binding.tgLiveBanner.setOnClickListener {
                 currentChat?.let {
