@@ -78,6 +78,9 @@ class LiveActivity : AppCompatActivity() {
     }
 
     @Volatile private var scale = 0
+    @Volatile private var joinSsrc = 0
+    @Volatile private var joinPayload = ""
+    private val rejoining = AtomicBoolean(false)
     @Volatile private var closed = false
     private val segCache = LinkedHashMap<String, ByteArray>()
     private val segLock = Any()
@@ -153,6 +156,8 @@ class LiveActivity : AppCompatActivity() {
             n.setStreamSources(KEY, StreamMode.PLAYBACK, MediaDescription(null, audio, video, video))
             log("fuentes de reproducción configuradas")
             val ssrc = try { JSONObject(payload).optLong("ssrc").toInt() } catch (e: Exception) { 0 }
+            joinSsrc = ssrc
+            joinPayload = payload
 
             val latch = CountDownLatch(1)
             var response: String? = null
@@ -225,14 +230,37 @@ class LiveActivity : AppCompatActivity() {
                 val f = failCount.incrementAndGet()
                 if (f <= 6) log("trozo ${req.segment_id}: $status ${err.trim().take(160)}")
                 n.sendBroadcastPart(KEY, req.segment_id, req.part_id, status, req.quality_update, null)
+                if (err.contains("JOIN_MISSING", true)) rejoin(b)
             } else {
-                val from = minOf(req.part_id.toLong() * req.limit, d.size.toLong()).toInt()
-                val to = minOf(from.toLong() + req.limit, d.size.toLong()).toInt()
-                n.sendBroadcastPart(KEY, req.segment_id, req.part_id, MediaSegmentPartStatus.SUCCESS, req.quality_update, d.copyOfRange(from, to))
+                // La parte 0 lleva el trozo ENTERO (ntgcalls no pide más partes aunque pase del límite).
+                val chunk = if (req.part_id == 0) d else {
+                    val from = minOf(req.part_id.toLong() * req.limit, d.size.toLong()).toInt()
+                    val to = minOf(from.toLong() + req.limit, d.size.toLong()).toInt()
+                    d.copyOfRange(from, to)
+                }
+                n.sendBroadcastPart(KEY, req.segment_id, req.part_id, MediaSegmentPartStatus.SUCCESS, req.quality_update, chunk)
                 if (okCount.incrementAndGet() <= 3) log("trozo ok: ${d.size} bytes (parte ${req.part_id})")
             }
         } catch (e: Throwable) {
             log("sendBroadcastPart: $e")
+        }
+    }
+
+    /** Telegram da de baja la sesión si pasa un rato (GROUPCALL_JOIN_MISSING): se vuelve a unir. */
+    private fun rejoin(b: TgAccountBackend) {
+        if (closed || joinPayload.isEmpty() || !rejoining.compareAndSet(false, true)) return
+        try {
+            log("sesión caducada (JOIN_MISSING): volviendo a unirse")
+            b.liveLeave(chatId)
+            Thread.sleep(1200)
+            val latch = CountDownLatch(1)
+            b.liveJoin(chatId, joinSsrc, joinPayload) { resp, info ->
+                log("reunirse: " + (if (resp == null) "FALLÓ " else "ok ") + info.trim().take(200))
+                latch.countDown()
+            }
+            latch.await(20, TimeUnit.SECONDS)
+        } finally {
+            rejoining.set(false)
         }
     }
 
