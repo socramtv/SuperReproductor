@@ -6,8 +6,8 @@ import android.opengl.GLSurfaceView
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengl.GL10
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.Proxy
 
 /**
  * Pinta fotogramas I420 (Y, U, V por separado) con la GPU: sin convertir a mano en la CPU
@@ -20,7 +20,8 @@ class YuvView(context: Context) : GLSurfaceView(context) {
     private var frameH = 0
     private var dirty = false
 
-    private val renderer = object : Renderer {
+    // Se evita nombrar GL10 (el compilador no lo encuentra): el Renderer se crea con un Proxy más abajo.
+    private val impl = object {
         private var program = 0
         private val tex = IntArray(3)
         private var viewW = 1
@@ -33,7 +34,7 @@ class YuvView(context: Context) : GLSurfaceView(context) {
             position(0)
         }
 
-        override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        fun created() {
             val vs = "attribute vec4 p; attribute vec2 t; varying vec2 v; void main(){ gl_Position = p; v = t; }"
             val fs = "precision mediump float; varying vec2 v; uniform sampler2D ty; uniform sampler2D tu; uniform sampler2D tv;" +
                 "void main(){ float y = 1.1643 * (texture2D(ty, v).r - 0.0625); float u = texture2D(tu, v).r - 0.5; float w = texture2D(tv, v).r - 0.5;" +
@@ -55,12 +56,12 @@ class YuvView(context: Context) : GLSurfaceView(context) {
             GLES20.glClearColor(0f, 0f, 0f, 1f)
         }
 
-        override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        fun changed(width: Int, height: Int) {
             viewW = maxOf(width, 1)
             viewH = maxOf(height, 1)
         }
 
-        override fun onDrawFrame(gl: GL10?) {
+        fun draw() {
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             var w: Int
             var h: Int
@@ -125,6 +126,22 @@ class YuvView(context: Context) : GLSurfaceView(context) {
 
     init {
         setEGLContextClientVersion(2)
+        val handler = InvocationHandler { proxy, method, args ->
+            when (method.name) {
+                "onSurfaceCreated" -> impl.created()
+                "onSurfaceChanged" -> impl.changed(args[1] as Int, args[2] as Int)
+                "onDrawFrame" -> impl.draw()
+                "toString" -> return@InvocationHandler "YuvRenderer"
+                "hashCode" -> return@InvocationHandler System.identityHashCode(proxy)
+                "equals" -> return@InvocationHandler proxy === args[0]
+            }
+            null
+        }
+        val renderer = Proxy.newProxyInstance(
+            GLSurfaceView.Renderer::class.java.classLoader,
+            arrayOf(GLSurfaceView.Renderer::class.java),
+            handler
+        ) as GLSurfaceView.Renderer
         setRenderer(renderer)
         renderMode = RENDERMODE_WHEN_DIRTY
     }
