@@ -536,7 +536,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_kbd)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_live)?.isVisible = inChat && chat?.live == true
-        menu.findItem(R.id.action_tgacc_watch)?.isVisible = inChat && chat?.live == true
+        menu.findItem(R.id.action_tgacc_watch)?.isVisible = inChat && (chat?.live == true || chat?.kind == "channel" || chat?.kind == "group" || chat?.kind == "forum")
         menu.findItem(R.id.action_tgacc_read)?.isVisible = inChat && !showingTopics
         menu.findItem(R.id.action_tgacc_leave)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group" || chat?.kind == "forum")
         menu.findItem(R.id.action_tgacc_join)?.isVisible = inChat && (chat?.kind == "channel" || chat?.kind == "group" || chat?.kind == "forum")
