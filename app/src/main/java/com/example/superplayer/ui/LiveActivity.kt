@@ -126,12 +126,13 @@ class LiveActivity : AppCompatActivity() {
             n.onRequestBroadcastTimestamp { _ -> net.execute { answerTimestamp(b, n) } }
             n.onRequestBroadcastPart { _, req -> net.execute { answerPart(b, n, req) } }
 
+            val payload = n.createCall(KEY)
+            log("createCall ok (${payload.length} bytes)")
+            // Las fuentes se configuran DESPUÉS de crear la llamada (antes da "Connection not found").
             val audio = AudioDescription(MediaSource.EXTERNAL, SAMPLE_RATE, CHANNELS, "", false)
             val video = VideoDescription(MediaSource.EXTERNAL, VIDEO_W, VIDEO_H, 30, "", false)
             n.setStreamSources(KEY, StreamMode.PLAYBACK, MediaDescription(null, audio, video, video))
-
-            val payload = n.createCall(KEY)
-            log("createCall ok (${payload.length} bytes)")
+            log("fuentes de reproducción configuradas")
             val ssrc = try { JSONObject(payload).optLong("ssrc").toInt() } catch (e: Exception) { 0 }
 
             val latch = CountDownLatch(1)
