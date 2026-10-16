@@ -1394,3 +1394,7 @@ El vídeo del directo se pinta con OpenGL (`YuvView`, shader YUV→RGB) en vez d
 ## Directos de Telegram: sesión más estable
 
 `LiveActivity` vigila la sesión: si pasan 12 s sin trozos, si varios fallan seguidos o si un sondeo cada 8 s responde `GROUPCALL_JOIN_MISSING`, se vuelve a unir solo (primero directo, luego salir y entrar con reintentos) con el mismo payload, sin reiniciar ntgcalls. El estado muestra el número de reconexiones.
+
+## Corrección: Telegram a veces se quedaba "conectando"
+
+Carrera al iniciar TDLib: la primera actualización podía llegar antes de que el cliente estuviera asignado y se perdían los parámetros de inicio. Ahora `send()` espera a que `start()` termine, y un vigilante pregunta el estado de autorización (`GetAuthorizationState`) si tras 5 s sigue en "conectando".

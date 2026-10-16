@@ -38,6 +38,24 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         } else {
             listener.onState(state)
         }
+        watchStartup(0)
+    }
+
+    /**
+     * Si tras unos segundos seguimos en "conectando", se le pregunta a TDLib en qué paso está
+     * y se actúa según su respuesta (por si se perdió la primera actualización de inicio).
+     */
+    private fun watchStartup(attempt: Int) {
+        if (attempt >= 4) return
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (state == TgAuthState.STARTING) {
+                val c = synchronized(this) { client }
+                c?.send(TdApi.GetAuthorizationState()) { r ->
+                    if (r is TdApi.AuthorizationState) handleAuth(r)
+                }
+                watchStartup(attempt + 1)
+            }
+        }, 5000)
     }
 
     private fun setState(newState: TgAuthState) {
@@ -46,7 +64,10 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     }
 
     private fun send(function: TdApi.Function<*>, onResult: ((TdApi.Object) -> Unit)? = null) {
-        val c = client ?: return
+        // Se espera a que start() termine de asignar el cliente: TDLib puede mandar la primera
+        // actualización (WaitTdlibParameters) antes de que Client.create() haya devuelto, y si
+        // aquí el cliente aún fuera nulo se perdería SetTdlibParameters y se quedaría "conectando" para siempre.
+        val c = synchronized(this) { client } ?: return
         c.send(function) { result ->
             if (result is TdApi.Error) {
                 listener?.onError(result.message)
