@@ -66,14 +66,45 @@ class LiveActivity : AppCompatActivity() {
     private val failCount = AtomicInteger(0)
     private val ui = Handler(Looper.getMainLooper())
     private var lastStatus = ""
+    private val consecFails = AtomicInteger(0)
+    private val rejoinCount = AtomicInteger(0)
+    @Volatile private var lastOkAt = 0L
+    @Volatile private var lastRejoinAt = 0L
+    private var beats = 0
     private val heartbeat = object : Runnable {
         override fun run() {
-            val st = "partes: pedidas ${reqCount.get()}, ok ${okCount.get()}, fallos ${failCount.get()} | audio $framesAudio, vídeo $framesVideo"
+            val st = "partes: pedidas ${reqCount.get()}, ok ${okCount.get()}, fallos ${failCount.get()} | audio $framesAudio, vídeo $framesVideo | reconexiones ${rejoinCount.get()}"
             if (st != lastStatus) {
                 lastStatus = st
                 log(st)
             }
+            keepAlive()
             if (!closed) ui.postDelayed(this, 4000)
+        }
+    }
+
+    /**
+     * Vigilante de la sesión: cada 4 s comprueba que Telegram sigue dándonos trozos y, cada 8 s,
+     * pregunta por los flujos (si responde JOIN_MISSING, nos ha dado de baja: se vuelve a unir
+     * enseguida, sin esperar a que falle un trozo y se congele la imagen).
+     */
+    private fun keepAlive() {
+        val b = backend ?: return
+        if (closed || joinPayload.isEmpty() || rejoining.get()) return
+        beats++
+        val now = System.currentTimeMillis()
+        if (lastOkAt != 0L && now - lastOkAt > 12000) {
+            net.execute { rejoin(b, "sin trozos desde hace ${(now - lastOkAt) / 1000} s") }
+            return
+        }
+        if (beats % 2 == 0) {
+            net.execute {
+                val latch = CountDownLatch(1)
+                var msg = ""
+                b.liveStreams(chatId) { _, i -> msg = i; latch.countDown() }
+                latch.await(10, TimeUnit.SECONDS)
+                if (msg.contains("JOIN_MISSING", true)) rejoin(b, "sondeo: JOIN_MISSING")
+            }
         }
     }
 
@@ -303,9 +334,11 @@ class LiveActivity : AppCompatActivity() {
             if (d == null) {
                 val status = if (err.contains("TOO_SMALL", true)) MediaSegmentPartStatus.RESYNC_NEEDED else MediaSegmentPartStatus.NOT_READY
                 val f = failCount.incrementAndGet()
+                val cf = consecFails.incrementAndGet()
                 if (f <= 6) log("trozo ${req.segment_id}: $status ${err.trim().take(160)}")
                 n.sendBroadcastPart(KEY, req.segment_id, req.part_id, status, req.quality_update, null)
-                if (err.contains("JOIN_MISSING", true)) rejoin(b)
+                if (err.contains("JOIN_MISSING", true)) rejoin(b, "JOIN_MISSING")
+                else if (cf >= 4 && !err.contains("TOO_SMALL", true)) rejoin(b, "$cf fallos seguidos")
             } else {
                 // La parte 0 lleva el trozo ENTERO (ntgcalls no pide más partes aunque pase del límite).
                 val chunk = if (req.part_id == 0) d else {
@@ -314,6 +347,8 @@ class LiveActivity : AppCompatActivity() {
                     d.copyOfRange(from, to)
                 }
                 n.sendBroadcastPart(KEY, req.segment_id, req.part_id, MediaSegmentPartStatus.SUCCESS, req.quality_update, chunk)
+                consecFails.set(0)
+                lastOkAt = System.currentTimeMillis()
                 if (okCount.incrementAndGet() <= 3) log("trozo ok: ${d.size} bytes (parte ${req.part_id})")
             }
         } catch (e: Throwable) {
@@ -321,20 +356,44 @@ class LiveActivity : AppCompatActivity() {
         }
     }
 
-    /** Telegram da de baja la sesión si pasa un rato (GROUPCALL_JOIN_MISSING): se vuelve a unir. */
-    private fun rejoin(b: TgAccountBackend) {
-        if (closed || joinPayload.isEmpty() || !rejoining.compareAndSet(false, true)) return
+    /**
+     * Telegram puede dar de baja la sesión (GROUPCALL_JOIN_MISSING). Se vuelve a unir con el mismo
+     * payload/ssrc, así ntgcalls sigue conectado y no hay que reiniciar nada. Primero se prueba
+     * unirse directamente (sin hueco); si no, salir, esperar y volver a entrar, con reintentos.
+     */
+    private fun rejoin(b: TgAccountBackend, reason: String) {
+        if (closed || joinPayload.isEmpty()) return
+        if (System.currentTimeMillis() - lastRejoinAt < 2500) return
+        if (!rejoining.compareAndSet(false, true)) return
         try {
-            log("sesión caducada (JOIN_MISSING): volviendo a unirse")
-            b.liveLeave(chatId)
-            Thread.sleep(1200)
-            val latch = CountDownLatch(1)
-            b.liveJoin(chatId, joinSsrc, joinPayload) { resp, info ->
-                log("reunirse: " + (if (resp == null) "FALLÓ " else "ok ") + info.trim().take(200))
-                latch.countDown()
+            lastRejoinAt = System.currentTimeMillis()
+            val n = rejoinCount.incrementAndGet()
+            log("reconectando #$n ($reason)")
+            var ok = false
+            var attempt = 0
+            while (!ok && !closed && attempt < 4) {
+                if (attempt > 0) {
+                    try { b.liveLeave(chatId) } catch (e: Throwable) { }
+                    Thread.sleep(800L * attempt)
+                }
+                val latch = CountDownLatch(1)
+                b.liveJoin(chatId, joinSsrc, joinPayload) { resp, info ->
+                    ok = resp != null
+                    if (!ok) log("reunirse (intento ${attempt + 1}): FALLÓ " + info.trim().take(160))
+                    latch.countDown()
+                }
+                latch.await(20, TimeUnit.SECONDS)
+                attempt++
             }
-            latch.await(20, TimeUnit.SECONDS)
+            if (ok) {
+                consecFails.set(0)
+                lastOkAt = System.currentTimeMillis()
+                log("reconexión #$n ok")
+            } else if (!closed) {
+                log("reconexión #$n fallida")
+            }
         } finally {
+            lastRejoinAt = System.currentTimeMillis()
             rejoining.set(false)
         }
     }

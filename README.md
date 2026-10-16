@@ -1390,3 +1390,7 @@ El vídeo del directo se pinta con OpenGL (`YuvView`, shader YUV→RGB) en vez d
 ## Corrección: cierre por `startForeground()` en TV
 
 `PlaybackService` ahora llama siempre a `startForeground()` con una notificación mínima al recibir `startForegroundService()` (y la quita si no hay reproducción), evitando el `RemoteServiceException` en Fire TV / Android TV.
+
+## Directos de Telegram: sesión más estable
+
+`LiveActivity` vigila la sesión: si pasan 12 s sin trozos, si varios fallan seguidos o si un sondeo cada 8 s responde `GROUPCALL_JOIN_MISSING`, se vuelve a unir solo (primero directo, luego salir y entrar con reintentos) con el mismo payload, sin reiniciar ntgcalls. El estado muestra el número de reconexiones.
