@@ -1398,3 +1398,7 @@ El vídeo del directo se pinta con OpenGL (`YuvView`, shader YUV→RGB) en vez d
 ## Corrección: Telegram a veces se quedaba "conectando"
 
 Carrera al iniciar TDLib: la primera actualización podía llegar antes de que el cliente estuviera asignado y se perdían los parámetros de inicio. Ahora `send()` espera a que `start()` termine, y un vigilante pregunta el estado de autorización (`GetAuthorizationState`) si tras 5 s sigue en "conectando".
+
+## Telegram: pósters con otro título
+
+Si el póster dice "Serie (Título original)" y los capítulos "Serie - 1x01", ahora se asocian igualmente (se prueba el título sin paréntesis y el de dentro). Si aun así no coincide, se usa la imagen publicada justo antes de los capítulos.

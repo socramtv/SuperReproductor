@@ -1048,6 +1048,16 @@ class TelegramAccountActivity : AppCompatActivity() {
         java.text.Normalizer.normalize(cleanName(raw).lowercase(), java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
 
+    /** Claves de nombre de un título: completo, sin el paréntesis ("Serie (Original)" -> "Serie") y el nombre entre paréntesis ("Original"). */
+    private fun nameVariants(title: String): List<String> {
+        val out = LinkedHashSet<String>()
+        out.add(nameKey(title))
+        val noParen = title.replace(Regex("\\((?!\\s*(?:19|20)\\d{2})[^)]*\\)"), " ").trim()
+        if (noParen != title) out.add(nameKey(noParen))
+        Regex("\\((?!\\s*(?:19|20)\\d{2})([^)]{2,})\\)").findAll(title).forEach { out.add(nameKey(it.groupValues[1])) }
+        return out.toList()
+    }
+
     private fun isImageMsg(m: TgMessage) = m.kind == "photo" || (m.kind == "document" && (m.mime ?: "").startsWith("image/"))
 
     /** Un .m3u subido como documento suele llegar con tipo "audio/…": hay que mirarlo antes de darlo por audio/vídeo. */
@@ -1080,8 +1090,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val imageByName = HashMap<String, TgMessage>()
         for (m in source) {
             if (!isImageMsg(m)) continue
-            val k = nameKey(titleOf(m))
-            if (k.length >= 2) imageByName.putIfAbsent(k, m)
+            for (k in nameVariants(titleOf(m))) if (k.length >= 2) imageByName.putIfAbsent(k, m)
         }
         // Varias versiones del mismo vídeo (mismo nombre) o todos los capítulos de una serie: una sola miniatura.
         val imageNoYear = HashMap<String, TgMessage>()
@@ -1101,6 +1110,23 @@ class TelegramAccountActivity : AppCompatActivity() {
         val usedImages = HashSet<Long>()
         for ((k, list) in groups) {
             val img = findImage(k.removePrefix("s:")) ?: continue
+            if (usedImages.add(img.messageId)) pairedByLeader[list[0].messageId] = img
+        }
+        // Pósters con otro título (p. ej. "Hijos de la anarquía (Sons of Anarchy)" y los capítulos "Hijos de la Anarquía - 1x01"):
+        // si una serie sigue sin imagen, se usa el póster más cercano publicado justo antes de sus capítulos.
+        val srcPos = HashMap<Long, Int>()
+        source.forEachIndexed { i, x -> srcPos[x.messageId] = i }
+        for ((k, list) in groups) {
+            if (!k.startsWith("s:") || list.size < 2 || list.any { pairedByLeader.containsKey(it.messageId) }) continue
+            val oldest = srcPos[list.last().messageId] ?: continue
+            var found: TgMessage? = null
+            var i = oldest + 1
+            while (i < source.size && i <= oldest + 12 && found == null) {
+                val c = source[i]
+                if (isImageMsg(c) && c.messageId !in usedImages) found = c
+                i++
+            }
+            val img = found ?: continue
             if (usedImages.add(img.messageId)) pairedByLeader[list[0].messageId] = img
         }
         // Listas (.m3u…) con su imagen del mismo nombre.
