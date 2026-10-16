@@ -805,6 +805,10 @@ En el menú de los tres puntos de la portada:
   reproductor se sustituyen por los de la copia. Al terminar sale un aviso con
   lo que entró de cada cosa. Las copias hechas con versiones anteriores
   siguen funcionando (simplemente no traen esas partes).
+- También guarda (y suma al importar, sin borrar nada): los **vídeos favoritos y
+  carpetas de Telegram**, los **chats favoritos** de Telegram, los **marcadores
+  del navegador** y los **equipos de los avisos de goles**. No guarda la sesión
+  de Telegram ni el api_id/api_hash (cada uno inicia sesión y los introduce).
 - No incluye las listas descargadas ni la guía de programación: se vuelven a
   bajar solas de sus URLs al abrir cada hueco. El archivo cargado con
   "Cargar archivo" tampoco se guarda (hay que volver a elegirlo).

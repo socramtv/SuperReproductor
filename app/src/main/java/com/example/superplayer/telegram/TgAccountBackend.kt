@@ -239,6 +239,80 @@ object TelegramAccountPrefs {
         prefs(context).edit().putString("fav_chat_info", o.toString()).apply()
     }
 
+    /** Para la copia de seguridad: favoritos, carpetas de vídeos y chats favoritos (no incluye credenciales ni la sesión). */
+    fun exportBackup(context: Context): JSONObject {
+        val p = prefs(context)
+        fun arr(key: String) = try { JSONArray(p.getString(key, "[]")) } catch (e: Exception) { JSONArray() }
+        fun obj(key: String) = try { JSONObject(p.getString(key, "{}")) } catch (e: Exception) { JSONObject() }
+        return JSONObject()
+            .put("favVideos", arr("fav_videos"))
+            .put("folders", arr("video_folders"))
+            .put("favChats", JSONArray(p.getStringSet("fav_chats", emptySet())!!.toList()))
+            .put("favChatInfo", obj("fav_chat_info"))
+    }
+
+    /** Suma lo de la copia a lo que ya hay (no borra nada); devuelve cuántos elementos nuevos entraron. */
+    fun importBackup(context: Context, o: JSONObject): Int {
+        val p = prefs(context)
+        var added = 0
+        fun keyOf(x: JSONObject) = x.optLong("c").toString() + ":" + x.optLong("m")
+        fun mergeVideos(base: MutableList<JSONObject>, extra: JSONArray?): Int {
+            if (extra == null) return 0
+            val seen = base.map { keyOf(it) }.toMutableSet()
+            var n = 0
+            for (i in 0 until extra.length()) {
+                val x = extra.optJSONObject(i) ?: continue
+                if (seen.add(keyOf(x))) { base.add(x); n++ }
+            }
+            return n
+        }
+        // Vídeos favoritos
+        val favs = videoFavorites(context).toMutableList()
+        val n1 = mergeVideos(favs, o.optJSONArray("favVideos"))
+        if (n1 > 0) {
+            val a = JSONArray(); for (x in favs) a.put(x)
+            p.edit().putString("fav_videos", a.toString()).apply()
+            added += n1
+        }
+        // Carpetas
+        val folders = foldersJson(context)
+        val incoming = o.optJSONArray("folders")
+        var foldersChanged = false
+        if (incoming != null) {
+            for (i in 0 until incoming.length()) {
+                val f = incoming.optJSONObject(i) ?: continue
+                val name = f.optString("n")
+                if (name.isEmpty()) continue
+                var mine = findFolder(folders, name)
+                if (mine == null) {
+                    mine = JSONObject().put("n", name).put("v", JSONArray())
+                    folders.put(mine)
+                    foldersChanged = true
+                }
+                val list = (mine.optJSONArray("v") ?: JSONArray()).let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.toMutableList() }
+                val n = mergeVideos(list, f.optJSONArray("v"))
+                if (n > 0) {
+                    val a = JSONArray(); for (x in list) a.put(x)
+                    mine.put("v", a)
+                    added += n
+                    foldersChanged = true
+                }
+            }
+        }
+        if (foldersChanged) saveFolders(context, folders)
+        // Chats favoritos
+        val chats = HashSet(p.getStringSet("fav_chats", emptySet())!!)
+        val inc = o.optJSONArray("favChats")
+        var n3 = 0
+        if (inc != null) for (i in 0 until inc.length()) if (chats.add(inc.optString(i))) n3++
+        val info = try { JSONObject(p.getString("fav_chat_info", "{}")) } catch (e: Exception) { JSONObject() }
+        o.optJSONObject("favChatInfo")?.let { bi -> for (k in bi.keys()) if (!info.has(k)) info.put(k, bi.get(k)) }
+        if (n3 > 0 || o.has("favChatInfo")) {
+            p.edit().putStringSet("fav_chats", chats).putString("fav_chat_info", info.toString()).apply()
+        }
+        return added + n3
+    }
+
     fun favoriteChatInfo(context: Context): Map<Long, TgChat> {
         val o = try { JSONObject(prefs(context).getString("fav_chat_info", "{}")) } catch (e: Exception) { JSONObject() }
         val out = HashMap<Long, TgChat>()

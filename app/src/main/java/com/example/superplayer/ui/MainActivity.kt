@@ -1069,7 +1069,7 @@ class MainActivity : AppCompatActivity() {
                 getString(
                     R.string.backup_import_ok_full,
                     result.newFavorites, result.listUrls, result.filters,
-                    result.hiddenChannels, result.renamedChannels, result.reminders, result.continueItems
+                    result.hiddenChannels, result.renamedChannels, result.reminders, result.continueItems, result.otherItems
                 ),
                 Toast.LENGTH_LONG
             ).show()

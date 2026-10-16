@@ -34,7 +34,9 @@ object BackupManager {
         val hiddenChannels: Int = 0,
         val renamedChannels: Int = 0,
         val reminders: Int = 0,
-        val continueItems: Int = 0
+        val continueItems: Int = 0,
+        /** Elementos nuevos de Telegram (vídeos favoritos, carpetas, chats), marcadores web y equipos de avisos de goles. */
+        val otherItems: Int = 0
     )
 
     fun export(context: Context): String {
@@ -103,6 +105,16 @@ object BackupManager {
         // Avisos por programa y pausa en directo.
         root.put("programAlerts", JSONArray(com.example.superplayer.reminder.ProgramAlerts.getAll(context)))
         root.put("timeShiftMinutes", AppPrefs.getTimeShiftMinutes(context))
+
+        // Telegram (favoritos, carpetas y chats favoritos), marcadores del navegador y avisos de goles.
+        root.put("telegram", com.example.superplayer.telegram.TelegramAccountPrefs.exportBackup(context))
+        root.put("webBookmarks", webBookmarks(context))
+        root.put(
+            "goalAlerts",
+            JSONObject()
+                .put("enabled", com.example.superplayer.sports.GoalAlerts.isEnabled(context))
+                .put("teams", JSONArray(com.example.superplayer.sports.GoalAlerts.getTeams(context)))
+        )
         return root.toString(2)
     }
 
@@ -225,6 +237,43 @@ object BackupManager {
             AppPrefs.setTimeShiftMinutes(context, root.optInt("timeShiftMinutes", 0))
         }
 
-        return ImportResult(newFavorites, urlCount, filterCount, darkChanged, newHidden, newNames, newReminders, newContinue)
+        var other = 0
+        root.optJSONObject("telegram")?.let { other += com.example.superplayer.telegram.TelegramAccountPrefs.importBackup(context, it) }
+        root.optJSONArray("webBookmarks")?.let { other += mergeWebBookmarks(context, it) }
+        root.optJSONObject("goalAlerts")?.let { g ->
+            val mine = com.example.superplayer.sports.GoalAlerts.getTeams(context)
+            val extra = (0 until (g.optJSONArray("teams")?.length() ?: 0)).map { g.optJSONArray("teams")!!.optString(it) }
+                .filter { it.isNotBlank() && it !in mine }
+            if (extra.isNotEmpty()) {
+                com.example.superplayer.sports.GoalAlerts.setTeams(context, mine + extra)
+                other += extra.size
+            }
+            if (g.optBoolean("enabled", false) && !com.example.superplayer.sports.GoalAlerts.isEnabled(context)) {
+                com.example.superplayer.sports.GoalAlerts.setEnabled(context, true)
+            }
+        }
+
+        return ImportResult(newFavorites, urlCount, filterCount, darkChanged, newHidden, newNames, newReminders, newContinue, other)
+    }
+
+    // ---- Marcadores del navegador (ver WebActivity) ----
+
+    private fun webPrefs(context: Context) =
+        context.applicationContext.getSharedPreferences("web_browser", Context.MODE_PRIVATE)
+
+    private fun webBookmarks(context: Context): JSONArray =
+        try { JSONArray(webPrefs(context).getString("bookmarks", "[]")) } catch (e: Exception) { JSONArray() }
+
+    private fun mergeWebBookmarks(context: Context, incoming: JSONArray): Int {
+        val mine = webBookmarks(context)
+        val seen = (0 until mine.length()).mapNotNull { mine.optJSONObject(it)?.optString("u") }.toMutableSet()
+        var n = 0
+        for (i in 0 until incoming.length()) {
+            val o = incoming.optJSONObject(i) ?: continue
+            val u = o.optString("u")
+            if (u.isNotEmpty() && seen.add(u)) { mine.put(o); n++ }
+        }
+        if (n > 0) webPrefs(context).edit().putString("bookmarks", mine.toString()).apply()
+        return n
     }
 }
