@@ -536,6 +536,8 @@
     <string name="web_clear_confirm">¿Borrar caché, historial, cookies y datos de las webs?</string>
     <string name="web_cleared">Datos borrados</string>
     <string name="tgweb_open">🌐 Abrir en la web: %1$s</string>
+    <string name="tg_pick_event">Elige el evento</string>
+    <string name="tg_play_options">▶ Reproducir en el reproductor (%1$d enlaces)</string>
     <string name="tgweb_play_link">▶ Reproducir el enlace en el reproductor</string>
     <string name="tgacc_menu_ntg">Diagnóstico de llamadas (ntgcalls)</string>
     <string name="tgacc_menu_watch">Unirme al directo</string>

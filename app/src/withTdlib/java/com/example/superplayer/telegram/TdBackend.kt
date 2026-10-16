@@ -592,6 +592,11 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             if (t is TdApi.TextEntityTypeTextUrl) found.add(t.url)
         }
         val links = found.map { if (it.startsWith("t.me/")) "https://$it" else it }.distinct()
+        val linkSpans = ArrayList<TgLinkSpan>()
+        fmt?.entities?.forEach { e ->
+            val t = e.type
+            if (t is TdApi.TextEntityTypeTextUrl && e.length > 0) linkSpans.add(TgLinkSpan(e.offset, e.offset + e.length, t.url))
+        }
         if (kind == "none" && text.isEmpty()) return null
         val senderName = when (val sid = m.senderId) {
             is TdApi.MessageSenderUser -> userNames[sid.userId] ?: ""
@@ -616,7 +621,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             m.chatId, chatTitle, chatKind, m.id, m.date.toLong(), text, kind,
             file?.id?.toString(), name?.ifEmpty { null }, mime?.ifEmpty { null },
             file?.let { if (it.size > 0) it.size else it.expectedSize } ?: 0L, links, buttons,
-            m.isOutgoing, senderName, thumb?.id ?: 0
+            m.isOutgoing, senderName, thumb?.id ?: 0, linkSpans
         )
     }
 

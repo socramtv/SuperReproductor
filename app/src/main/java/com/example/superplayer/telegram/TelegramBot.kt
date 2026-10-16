@@ -11,6 +11,9 @@ import java.net.URLEncoder
 /** [row]: fila del teclado en la que va el botón (como en Telegram). */
 data class TgButton(val text: String, val kind: String, val data: String, val row: Int = 0)
 
+/** Trozo del texto de un mensaje ([start] incluido, [end] excluido) que es un enlace con texto ("Opción 1") hacia [url]. */
+data class TgLinkSpan(val start: Int, val end: Int, val url: String)
+
 /** Un mensaje guardado de un canal o grupo donde está el bot. */
 data class TgMessage(
     val chatId: Long,
@@ -30,7 +33,9 @@ data class TgMessage(
     val outgoing: Boolean = false,
     val sender: String = "",
     /** Archivo de la miniatura (fotos, vídeos…) para mostrarla en la lista; 0 si no hay. */
-    val thumbId: Int = 0
+    val thumbId: Int = 0,
+    /** Enlaces con texto dentro del mensaje (la URL no se ve en el texto). */
+    val linkSpans: List<TgLinkSpan> = emptyList()
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("c", chatId).put("ct", chatTitle).put("cy", chatType)

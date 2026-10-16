@@ -45,6 +45,7 @@ import com.example.superplayer.telegram.TgAccountBackend
 import com.example.superplayer.telegram.TgAuthState
 import com.example.superplayer.telegram.TgStreamServer
 import com.example.superplayer.telegram.TgChat
+import com.example.superplayer.telegram.TgLinkSpan
 import com.example.superplayer.telegram.TgMessage
 import com.example.superplayer.telegram.TgTopic
 import java.io.File
@@ -2341,7 +2342,15 @@ class TelegramAccountActivity : AppCompatActivity() {
                 actions.add { downloadAndPlay(m) }
             }
         }
+        val optUrls = HashSet<String>()
+        val opts = linkOptions(m)
+        if (opts.isNotEmpty()) {
+            optUrls.addAll(opts.map { it.url })
+            labels.add(getString(R.string.tg_play_options, opts.size))
+            actions.add { showLinkOptions(m) }
+        }
         for (link in m.links) {
+            if (link in optUrls) continue
             if (isTgLink(link)) {
                 labels.add(getString(R.string.tgacc_open_link, link.removePrefix("https://").removePrefix("http://").take(40)))
                 actions.add { openTgLink(link) }
@@ -2611,15 +2620,91 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
-    private fun playUrl(url: String, name: String) {
-        val lower = url.lowercase().substringBefore('?')
-        val type = when {
-            lower.endsWith(".m3u8") -> "HLS"
-            lower.endsWith(".mpd") -> "DASH"
+    private fun streamTypeOf(url: String): String {
+        val full = url.lowercase()
+        val lower = full.substringBefore('?')
+        return when {
+            lower.endsWith(".m3u8") || full.contains(".m3u8") -> "HLS"
+            lower.endsWith(".mpd") || full.contains(".mpd") -> "DASH"
             lower.endsWith(".mp3") || lower.endsWith(".aac") -> "MP3"
             else -> "MP4"
         }
-        open(Stream(name = name.take(80), type = type, url = url, icon = null, category = "Telegram"))
+    }
+
+    private fun playUrl(url: String, name: String) {
+        open(Stream(name = name.take(80), type = streamTypeOf(url), url = url, icon = null, category = "Telegram"))
+    }
+
+    // ---- Mensajes de bots con enlaces con texto ("Opción 1 en reproductor"), agrupados por evento ----
+
+    private class LinkOpt(val url: String, val event: String, val option: String, val group: Int, val start: Int)
+
+    private val reDashLine = Regex("^[\\s\\p{Pd}\\u2500-\\u257F_=*~.]+$")
+    private val reLeadSymbols = Regex("^[^\\p{L}\\p{N}]+")
+    private val reOptionName = Regex("(?i)opci[oó]n\\s*\\d+")
+
+    /** Cada enlace con texto del mensaje (no de Telegram) con el evento (su párrafo) al que pertenece. */
+    private fun linkOptions(m: TgMessage): List<LinkOpt> {
+        val text = m.text
+        val out = ArrayList<LinkOpt>()
+        for (sp in m.linkSpans) {
+            if (sp.start < 0 || sp.end > text.length || sp.start >= sp.end) continue
+            if (isTgLink(sp.url)) continue
+            val ps = text.lastIndexOf("\n\n", maxOf(sp.start - 1, 0)).let { if (it < 0) 0 else it + 2 }
+            val pe = text.indexOf("\n\n", sp.end).let { if (it < 0) text.length else it }
+            val anchors = m.linkSpans.filter { it.start >= ps && it.end <= pe && it.end <= text.length }
+                .map { text.substring(it.start, it.end).trim() }.filter { it.isNotEmpty() }
+            val title = text.substring(ps, pe).lines().map { it.trim() }
+                .filter { it.isNotEmpty() && !reDashLine.matches(it) && !it.contains("📅") && anchors.none { a -> it.contains(a) } }
+                .map { it.replace(reLeadSymbols, "") }.filter { it.isNotEmpty() }
+                .joinToString(" · ")
+            val anchor = text.substring(sp.start, sp.end).trim()
+            val option = reOptionName.find(anchor)?.value ?: anchor.replace(reLeadSymbols, "").ifEmpty { anchor }
+            out.add(LinkOpt(sp.url, title.ifEmpty { cleanName(titleOf(m)) }, option, ps, sp.start))
+        }
+        return out
+    }
+
+    private fun streamOf(o: LinkOpt) =
+        Stream(name = (o.event.take(60) + " · " + o.option).take(80), type = streamTypeOf(o.url), url = o.url, icon = null, category = "Telegram")
+
+    private fun playOption(o: LinkOpt, group: List<LinkOpt>) {
+        open(streamOf(o), group.map { streamOf(it) })
+    }
+
+    private fun chooseOption(group: List<LinkOpt>) {
+        if (group.size == 1) {
+            playOption(group[0], group)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(group[0].event.take(70))
+            .setItems(group.map { "▶ " + it.option }.toTypedArray()) { _, i -> playOption(group[i], group) }
+            .show()
+    }
+
+    /** Elegir el evento y, después, la opción: se reproduce en el reproductor principal. */
+    private fun showLinkOptions(m: TgMessage) {
+        val groups = linkOptions(m).groupBy { it.group }.values.toList()
+        when {
+            groups.isEmpty() -> {}
+            groups.size == 1 -> chooseOption(groups[0])
+            else -> AlertDialog.Builder(this)
+                .setTitle(R.string.tg_pick_event)
+                .setItems(groups.map { it[0].event.take(80) + "  (" + it.size + ")" }.toTypedArray()) { _, i -> chooseOption(groups[i]) }
+                .show()
+        }
+    }
+
+    /** Pulsar un enlace con texto dentro de la burbuja. */
+    private fun onLinkSpanClick(m: TgMessage, sp: TgLinkSpan) {
+        if (isTgLink(sp.url)) {
+            openTgLink(sp.url)
+            return
+        }
+        val opts = linkOptions(m)
+        val o = opts.firstOrNull { it.start == sp.start }
+        if (o == null) playUrl(sp.url, cleanName(titleOf(m)).ifEmpty { sp.url }) else playOption(o, opts.filter { it.group == o.group })
     }
 
     private fun open(stream: Stream, list: List<Stream> = emptyList()) {
@@ -2721,7 +2806,30 @@ class TelegramAccountActivity : AppCompatActivity() {
                 for (u in reUrlInText.findAll(text)) {
                     sp.setSpan(android.text.style.ForegroundColorSpan(linkColor), u.range.first, u.range.last + 1, 0)
                 }
+                val spans = m.linkSpans.filter { it.start >= 0 && it.end <= text.length && it.start < it.end }
+                for (ls in spans) {
+                    sp.setSpan(object : android.text.style.ClickableSpan() {
+                        override fun onClick(widget: View) { onLinkSpanClick(m, ls) }
+                        override fun updateDrawState(ds: android.text.TextPaint) {
+                            ds.color = linkColor
+                            ds.isUnderlineText = false
+                        }
+                    }, ls.start, ls.end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
                 b.tgbText.text = sp
+                if (spans.isNotEmpty()) {
+                    b.tgbText.movementMethod = android.text.method.LinkMovementMethod.getInstance()
+                    b.tgbText.setOnClickListener { b.tgbBubble.performClick() }
+                    b.tgbText.setOnLongClickListener { b.tgbBubble.performLongClick() }
+                    b.tgbText.isFocusable = false
+                } else {
+                    b.tgbText.movementMethod = null
+                    b.tgbText.setOnClickListener(null)
+                    b.tgbText.setOnLongClickListener(null)
+                    b.tgbText.isClickable = false
+                    b.tgbText.isLongClickable = false
+                    b.tgbText.isFocusable = false
+                }
                 b.tgbText.visibility = View.VISIBLE
             }
             // Hora
