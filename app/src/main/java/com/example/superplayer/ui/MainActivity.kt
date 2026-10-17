@@ -394,9 +394,9 @@ class MainActivity : AppCompatActivity() {
         reapplyChannelOverrides()
         updateCategoryFilterButton()
         // Al volver de ver algo: "Continuar viendo" y el orden de Favoritos pueden haber cambiado.
-        if (playlist.categories.isNotEmpty()) categoryAdapter.submit(buildCategoryListWithFavorites())
+        if (playlist.categories.isNotEmpty()) refreshCategories(restoreLast = true)
         if (binding.recyclerView.adapter === streamAdapter) {
-            streamAdapter.notifyDataSetChanged()
+            FocusKeeper.keep(binding.recyclerView) { streamAdapter.notifyDataSetChanged() }
         }
     }
 
@@ -412,7 +412,7 @@ class MainActivity : AppCompatActivity() {
     private fun refreshAfterChannelChange() {
         reapplyChannelOverrides()
         updateCategoryFilterButton()
-        categoryAdapter.submit(buildCategoryListWithFavorites())
+        refreshCategories()
         streamAdapter.notifyDataSetChanged()
     }
 
@@ -686,7 +686,27 @@ class MainActivity : AppCompatActivity() {
         return result
     }
 
+    /** Última categoría abierta: al volver, el foco del mando se queda en ella (no salta a la lupa). */
+    private var lastCategoryName: String? = null
+
+    /** Repinta las categorías conservando la fila con foco (o la última abierta al volver de ella). */
+    private fun refreshCategories(restoreLast: Boolean = false) {
+        val rv = binding.recyclerView
+        val onCats = rv.adapter === categoryAdapter
+        val focused = if (onCats) rv.focusedChild else null
+        val fpos = if (focused != null) rv.getChildAdapterPosition(focused) else androidx.recyclerview.widget.RecyclerView.NO_POSITION
+        val name = (if (fpos >= 0) categoryAdapter.nameAt(fpos) else null) ?: (if (restoreLast) lastCategoryName else null)
+        val list = buildCategoryListWithFavorites()
+        categoryAdapter.submit(list)
+        if (restoreLast) lastCategoryName = null
+        if (onCats && name != null) {
+            val idx = list.indexOfFirst { it.name == name }
+            if (idx >= 0) FocusKeeper.restore(rv, idx)
+        }
+    }
+
     private fun openCategory(category: Category) {
+        lastCategoryName = category.name
         StreamListActivity.pendingStreams = category.streams
         val intent = Intent(this, StreamListActivity::class.java)
         intent.putExtra(StreamListActivity.EXTRA_CATEGORY_NAME, category.name)
@@ -706,8 +726,8 @@ class MainActivity : AppCompatActivity() {
             getString(if (nowFav) R.string.added_to_favorites else R.string.removed_from_favorites),
             Toast.LENGTH_SHORT
         ).show()
-        categoryAdapter.submit(buildCategoryListWithFavorites())
-        streamAdapter.notifyDataSetChanged()
+        refreshCategories()
+        FocusKeeper.keep(binding.recyclerView) { streamAdapter.notifyDataSetChanged() }
         refreshShortcuts()
     }
 

@@ -79,7 +79,7 @@ class StreamListActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        adapter.notifyDataSetChanged()
+        FocusKeeper.keep(binding.recyclerView) { adapter.notifyDataSetChanged() }
     }
 
     /** Tras ocultar/renombrar/comprobar canales: quita los ocultos y pone los nombres propios en esta lista. */

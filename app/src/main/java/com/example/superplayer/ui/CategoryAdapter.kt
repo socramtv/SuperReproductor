@@ -28,6 +28,8 @@ class CategoryAdapter(
 
     override fun getItemCount() = items.size
 
+    fun nameAt(position: Int): String? = items.getOrNull(position)?.name
+
     inner class ViewHolder(private val binding: ItemCategoryBinding) :
         RecyclerView.ViewHolder(binding.root) {
 

@@ -1417,3 +1417,7 @@ Los enlaces ocultos tras un texto ("🔗 Opción 1 en reproductor") ahora se ven
 - **Telegram, volver de un chat:** el foco vuelve a la misma fila donde estabas (con reintentos hasta que la lista está pintada), en vez de saltar a la lupa.
 - **Favoritos ordenables:** en la pestaña ⭐ Favoritos, pulsación larga (mantener OK en el mando) en un chat → mover arriba/abajo, al principio o al final, o quitarlo. El orden se guarda y va en la copia de seguridad.
 - **📁 Carpetas:** nueva pestaña con tus carpetas de chats de Telegram (las compartidas por enlace salen primero, marcadas con 🔗). Al abrir una se ven sus chats.
+
+## TV: el foco no salta a la lupa al volver
+
+En la portada, al volver de una categoría (o del reproductor) el foco del mando se queda en la misma fila (`FocusKeeper`): se recuerda la última categoría abierta y se reintenta el foco hasta que la lista está pintada. Lo mismo dentro de la lista de canales de una categoría.
