@@ -1421,3 +1421,7 @@ Los enlaces ocultos tras un texto ("🔗 Opción 1 en reproductor") ahora se ven
 ## TV: el foco no salta a la lupa al volver
 
 En la portada, al volver de una categoría (o del reproductor) el foco del mando se queda en la misma fila (`FocusKeeper`): se recuerda la última categoría abierta y se reintenta el foco hasta que la lista está pintada. Lo mismo dentro de la lista de canales de una categoría.
+
+## Portada de bienvenida
+
+Mientras no hay ninguna lista cargada (solo la lista de ejemplo "Demo"), el espacio de las categorías muestra el logo de la app dentro de una **gota de agua** (`ic_launcher_app` recortado con la silueta) y un resumen de lo que hace la app: listas IPTV, reproductor, favoritos, guía y avisos, radio y cine, Telegram, navegador, móvil/TV y copia de seguridad. En cuanto cargas una lista (o buscas), se ven las categorías de siempre. En TV el panel se desplaza con las flechas.

@@ -129,11 +129,55 @@ class MainActivity : AppCompatActivity() {
         binding.recyclerView.adapter = categoryAdapter
 
         setupListSlotButtons()
+        setupHomeInfo()
         loadInitialPlaylist()
         handleAssistantIntent(intent)
         handleMatchIntent(intent)
         updateSlotButtonLabels()
         autoRefreshLists()
+    }
+
+    /** Portada de bienvenida (logo en gota + resumen de lo que hace la app): se ve mientras solo hay la lista de ejemplo. */
+    private fun setupHomeInfo() {
+        val logo = binding.homeLogo
+        logo.clipToOutline = true
+        logo.outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) {
+                val w = view.width.toFloat()
+                val h = view.height.toFloat()
+                if (w <= 0f || h <= 0f) return
+                val r = w / 2f
+                val p = android.graphics.Path()
+                p.moveTo(w / 2f, 0f)
+                p.cubicTo(w * 0.5f, h * 0.14f, 0f, h * 0.38f, 0f, h - r)
+                p.arcTo(android.graphics.RectF(0f, h - 2f * r, w, h), 180f, -180f)
+                p.cubicTo(w, h * 0.38f, w * 0.5f, h * 0.14f, w / 2f, 0f)
+                p.close()
+                outline.setConvexPath(p)
+            }
+        }
+        val items = listOf(
+            R.string.home_t1 to R.string.home_d1, R.string.home_t2 to R.string.home_d2,
+            R.string.home_t3 to R.string.home_d3, R.string.home_t4 to R.string.home_d4,
+            R.string.home_t5 to R.string.home_d5, R.string.home_t6 to R.string.home_d6,
+            R.string.home_t7 to R.string.home_d7, R.string.home_t8 to R.string.home_d8,
+            R.string.home_t9 to R.string.home_d9
+        )
+        val inflater = android.view.LayoutInflater.from(this)
+        for ((t, d) in items) {
+            val v = inflater.inflate(R.layout.item_home_info, binding.homeItems, false)
+            v.findViewById<android.widget.TextView>(R.id.homeItemTitle).setText(t)
+            v.findViewById<android.widget.TextView>(R.id.homeItemText).setText(d)
+            binding.homeItems.addView(v)
+        }
+    }
+
+    /** La portada de bienvenida sustituye a la lista de ejemplo; en cuanto hay una lista de verdad (o resultados de búsqueda) se ven las categorías. */
+    private fun updateHomeInfo() {
+        val show = currentListKey == "sample" && binding.recyclerView.adapter === categoryAdapter
+        binding.homeInfo.visibility = if (show) View.VISIBLE else View.GONE
+        binding.recyclerView.visibility = if (show) View.GONE else View.VISIBLE
+        if (show) binding.emptyView.visibility = View.GONE
     }
 
     private fun slotDefs() = listOf(
@@ -480,6 +524,7 @@ class MainActivity : AppCompatActivity() {
         categoryAdapter.submit(buildCategoryListWithFavorites())
         updateCategoryFilterButton()
         binding.emptyView.visibility = if (data.categories.isEmpty()) View.VISIBLE else View.GONE
+        updateHomeInfo()
         // Sin bloquear nada: si esta lista trae guía EPG (o ya la teníamos
         // cargada de antes), se descarga/parsea sola en segundo plano.
         val allStreams = data.categories.flatMap { it.streams }
@@ -754,6 +799,7 @@ class MainActivity : AppCompatActivity() {
             override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
                 lastQuery = ""
                 binding.recyclerView.adapter = categoryAdapter
+                updateHomeInfo()
                 return true
             }
         })
@@ -767,6 +813,7 @@ class MainActivity : AppCompatActivity() {
         lastQuery = query
         if (query.isBlank()) {
             binding.recyclerView.adapter = categoryAdapter
+            updateHomeInfo()
             return
         }
         // Todas las palabras tienen que aparecer (en cualquier orden), sin
@@ -783,6 +830,7 @@ class MainActivity : AppCompatActivity() {
         currentSearchResults = matches
         streamAdapter.submit(matches)
         binding.recyclerView.adapter = streamAdapter
+        updateHomeInfo()
     }
 
     private fun refreshSearchIndexIfNeeded() {
