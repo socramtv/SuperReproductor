@@ -39,6 +39,24 @@ object TgStreamServer {
         return "http://127.0.0.1:${srv.localPort}/tg/$fileId?s=$size&m=$m"
     }
 
+    /** Vídeos de RAR por partes registrados (ver [RarVolumes]): id -> vídeo. */
+    private val rarSources = java.util.concurrent.ConcurrentHashMap<Int, RarVideo>()
+    private val rarCounter = java.util.concurrent.atomic.AtomicInteger()
+
+    /** URL de reproducción de un vídeo repartido en partes de RAR (se sirve como un único archivo). */
+    @Synchronized
+    fun urlForRar(b: TgAccountBackend, video: RarVideo): String {
+        backend = b
+        val srv = server ?: ServerSocket(0, 20, InetAddress.getByName("127.0.0.1")).also {
+            server = it
+            Thread { acceptLoop(it) }.apply { isDaemon = true }.start()
+        }
+        val id = rarCounter.incrementAndGet()
+        rarSources[id] = video
+        val m = java.net.URLEncoder.encode(RarVolumes.mimeFor(video.ext), "UTF-8")
+        return "http://127.0.0.1:${srv.localPort}/rar/$id?s=${video.total}&m=$m"
+    }
+
     private fun acceptLoop(srv: ServerSocket) {
         while (!srv.isClosed) {
             val socket = try { srv.accept() } catch (e: Exception) { return }
@@ -64,7 +82,9 @@ object TgStreamServer {
                 val params = query.split('&').filter { it.contains('=') }.associate {
                     it.substringBefore('=') to URLDecoder.decode(it.substringAfter('='), "UTF-8")
                 }
-                val fileId = path.removePrefix("/tg/").toIntOrNull()
+                val rarId = if (path.startsWith("/rar/")) path.removePrefix("/rar/").toIntOrNull() else null
+                val rar = rarId?.let { rarSources[it] }
+                val fileId = if (rar != null) -rarId!! else path.removePrefix("/tg/").toIntOrNull()
                 val total = params["s"]?.toLongOrNull() ?: 0L
                 val b = backend
                 val out = s.getOutputStream()
@@ -106,11 +126,31 @@ object TgStreamServer {
                 head.append("Connection: close\r\n\r\n")
                 out.write(head.toString().toByteArray())
                 out.flush()
-                copyRange(b, fileId, start, length, out, cancelled)
+                if (rar != null) copyRar(b, rar, start, length, out, cancelled)
+                else copyRange(b, fileId, start, length, out, cancelled)
             } catch (e: Exception) {
                 // El reproductor cerró la conexión (saltar, parar...): normal.
             }
         }
+    }
+
+    /** Como [copyRange] pero sobre un vídeo repartido en varias partes de RAR. */
+    private fun copyRar(b: TgAccountBackend, v: RarVideo, start: Long, length: Long, out: OutputStream, cancelled: () -> Boolean) {
+        var pos = start
+        var remaining = length
+        while (remaining > 0 && !cancelled()) {
+            val seg = v.segments.lastOrNull { it.start <= pos } ?: return
+            val local = pos - seg.start
+            val inSeg = seg.length - local
+            if (inSeg <= 0) return
+            val want = minOf(remaining, inSeg, 512L * 1024L).toInt()
+            val chunk = b.readBytes(seg.fileId, seg.offset + local, want, cancelled) ?: return
+            if (chunk.isEmpty()) return
+            out.write(chunk)
+            pos += chunk.size
+            remaining -= chunk.size
+        }
+        out.flush()
     }
 
     private fun copyRange(b: TgAccountBackend, fileId: Int, start: Long, length: Long, out: OutputStream, cancelled: () -> Boolean) {

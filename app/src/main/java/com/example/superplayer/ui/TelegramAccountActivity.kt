@@ -44,6 +44,8 @@ import com.example.superplayer.telegram.TelegramAccountPrefs
 import com.example.superplayer.telegram.TgAccountBackend
 import com.example.superplayer.telegram.TgAuthState
 import com.example.superplayer.telegram.TgStreamServer
+import com.example.superplayer.telegram.RarVideo
+import com.example.superplayer.telegram.RarVolumes
 import com.example.superplayer.telegram.TgChat
 import com.example.superplayer.telegram.TgFolder
 import com.example.superplayer.telegram.TgLinkSpan
@@ -1486,7 +1488,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Formatos que se ofrecen según el tipo elegido. */
     private fun formatsFor(type: String): List<String> = when (type) {
-        "video" -> listOf("mp4", "mkv", "avi", "ts", "mov", "webm")
+        "video" -> listOf("mp4", "mkv", "avi", "ts", "mov", "webm", "rar")
         "audio" -> listOf("mp3", "flac", "m4a", "ogg", "wav")
         "document" -> listOf("pdf", "zip", "rar", "epub", "m3u", "apk")
         else -> emptyList()
@@ -1611,7 +1613,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         val ext = extOf(m)
         val mime = m.mime ?: ""
         val okType = when (type) {
-            "video" -> m.kind == "video" || (m.kind == "document" && (mime.startsWith("video/") || ext in videoExts))
+            "video" -> m.kind == "video" || (m.kind == "document" && (mime.startsWith("video/") || ext in videoExts)) ||
+                (m.kind == "document" && RarVolumes.isRar(m.fileName) && RarVolumes.index(m.fileName!!) <= 1)
             "audio" -> m.kind == "audio" || (m.kind == "document" && (mime.startsWith("audio/") || ext in audioExts))
             "document" -> m.kind == "document"
             "photo" -> m.kind == "photo"
@@ -2678,6 +2681,9 @@ class TelegramAccountActivity : AppCompatActivity() {
                 actions.add { loadPlaylistFile(m) { data -> TelegramImport.openInMain(this, data) } }
                 labels.add(getString(R.string.tg_open_playlist))
                 actions.add { openPlaylist(m) }
+            } else if (m.kind == "document" && RarVolumes.isRar(m.fileName) && m.size > 0) {
+                labels.add(getString(R.string.tgrar_play))
+                actions.add { playRar(m) }
             } else if (m.kind != "document" || looksLikeMedia(m)) {
                 if (m.size > 0) {
                     labels.add(getString(R.string.tgacc_stream_play))
@@ -2894,6 +2900,74 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         val list = if (queue.size > 1) queue.mapNotNull { streamFor(it) } else emptyList()
         open(stream, if (list.any { it.id == stream.id }) list else emptyList())
+    }
+
+    /**
+     * Vídeo en un RAR por partes (nombre.part1.rar, .part2.rar…): busca todas las partes en el chat,
+     * lee sus cabeceras y lo reproduce como un solo archivo, sin descomprimir ni descargar todo.
+     * Solo vale si el RAR no está comprimido ni tiene contraseña (ver [RarVolumes]).
+     */
+    private fun playRar(m: TgMessage) {
+        val b = backend ?: return
+        val name = m.fileName ?: return
+        val base = RarVolumes.baseName(name)
+        val known = messages.toList()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.tgrar_reading)
+            .setMessage(base)
+            .setCancelable(true)
+            .show()
+        var cancelled = false
+        dialog.setOnCancelListener { cancelled = true }
+        Thread {
+            val latch = java.util.concurrent.CountDownLatch(1)
+            var found: List<TgMessage> = emptyList()
+            b.searchMessages(base, m.chatId, "document") { found = it; latch.countDown() }
+            latch.await(25, java.util.concurrent.TimeUnit.SECONDS)
+            val parts = (known + found + m)
+                .filter { it.chatId == m.chatId && it.fileId != null && it.size > 0 && RarVolumes.isRar(it.fileName) &&
+                    RarVolumes.baseName(it.fileName!!).equals(base, ignoreCase = true) }
+                .distinctBy { RarVolumes.index(it.fileName!!) }
+                .sortedBy { RarVolumes.index(it.fileName!!) }
+            // Partes que faltan (p. ej. hay la 1 y la 3 pero no la 2).
+            val idx = parts.map { RarVolumes.index(it.fileName!!) }
+            val first = if (idx.firstOrNull() == 0) 0 else 1
+            val missing = if (idx.isEmpty()) emptyList() else (first..idx.last()).filter { it !in idx }
+            var error: String? = null
+            var video: RarVideo? = null
+            if (missing.isNotEmpty()) {
+                error = getString(R.string.tgrar_err_missing, missing.joinToString(", "))
+            } else {
+                when (val r = RarVolumes.build(b, parts.map { (it.fileId!!.toInt()) to it.size })) {
+                    is RarVolumes.Result.Ok -> video = r.video
+                    is RarVolumes.Result.Fail -> error = getString(
+                        when (r.code) {
+                            "compressed" -> R.string.tgrar_err_compressed
+                            "encrypted" -> R.string.tgrar_err_encrypted
+                            "novideo" -> R.string.tgrar_err_novideo
+                            else -> R.string.tgrar_err_read
+                        }
+                    )
+                }
+            }
+            runOnUiThread {
+                dialog.dismiss()
+                if (cancelled || isFinishing || isDestroyed) return@runOnUiThread
+                val v = video
+                if (v == null) {
+                    AlertDialog.Builder(this).setMessage(error ?: getString(R.string.tgrar_err_read))
+                        .setPositiveButton(android.R.string.ok, null).show()
+                    return@runOnUiThread
+                }
+                val appCtx = applicationContext
+                val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                TgStreamServer.onProblem = { msg ->
+                    handler.post { android.widget.Toast.makeText(appCtx, "Telegram sin datos: $msg", android.widget.Toast.LENGTH_LONG).show() }
+                }
+                val url = TgStreamServer.urlForRar(b, v)
+                open(Stream(name = base, type = "MP4", url = url, icon = null, category = "Telegram"))
+            }
+        }.start()
     }
 
     private fun downloadAndPlay(m: TgMessage) {

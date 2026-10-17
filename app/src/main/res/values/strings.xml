@@ -595,4 +595,11 @@
     <string name="tgacc_f_photo">Fotos</string>
     <string name="tgacc_f_link">Enlaces</string>
     <string name="tgacc_f_fmt_all">Todos</string>
+    <string name="tgrar_play">▶ Reproducir vídeo del RAR (por partes)</string>
+    <string name="tgrar_reading">Leyendo las partes del RAR…</string>
+    <string name="tgrar_err_missing">Faltan partes del RAR en este chat: %1$s. Sin todas las partes no se puede reproducir.</string>
+    <string name="tgrar_err_compressed">Este RAR está comprimido. Solo se pueden reproducir RAR sin compresión (modo «almacenar»), que es lo habitual en vídeos.</string>
+    <string name="tgrar_err_encrypted">Este RAR tiene contraseña, no se puede reproducir.</string>
+    <string name="tgrar_err_novideo">No he encontrado un vídeo dentro del RAR (solo se admite un vídeo por archivo).</string>
+    <string name="tgrar_err_read">No se pudieron leer las cabeceras del RAR (¿Telegram sin datos o no es un RAR?).</string>
 </resources>

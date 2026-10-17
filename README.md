@@ -1448,3 +1448,9 @@ Ajustes posteriores: la portada ya no tiene botón «Entrar a mis listas» (la �
 - El título de la pantalla de Telegram ya no pone «(mi cuenta)»: muestra tu @usuario (o tu nombre si no tienes) — `accountName` en `TdBackend`.
 
 Ajuste del buscador de Telegram: al ocultar el teclado con «atrás» ya no se cierra la búsqueda; el primer «atrás» solo esconde el teclado y deja ver los resultados, el segundo sale de la búsqueda.
+
+## Vídeos en RAR por partes (Telegram)
+Si en un chat hay un vídeo subido como `Nombre.part1.rar`, `Nombre.part2.rar`… (o `.rar`, `.r00`, `.r01`…), al tocar cualquier parte sale **«▶ Reproducir vídeo del RAR (por partes)»**. La app busca todas las partes del chat, lee sus cabeceras y las une como un único archivo que se reproduce en streaming (con saltos), sin descomprimir ni descargar todo.
+- Solo funciona con RAR **sin compresión** (modo «almacenar», lo habitual en vídeos) y **sin contraseña**, RAR4 y RAR5, con **un solo vídeo** dentro. Si está comprimido, cifrado o faltan partes, avisa con un mensaje.
+- En el buscador, el tipo «Vídeos» también incluye estos RAR (solo se lista la primera parte) y hay un formato «RAR».
+- Código: `telegram/RarVolumes.kt` (cabeceras RAR4/RAR5), `TgStreamServer.urlForRar` y `TelegramAccountActivity.playRar`.
