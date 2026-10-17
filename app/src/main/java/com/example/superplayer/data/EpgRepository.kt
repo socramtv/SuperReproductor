@@ -42,7 +42,25 @@ object EpgRepository {
         val startMillis: Long,
         val stopMillis: Long,
         val title: String,
-        val iconUrl: String? = null
+        val iconUrl: String? = null,
+        val details: Details? = null
+    )
+
+    /**
+     * Datos extra de un programa del XMLTV (todos opcionales): subtítulo, sinopsis (recortada para no
+     * gastar memoria), categorías, año, clasificación por edades, valoración (0–5 estrellas),
+     * país, episodio ("T1 E2") y reparto.
+     */
+    data class Details(
+        val subTitle: String? = null,
+        val desc: String? = null,
+        val category: String? = null,
+        val year: String? = null,
+        val rating: String? = null,
+        val stars: Int? = null,
+        val country: String? = null,
+        val episode: String? = null,
+        val cast: String? = null
     )
 
     @Volatile private var loadedUrl: String? = null
@@ -105,7 +123,13 @@ object EpgRepository {
      * trae, o si la guía viene en el otro formato admitido (JSON de listas
      * tipo tdtchannels.com, que no documenta nada de icono por programa).
      */
-    data class EpgEntry(val title: String, val startMillis: Long, val stopMillis: Long, val iconUrl: String? = null)
+    data class EpgEntry(
+        val title: String,
+        val startMillis: Long,
+        val stopMillis: Long,
+        val iconUrl: String? = null,
+        val details: Details? = null
+    )
 
     /** "Ahora", "Después" y "Esta noche" de un canal, para la lista de canales (ver [schedule]). */
     data class EpgSchedule(val now: EpgEntry?, val next: EpgEntry?, val tonight: EpgEntry?)
@@ -173,7 +197,8 @@ object EpgRepository {
                     title = it.title,
                     startMillis = it.startMillis.coerceAtLeast(fromMillis),
                     stopMillis = it.stopMillis.coerceAtMost(toMillis),
-                    iconUrl = it.iconUrl
+                    iconUrl = it.iconUrl,
+                    details = it.details
                 )
             }
     }
@@ -210,7 +235,7 @@ object EpgRepository {
         return if (min <= max) min to max else null
     }
 
-    private fun Programme.toEntry() = EpgEntry(title, startMillis, stopMillis, iconUrl)
+    private fun Programme.toEntry() = EpgEntry(title, startMillis, stopMillis, iconUrl, details)
 
     /** Instante "22:00 de hoy", entendiendo "hoy" como día de emisión (ver [schedule]). */
     private fun tonightAnchorMillis(nowMillis: Long): Long {
@@ -291,6 +316,20 @@ object EpgRepository {
         var stop = -1L
         var title: String? = null
         var iconUrl: String? = null
+        // Datos extra (ver [Details]).
+        var cap: String? = null
+        var inRating = false
+        var inStar = false
+        var epSystem: String? = null
+        var subTitle: String? = null
+        var desc: String? = null
+        val cats = ArrayList<String>()
+        var year: String? = null
+        var rating: String? = null
+        var stars: Int? = null
+        var country: String? = null
+        var episode: String? = null
+        val actors = ArrayList<String>()
 
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT) {
@@ -303,29 +342,70 @@ object EpgRepository {
                         stop = parseXmlTvDate(parser.getAttributeValue(null, "stop"))
                         title = null
                         iconUrl = null
+                        cap = null; inRating = false; inStar = false; epSystem = null
+                        subTitle = null; desc = null; cats.clear(); year = null; rating = null
+                        stars = null; country = null; episode = null; actors.clear()
                     }
                     "title" -> if (inProgramme) inTitle = true
+                    "sub-title" -> if (inProgramme && subTitle == null) cap = "sub"
+                    "desc" -> if (inProgramme && desc == null) cap = "desc"
+                    "category" -> if (inProgramme && cats.size < 3) cap = "cat"
+                    "date" -> if (inProgramme && year == null) cap = "date"
+                    "country" -> if (inProgramme && country == null) cap = "country"
+                    "actor" -> if (inProgramme && actors.size < 4) cap = "actor"
+                    "rating" -> if (inProgramme) inRating = true
+                    "star-rating" -> if (inProgramme) inStar = true
+                    "value" -> if (inProgramme) {
+                        if (inRating && rating == null) cap = "rating" else if (inStar && stars == null) cap = "star"
+                    }
+                    "episode-num" -> if (inProgramme && episode == null) {
+                        epSystem = parser.getAttributeValue(null, "system")
+                        cap = "ep"
+                    }
                     // <icon src="..."/> va suelta (sin texto dentro, solo el
                     // atributo): a diferencia de <title>, no hace falta
                     // mirar su cierre ni su TEXT, con el START_TAG ya está
                     // todo lo que trae. Si un programa trajera más de una
                     // (no debería), se queda con la primera.
-                    "icon" -> if (inProgramme && iconUrl == null) {
+                    "icon" -> if (inProgramme && iconUrl == null && !inRating && !inStar) {
                         iconUrl = parser.getAttributeValue(null, "src")?.trim()?.takeIf { it.isNotBlank() }
                     }
                 }
-                XmlPullParser.TEXT -> if (inProgramme && inTitle && title == null) {
+                XmlPullParser.TEXT -> if (inProgramme) {
                     val text = parser.text?.trim()
-                    if (!text.isNullOrBlank()) title = text
+                    if (!text.isNullOrBlank()) {
+                        if (inTitle && title == null) {
+                            title = text
+                        } else when (cap) {
+                            "sub" -> subTitle = text.take(120)
+                            "desc" -> desc = text.take(400)
+                            "cat" -> cats.add(text.take(40))
+                            "date" -> year = Regex("(19|20)\\d{2}").find(text)?.value
+                            "country" -> country = text.take(40)
+                            "actor" -> actors.add(text.take(40))
+                            "rating" -> rating = text.take(12)
+                            "star" -> stars = parseStars(text)
+                            "ep" -> episode = parseEpisodeNum(text, epSystem)
+                        }
+                    }
                 }
                 XmlPullParser.END_TAG -> when (parser.name) {
                     "title" -> inTitle = false
+                    "sub-title", "desc", "category", "date", "country", "actor", "value", "episode-num" -> cap = null
+                    "rating" -> { inRating = false; cap = null }
+                    "star-rating" -> { inStar = false; cap = null }
                     "programme" -> {
                         val ch = channel
                         val t = title
                         if (!ch.isNullOrBlank() && !t.isNullOrBlank() && start > 0 && stop > start) {
-                            result.getOrPut(ch) { mutableListOf() }.add(Programme(start, stop, t, iconUrl))
+                            val det = if (subTitle != null || desc != null || cats.isNotEmpty() || year != null ||
+                                rating != null || stars != null || country != null || episode != null || actors.isNotEmpty()) {
+                                Details(subTitle, desc, cats.joinToString(", ").ifEmpty { null }, year, rating, stars,
+                                    country, episode, actors.joinToString(", ").ifEmpty { null })
+                            } else null
+                            result.getOrPut(ch) { mutableListOf() }.add(Programme(start, stop, t, iconUrl, det))
                         }
+                        cap = null
                         inProgramme = false
                         inTitle = false
                         channel = null
@@ -341,6 +421,38 @@ object EpgRepository {
 
         for (list in result.values) list.sortBy { it.startMillis }
         return result
+    }
+
+    /** "3/5", "7.5/10" o "4" -> estrellas de 0 a 5 (null si no se entiende). */
+    private fun parseStars(raw: String): Int? {
+        val m = Regex("([0-9]+(?:[.,][0-9]+)?)\\s*/\\s*([0-9]+(?:[.,][0-9]+)?)").find(raw)
+        val num: Double
+        val den: Double
+        if (m != null) {
+            num = m.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return null
+            den = m.groupValues[2].replace(',', '.').toDoubleOrNull() ?: return null
+        } else {
+            num = raw.replace(',', '.').toDoubleOrNull() ?: return null
+            den = 5.0
+        }
+        if (den <= 0) return null
+        return Math.round(num / den * 5.0).toInt().coerceIn(0, 5)
+    }
+
+    /** Episodio: "S01E02"/"1x02" tal cual, o formato xmltv_ns "0.1." (temporada 1, episodio 2) -> "T1 E2". */
+    private fun parseEpisodeNum(raw: String, system: String?): String? {
+        if (system == null || system.equals("xmltv_ns", ignoreCase = true)) {
+            val m = Regex("^\\s*(\\d*)\\s*(?:/\\d+)?\\s*\\.\\s*(\\d*)").find(raw)
+            if (m != null) {
+                val sn = m.groupValues[1].toIntOrNull()
+                val ep = m.groupValues[2].toIntOrNull()
+                val parts = ArrayList<String>()
+                if (sn != null) parts.add("T${sn + 1}")
+                if (ep != null) parts.add("E${ep + 1}")
+                if (parts.isNotEmpty()) return parts.joinToString(" ")
+            }
+        }
+        return raw.trim().takeIf { it.length in 3..12 && it.any { c -> c.isDigit() } }
     }
 
     /** XMLTV: "20260926140000 +0200" (a veces sin el offset). Devuelve epoch millis, o -1 si no se puede leer. */

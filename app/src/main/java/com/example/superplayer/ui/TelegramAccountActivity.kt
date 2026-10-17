@@ -71,6 +71,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         val onLong: (() -> Unit)? = null,
         val thumbFileId: Int = 0,
         val circle: Boolean = false,
+        /** Mensaje que representa la fila (para la selección múltiple); null si no es un mensaje. */
+        val msg: TgMessage? = null,
         val onClick: () -> Unit
     )
 
@@ -91,6 +93,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         val options: List<TgMessage> = emptyList(),
         /** true si la miniatura es una imagen del chat (esa gana sobre la carátula de TMDb). */
         val pairedImage: Boolean = false,
+        /** Mensajes que se eligen al seleccionar esta miniatura (selección múltiple). */
+        val select: List<TgMessage> = emptyList(),
         /** Fondo de la miniatura cuando no hay imagen (listas y enlaces). */
         val tileRes: Int = 0,
         val onLong: (() -> Unit)? = null,
@@ -212,6 +216,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         backCallback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
+                if (selectionMode != null) {
+                    selectionMode?.finish()
+                    return
+                }
                 if (searching) {
                     val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
                     val recentlyHidden = System.currentTimeMillis() - imeHiddenAt < 800L
@@ -575,6 +583,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             it.title = getString(if (mediaMode) R.string.tgacc_view_all else R.string.tgacc_view_media)
         }
         menu.findItem(R.id.action_tgacc_fav)?.isVisible = inChat
+        menu.findItem(R.id.action_tgacc_select)?.isVisible = inChat && !showingTopics && selectionMode == null
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_kbd)?.isVisible = inChat && chat?.kind == "bot"
         menu.findItem(R.id.action_tgacc_live)?.isVisible = inChat && chat?.live == true
@@ -589,6 +598,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         when (item.itemId) {
             android.R.id.home -> {
                 goBack()
+                return true
+            }
+            R.id.action_tgacc_select -> {
+                startSelection()
                 return true
             }
             R.id.action_tgacc_view -> {
@@ -740,7 +753,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun updateBack() {
-        backCallback.isEnabled = searching || currentChat != null || (chatFilter == VIDEO_TAB && videoFolder != null) ||
+        backCallback.isEnabled = selectionMode != null || searching || currentChat != null || (chatFilter == VIDEO_TAB && videoFolder != null) ||
             (chatFilter == FOLDER_TAB && openFolder != null)
     }
 
@@ -1333,7 +1346,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             val isVideo = isVideoMsg(m) || isRarPart(m)
             if (isImage) {
                 if (m.messageId in usedImages) continue
-                items.add(MediaItem(key = "${m.messageId}:img", caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
+                items.add(MediaItem(key = "${m.messageId}:img", select = listOf(m), caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
                     messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
             } else if (isVideo) {
                 val k = groupOf[m.messageId]
@@ -1347,7 +1360,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     val rimg = pairedByLeader[m.messageId]
                     val rthumb = rimg?.thumbId?.takeIf { it != 0 } ?: 0
                     val title = rarTitle(first)
-                    items.add(MediaItem(key = "${m.messageId}:rar", caption = title.ifEmpty { first.fileName.orEmpty() }, meta = date, thumbFileId = rthumb,
+                    items.add(MediaItem(key = "${m.messageId}:rar", select = parts, caption = title.ifEmpty { first.fileName.orEmpty() }, meta = date, thumbFileId = rthumb,
                         badge = "▶ RAR" + (if (parts.size > 1) " ×${parts.size}" else ""), messageId = m.messageId,
                         query = title.takeIf { it.length >= 2 }.orEmpty(), options = parts, pairedImage = rimg != null,
                         onLong = { onMessageLong(first) }) { playRar(first) })
@@ -1361,13 +1374,13 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val q = if (options.any { isMovieFile(it) }) (k?.let { groupName[it] } ?: cleanName(titleOf(m))).takeIf { it.length >= 2 }.orEmpty() else ""
                 val fav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
                 val badge = (if (options.size > 1) "▶ ×${options.size}" else "▶") + (if (fav) " ★" else "")
-                items.add(MediaItem(key = "${m.messageId}:vid", caption = (if (q.isNotEmpty()) q else caption.ifEmpty { m.fileName.orEmpty() }), meta = date, thumbFileId = thumb,
+                items.add(MediaItem(key = "${m.messageId}:vid", select = options, caption = (if (q.isNotEmpty()) q else caption.ifEmpty { m.fileName.orEmpty() }), meta = date, thumbFileId = thumb,
                     badge = badge, messageId = m.messageId, query = q, options = options, pairedImage = img != null,
                     onLong = { toggleVideoFav(options, q, thumb) }) { onVideoClick(options, q, thumb) })
             } else if (isListMsg(m)) {
                 val img = listImage[m.messageId]
                 val name = m.fileName ?: caption
-                items.add(MediaItem(key = "${m.messageId}:file", caption = cleanName(caption.ifEmpty { name }), meta = date, thumbFileId = img?.thumbId ?: 0,
+                items.add(MediaItem(key = "${m.messageId}:file", select = listOf(m), caption = cleanName(caption.ifEmpty { name }), meta = date, thumbFileId = img?.thumbId ?: 0,
                     iconRes = R.drawable.ic_tg_list, tileRes = R.drawable.bg_tg_tile_list,
                     badge = getString(R.string.tgacc_badge_list), messageId = m.messageId,
                     onLong = { onMessageLong(m) }) { onMessageClick(m) })
@@ -1782,7 +1795,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val global = currentChat == null
         searchResults?.forEach { m ->
             val prefix = if (global && m.chatTitle.isNotEmpty()) m.chatTitle + " · " else ""
-            rows.add(Row(messageTitle(m), prefix + messageSubtitle(m, df), null, null, { onMessageLong(m) }, m.thumbId) { onMessageClick(m) })
+            rows.add(Row(messageTitle(m), prefix + messageSubtitle(m, df), null, null, { onMessageLong(m) }, m.thumbId, msg = m) { onMessageClick(m) })
         }
         adapter.submit(rows)
         binding.emptyView.text = getString(R.string.tgacc_search_none)
@@ -2240,6 +2253,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun onMessageLong(m: TgMessage) {
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
+        labels.add(getString(R.string.tgsel_start))
+        actions.add { startSelection(listOf(m)) }
         if (isElsewhere(m)) {
             labels.add(getString(R.string.tgacc_go_chat, m.chatTitle.ifEmpty { getString(R.string.tgacc_title) }))
             actions.add { goToMessageChat(m) }
@@ -2724,6 +2739,244 @@ class TelegramAccountActivity : AppCompatActivity() {
     // -----------------------------------------------------------------
     // Acciones
     // -----------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // Selección múltiple: reenviar o copiar los enlaces de varios mensajes a la vez
+    // ------------------------------------------------------------------
+
+    private var selectionMode: androidx.appcompat.view.ActionMode? = null
+    private val selected = LinkedHashMap<String, TgMessage>()
+
+    private fun selKey(m: TgMessage) = "${m.chatId}:${m.messageId}"
+    private fun isSel(list: List<TgMessage>) = list.isNotEmpty() && list.all { selKey(it) in selected }
+    private fun selectionOverlay(on: Boolean): android.graphics.drawable.Drawable? =
+        if (on) android.graphics.drawable.ColorDrawable(0x66FF6B4A) else null
+
+    private fun refreshSelectionUi() {
+        adapter.refreshSel()
+        chatAdapter.refreshSel()
+        mediaAdapter.refreshSel()
+        selectionMode?.title = getString(R.string.tgsel_count, selected.size)
+    }
+
+    private fun toggleSel(list: List<TgMessage>) {
+        val allIn = isSel(list)
+        for (m in list) if (allIn) selected.remove(selKey(m)) else selected[selKey(m)] = m
+        refreshSelectionUi()
+    }
+
+    private fun startSelection(initial: List<TgMessage> = emptyList()) {
+        if (selectionMode == null) {
+            selectionMode = startSupportActionMode(object : androidx.appcompat.view.ActionMode.Callback {
+                override fun onCreateActionMode(mode: androidx.appcompat.view.ActionMode, menu: Menu): Boolean {
+                    menu.add(0, 1, 0, R.string.tgsel_forward).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+                    menu.add(0, 2, 1, R.string.tgsel_links).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+                    menu.add(0, 4, 2, R.string.tgsel_save).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+                    menu.add(0, 3, 3, R.string.tgsel_all).setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+                    return true
+                }
+
+                override fun onPrepareActionMode(mode: androidx.appcompat.view.ActionMode, menu: Menu) = false
+
+                override fun onActionItemClicked(mode: androidx.appcompat.view.ActionMode, item: MenuItem): Boolean {
+                    when (item.itemId) {
+                        1 -> forwardSelected()
+                        2 -> copySelectedLinks()
+                        3 -> selectAllVisible()
+                        4 -> saveSelectedFiles()
+                    }
+                    return true
+                }
+
+                override fun onDestroyActionMode(mode: androidx.appcompat.view.ActionMode) {
+                    selectionMode = null
+                    selected.clear()
+                    refreshSelectionUi()
+                    updateBack()
+                }
+            })
+            updateBack()
+        }
+        if (initial.isNotEmpty()) toggleSel(initial) else refreshSelectionUi()
+    }
+
+    private fun selectAllVisible() {
+        val all: List<TgMessage> = when {
+            searching -> searchResults.orEmpty()
+            currentChat != null && mediaMode -> mediaAdapter.allSelectables()
+            else -> messages.toList()
+        }
+        for (m in all) selected[selKey(m)] = m
+        refreshSelectionUi()
+    }
+
+    /** Mensajes elegidos, de más antiguo a más nuevo dentro de cada chat (para que lleguen en orden). */
+    private fun selectedReal(): List<TgMessage> =
+        selected.values.mapNotNull { realMessage(it) }.sortedWith(compareBy({ it.chatId }, { it.messageId }))
+
+    private fun forwardSelected() {
+        val msgs = selectedReal()
+        if (msgs.isEmpty()) {
+            Toast.makeText(this, R.string.tgsel_none, Toast.LENGTH_SHORT).show()
+            return
+        }
+        pickDestination { chat, topicId ->
+            var ok = 0
+            var i = 0
+            fun next() {
+                if (i >= msgs.size) {
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        Toast.makeText(this, getString(R.string.tgsel_fwd_done, ok, msgs.size, chat.title), Toast.LENGTH_LONG).show()
+                        selectionMode?.finish()
+                    }
+                    return
+                }
+                val m = msgs[i++]
+                val b = backend
+                if (b == null) { next(); return }
+                b.forwardMessage(m.chatId, m.messageId, chat.id, topicId) { r ->
+                    if (r) ok++
+                    next()
+                }
+            }
+            next()
+        }
+    }
+
+    /** Nombre de archivo para guardar un mensaje en el móvil. */
+    private fun saveName(m: TgMessage): String {
+        val n = m.fileName?.takeIf { it.isNotBlank() }
+        val raw = n ?: when (m.kind) {
+            "photo" -> "foto_${m.messageId}.jpg"
+            "video", "animation" -> "video_${m.messageId}.mp4"
+            "audio" -> "audio_${m.messageId}.mp3"
+            "voice" -> "nota_${m.messageId}.ogg"
+            else -> "archivo_${m.messageId}"
+        }
+        return raw.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+    }
+
+    /** Copia un archivo ya descargado a Descargas/Socram TV (Android 10+) o a la carpeta de la app (antes). */
+    private fun copyToDownloads(src: File, name: String, mime: String?): Boolean = try {
+        val type = mime ?: java.net.URLConnection.guessContentTypeFromName(name) ?: "application/octet-stream"
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val cv = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, type)
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/Socram TV")
+            }
+            val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)
+            val out = if (uri != null) contentResolver.openOutputStream(uri) else null
+            if (out == null) {
+                false
+            } else {
+                out.use { o -> src.inputStream().use { it.copyTo(o) } }
+                true
+            }
+        } else {
+            val dir = File(getExternalFilesDir(null), "Descargas")
+            dir.mkdirs()
+            src.copyTo(File(dir, name), overwrite = true)
+            true
+        }
+    } catch (e: Exception) {
+        false
+    }
+
+    /** Descarga los archivos elegidos, uno tras otro, y los copia a Descargas/Socram TV del móvil. */
+    private fun saveSelectedFiles() {
+        val b = backend ?: return
+        val msgs = selectedReal().filter { it.fileId?.toIntOrNull() != null }
+        if (msgs.isEmpty()) {
+            Toast.makeText(this, R.string.tgsel_nofiles, Toast.LENGTH_SHORT).show()
+            return
+        }
+        var cancelled = false
+        var current = 0
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.tgsel_saving)
+            .setMessage("0 / ${msgs.size}")
+            .setCancelable(false)
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                cancelled = true
+                if (current != 0) b.cancelDownload(current)
+            }
+            .show()
+        var ok = 0
+        var i = 0
+        fun wrapUp() {
+            runOnUiThread {
+                dialog.dismiss()
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                Toast.makeText(this, getString(R.string.tgsel_save_done, ok, msgs.size), Toast.LENGTH_LONG).show()
+                if (!cancelled) selectionMode?.finish()
+            }
+        }
+        fun next() {
+            if (cancelled || i >= msgs.size) {
+                wrapUp()
+                return
+            }
+            val m = msgs[i++]
+            val idx = i
+            val fileId = m.fileId?.toIntOrNull()
+            if (fileId == null) { next(); return }
+            current = fileId
+            val name = saveName(m)
+            b.download(fileId, { done, total ->
+                runOnUiThread {
+                    val pct = if (total > 0) " " + (done * 100 / total) + " %" else ""
+                    dialog.setMessage("$idx / ${msgs.size}  $name$pct")
+                }
+            }, { path ->
+                current = 0
+                if (path.isNullOrEmpty()) {
+                    next()
+                } else {
+                    Thread {
+                        if (copyToDownloads(File(path), name, m.mime)) ok++
+                        next()
+                    }.start()
+                }
+            })
+        }
+        next()
+    }
+
+    private fun copySelectedLinks() {
+        val msgs = selectedReal()
+        if (msgs.isEmpty()) {
+            Toast.makeText(this, R.string.tgsel_none, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val links = ArrayList<String>()
+        var i = 0
+        fun next() {
+            if (i >= msgs.size) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (links.isEmpty()) {
+                        Toast.makeText(this, R.string.tgacc_no_link, Toast.LENGTH_SHORT).show()
+                    } else {
+                        val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("telegram", links.joinToString("\n")))
+                        Toast.makeText(this, getString(R.string.tgsel_links_done, links.size), Toast.LENGTH_SHORT).show()
+                        selectionMode?.finish()
+                    }
+                }
+                return
+            }
+            val m = msgs[i++]
+            val b = backend
+            if (b == null) { next(); return }
+            b.messageLink(m.chatId, m.messageId) { link ->
+                if (link != null) links.add(link)
+                next()
+            }
+        }
+        next()
+    }
 
     /** Abre el chat donde está el mensaje y salta hasta él (desde los resultados de búsqueda, favoritos…). */
     private fun goToMessageChat(m: TgMessage) {
@@ -3236,6 +3489,8 @@ class TelegramAccountActivity : AppCompatActivity() {
             items.forEachIndexed { i, m -> if (m != null && m.thumbId == id) notifyItemChanged(i) }
         }
 
+        fun refreshSel() { if (itemCount > 0) notifyItemRangeChanged(0, itemCount) }
+
         override fun getItemViewType(position: Int) = if (items[position] == null) 0 else 1
         override fun getItemCount() = items.size
 
@@ -3332,8 +3587,14 @@ class TelegramAccountActivity : AppCompatActivity() {
             b.tgbTime.text = java.text.SimpleDateFormat(f, java.util.Locale.getDefault()).format(Date(ms))
             // Pulsar / mantener
             val hasAction = m.fileId != null || m.links.isNotEmpty()
-            b.tgbBubble.setOnClickListener { if (hasAction) onMessageClick(m, withButtons = false) }
-            b.tgbBubble.setOnLongClickListener { onMessageLong(m); true }
+            b.tgbBubble.setOnClickListener {
+                if (selectionMode != null) toggleSel(listOf(m)) else if (hasAction) onMessageClick(m, withButtons = false)
+            }
+            b.tgbBubble.setOnLongClickListener {
+                if (selectionMode != null) toggleSel(listOf(m)) else onMessageLong(m)
+                true
+            }
+            b.root.foreground = selectionOverlay(isSel(listOf(m)))
             // Botones del bot, debajo
             fillInlineButtons(b.tgbButtons, m)
         }
@@ -3369,10 +3630,16 @@ class TelegramAccountActivity : AppCompatActivity() {
             holder.b.tgTitle.text = row.title
             holder.b.tgSubtitle.text = row.subtitle
             holder.b.tgSubtitle.visibility = if (row.subtitle.isEmpty()) View.GONE else View.VISIBLE
-            holder.b.root.setOnClickListener { row.onClick() }
+            val rowMsg = row.msg
+            holder.b.root.setOnClickListener {
+                if (selectionMode != null && rowMsg != null) toggleSel(listOf(rowMsg)) else row.onClick()
+            }
+            holder.b.root.foreground = selectionOverlay(rowMsg != null && isSel(listOf(rowMsg)))
             // Mando de TV: mantener pulsado OK sobre un chat lo marca/desmarca como favorito.
             val longAction = row.onLong ?: row.onStar
-            if (longAction != null) {
+            if (selectionMode != null && rowMsg != null) {
+                holder.b.root.setOnLongClickListener { toggleSel(listOf(rowMsg)); true }
+            } else if (longAction != null) {
                 holder.b.root.setOnLongClickListener { longAction(); true }
             } else {
                 holder.b.root.setOnLongClickListener(null)
@@ -3392,6 +3659,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         fun thumbLoaded(id: Int) {
             rows.forEachIndexed { i, r -> if (r.thumbFileId == id) notifyItemChanged(i) }
         }
+
+        fun refreshSel() { if (itemCount > 0) notifyItemRangeChanged(0, itemCount) }
 
         private fun bindThumb(holder: VH, row: Row) {
             val id = row.thumbFileId
@@ -3449,6 +3718,10 @@ class TelegramAccountActivity : AppCompatActivity() {
 
         fun isFull(position: Int) = items.getOrNull(position)?.loadMore == true
 
+        fun refreshSel() { if (itemCount > 0) notifyItemRangeChanged(0, itemCount) }
+
+        fun allSelectables(): List<TgMessage> = items.flatMap { it.select }
+
         fun thumbLoaded(id: Int) {
             items.forEachIndexed { i, r -> if (r.thumbFileId == id) notifyItemChanged(i) }
         }
@@ -3469,9 +3742,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: VH, position: Int) {
             val item = items[position]
             val b = holder.b
-            b.root.setOnClickListener { item.onClick() }
+            b.root.setOnClickListener {
+                if (selectionMode != null && item.select.isNotEmpty()) toggleSel(item.select) else item.onClick()
+            }
+            b.root.foreground = selectionOverlay(isSel(item.select))
             val long = item.onLong
-            if (long != null) {
+            if (selectionMode != null && item.select.isNotEmpty()) {
+                b.root.setOnLongClickListener { toggleSel(item.select); true }
+            } else if (long != null) {
                 b.root.setOnLongClickListener { long(); true }
             } else {
                 b.root.setOnLongClickListener(null)

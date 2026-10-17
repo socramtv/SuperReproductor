@@ -6,6 +6,10 @@
         android:title="@string/tgacc_view_all"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_tgacc_select"
+        android:title="@string/tgsel_start"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tgacc_fav"
         android:title="@string/tgacc_menu_fav"
         app:showAsAction="never" />

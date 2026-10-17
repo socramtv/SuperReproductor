@@ -354,7 +354,41 @@
                 android:maxLines="1"
                 android:ellipsize="end" />
 
-            <!-- Horario del programa de la guía (EPG) con su barra de progreso; solo si la guía lo trae. -->
+            <!-- Año | clasificación | estrellas, sinopsis y datos extra del programa (solo si la guía los trae). -->
+        <TextView
+            android:id="@+id/videoNowPlayingMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/player_text"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/videoNowPlayingDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/player_text"
+            android:textSize="13sp"
+            android:maxLines="3"
+            android:ellipsize="end"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/videoNowPlayingExtra"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/player_text_muted"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone" />
+
+        <!-- Horario del programa de la guía (EPG) con su barra de progreso; solo si la guía lo trae. -->
             <LinearLayout
                 android:id="@+id/videoNowPlayingTimeRow"
                 android:layout_width="match_parent"

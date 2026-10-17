@@ -1648,8 +1648,42 @@ class PlayerActivity : AppCompatActivity() {
         applyEpgDetail()
     }
 
+    /** Subtítulo/episodio en el título y, debajo, año | edad | estrellas, sinopsis y país/reparto del programa en emisión (si la guía los trae). */
+    private fun applyEpgExtra(now: EpgRepository.EpgEntry?) {
+        val det = now?.details
+        if (now != null && det != null && lastDynamicTitle == null &&
+            binding.videoNowPlayingTitle.text.toString().equals(now.title, ignoreCase = true)) {
+            val extra = listOfNotNull(det.episode, det.subTitle?.takeIf { !it.equals(now.title, ignoreCase = true) })
+            if (extra.isNotEmpty()) binding.videoNowPlayingTitle.text = now.title + " · " + extra.joinToString(" · ")
+        }
+        val meta = ArrayList<String>()
+        det?.year?.let { meta.add(it) }
+        det?.rating?.let { meta.add("[$it]") }
+        det?.stars?.let { meta.add("★".repeat(it) + "☆".repeat(5 - it)) }
+        binding.videoNowPlayingMeta.text = meta.joinToString(" | ")
+        binding.videoNowPlayingMeta.visibility = if (meta.isEmpty()) View.GONE else View.VISIBLE
+        val body = listOfNotNull(det?.category, det?.desc).joinToString(" · ")
+        binding.videoNowPlayingDesc.text = body
+        binding.videoNowPlayingDesc.visibility = if (body.isEmpty()) View.GONE else View.VISIBLE
+        val extraLine = listOfNotNull(
+            det?.country?.let { getString(R.string.epg_country, it) },
+            det?.cast?.let { getString(R.string.epg_cast, it) }
+        ).joinToString(" · ")
+        binding.videoNowPlayingExtra.text = extraLine
+        binding.videoNowPlayingExtra.visibility = if (extraLine.isEmpty()) View.GONE else View.VISIBLE
+    }
+
     /** Horario del programa en emisión con barra de progreso y, debajo, el siguiente (solo si la guía EPG los trae). */
     private fun applyEpgDetail() {
+        // En horizontal la barra de navegación puede quedar a un lado y tapar el póster: se deja ese margen.
+        run {
+            val bar = binding.videoNowPlayingBar
+            val d = resources.displayMetrics.density
+            val ins = androidx.core.view.ViewCompat.getRootWindowInsets(bar)?.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout()
+            )
+            bar.setPadding((20 * d).toInt() + (ins?.left ?: 0), bar.paddingTop, (20 * d).toInt() + (ins?.right ?: 0), bar.paddingBottom)
+        }
         val sched = EpgRepository.schedule(currentStream?.tvgId)
         val now = sched.now
         if (now == null || now.stopMillis <= now.startMillis) {
@@ -1662,6 +1696,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.videoNowPlayingProgress.progress = (frac * 1000).toInt().coerceIn(0, 1000)
             binding.videoNowPlayingTimeRow.visibility = View.VISIBLE
         }
+        applyEpgExtra(now)
         val poster = now?.iconUrl
         if (poster.isNullOrBlank()) {
             binding.videoNowPlayingPoster.visibility = View.GONE

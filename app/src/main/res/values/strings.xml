@@ -603,4 +603,18 @@
     <string name="tgrar_err_novideo">No he encontrado un vídeo dentro del RAR (solo se admite un vídeo por archivo).</string>
     <string name="tgrar_err_read">No se pudieron leer las cabeceras del RAR (¿Telegram sin datos o no es un RAR?).</string>
     <string name="tgacc_go_chat">📂 Ir al chat: %1$s</string>
+    <string name="tgsel_start">☑ Seleccionar varios</string>
+    <string name="tgsel_count">%1$d seleccionados</string>
+    <string name="tgsel_forward">Reenviar</string>
+    <string name="tgsel_links">Copiar enlaces</string>
+    <string name="tgsel_all">Todo</string>
+    <string name="tgsel_none">No has seleccionado nada</string>
+    <string name="tgsel_fwd_done">Reenviados %1$d de %2$d a %3$s</string>
+    <string name="tgsel_links_done">%1$d enlaces copiados</string>
+    <string name="epg_country">País: %1$s</string>
+    <string name="epg_cast">Reparto: %1$s</string>
+    <string name="tgsel_save">Guardar en el móvil</string>
+    <string name="tgsel_saving">Guardando archivos…</string>
+    <string name="tgsel_nofiles">No hay archivos en la selección</string>
+    <string name="tgsel_save_done">Guardados %1$d de %2$d archivos en Descargas/Socram TV</string>
 </resources>

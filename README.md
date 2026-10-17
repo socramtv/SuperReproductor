@@ -1458,3 +1458,11 @@ Si en un chat hay un vídeo subido como `Nombre.part1.rar`, `Nombre.part2.rar`�
 Imagen de los vídeos en RAR (galería de Telegram): las partes `.partN.rar` salen como **una sola miniatura «▶ RAR ×N»** que se reproduce al tocarla. La imagen se empareja (1) por nombre, ignorando guiones bajos, año y etiquetas como WEB-DL/4K/HDR, y si no coincide (otro idioma, p. ej. «Video Proof» / «la prueba de video») (2) con la imagen más cercana, publicada justo antes de la parte 1 (o justo después de la última), sin otro vídeo por medio; y (3) si no hay imagen, con la carátula de TMDb. Código: `rarTitle`, `isRarPart` y el bloque de RAR en `renderMedia`.
 
 Ir al chat desde la búsqueda de Telegram: al tocar (o mantener pulsado) un resultado o un mensaje de otro chat aparece **«📂 Ir al chat: nombre»**, que abre el chat donde está alojado y salta hasta ese mensaje. Código: `goToMessageChat` / `isElsewhere` en `TelegramAccountActivity`.
+
+## Selección múltiple en Telegram y póster del EPG
+- **Seleccionar varios** (en un chat: mantener pulsado un mensaje → «☑ Seleccionar varios», o menú ⋮ → «Seleccionar varios»; también desde los resultados de búsqueda). Después se tocan los mensajes o miniaturas (se marcan en naranja; en la galería una miniatura de serie o de RAR selecciona todos sus capítulos/partes) y arriba salen **Reenviar** (a otro chat, en orden), **Copiar enlaces** (uno por línea) y **Todo**. «Atrás» sale de la selección.
+- El póster del EPG en el reproductor respeta ahora la barra de navegación lateral (no se mete debajo): `applyEpgDetail` suma al margen de la barra los insets del sistema.
+
+## Más información del programa en el EPG + guardar varios archivos
+- La barra del reproductor muestra, si el XMLTV lo trae: episodio y subtítulo junto al título (`Serie · T1 E2 · Subtítulo`), una línea `2021 | [16] | ★★★★☆`, la sinopsis precedida de la categoría (hasta 3 líneas) y `País · Reparto`. Datos leídos en `EpgRepository.parseXmlTv` (`<sub-title>`, `<desc>`, `<category>`, `<date>`, `<rating>`, `<star-rating>`, `<country>`, `<actor>`, `<episode-num>`); las guías JSON no traen estos datos.
+- En la selección múltiple de Telegram, **«Guardar en el móvil»** descarga los archivos elegidos uno tras otro y los copia a `Descargas/Socram TV` (Android 10+; en versiones anteriores, a la carpeta de la app).
