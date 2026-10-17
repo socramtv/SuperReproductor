@@ -1456,3 +1456,5 @@ Si en un chat hay un vídeo subido como `Nombre.part1.rar`, `Nombre.part2.rar`�
 - Código: `telegram/RarVolumes.kt` (cabeceras RAR4/RAR5), `TgStreamServer.urlForRar` y `TelegramAccountActivity.playRar`.
 
 Imagen de los vídeos en RAR (galería de Telegram): las partes `.partN.rar` salen como **una sola miniatura «▶ RAR ×N»** que se reproduce al tocarla. La imagen se empareja (1) por nombre, ignorando guiones bajos, año y etiquetas como WEB-DL/4K/HDR, y si no coincide (otro idioma, p. ej. «Video Proof» / «la prueba de video») (2) con la imagen más cercana, publicada justo antes de la parte 1 (o justo después de la última), sin otro vídeo por medio; y (3) si no hay imagen, con la carátula de TMDb. Código: `rarTitle`, `isRarPart` y el bloque de RAR en `renderMedia`.
+
+Ir al chat desde la búsqueda de Telegram: al tocar (o mantener pulsado) un resultado o un mensaje de otro chat aparece **«📂 Ir al chat: nombre»**, que abre el chat donde está alojado y salta hasta ese mensaje. Código: `goToMessageChat` / `isElsewhere` en `TelegramAccountActivity`.

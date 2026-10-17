@@ -602,4 +602,5 @@
     <string name="tgrar_err_encrypted">Este RAR tiene contraseña, no se puede reproducir.</string>
     <string name="tgrar_err_novideo">No he encontrado un vídeo dentro del RAR (solo se admite un vídeo por archivo).</string>
     <string name="tgrar_err_read">No se pudieron leer las cabeceras del RAR (¿Telegram sin datos o no es un RAR?).</string>
+    <string name="tgacc_go_chat">📂 Ir al chat: %1$s</string>
 </resources>

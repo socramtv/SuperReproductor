@@ -2240,6 +2240,10 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun onMessageLong(m: TgMessage) {
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
+        if (isElsewhere(m)) {
+            labels.add(getString(R.string.tgacc_go_chat, m.chatTitle.ifEmpty { getString(R.string.tgacc_title) }))
+            actions.add { goToMessageChat(m) }
+        }
         if (currentChat != null && !searching) {
             labels.add(getString(R.string.tgacc_act_reply))
             actions.add { setReply(m) }
@@ -2721,9 +2725,24 @@ class TelegramAccountActivity : AppCompatActivity() {
     // Acciones
     // -----------------------------------------------------------------
 
+    /** Abre el chat donde está el mensaje y salta hasta él (desde los resultados de búsqueda, favoritos…). */
+    private fun goToMessageChat(m: TgMessage) {
+        val chat = chats.firstOrNull { it.id == m.chatId }
+            ?: folderChats.firstOrNull { it.id == m.chatId }
+            ?: TgChat(m.chatId, m.chatTitle.ifEmpty { getString(R.string.tgacc_title) }, m.chatType.ifEmpty { "group" }, 0L)
+        openChat(chat, m.messageId)
+    }
+
+    /** ¿El mensaje está en otro chat distinto del que se ve ahora (p. ej. un resultado de búsqueda global)? */
+    private fun isElsewhere(m: TgMessage) = m.chatId != 0L && currentChat?.id != m.chatId
+
     private fun onMessageClick(m: TgMessage, withButtons: Boolean = true) {
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
+        if (isElsewhere(m)) {
+            labels.add(getString(R.string.tgacc_go_chat, m.chatTitle.ifEmpty { getString(R.string.tgacc_title) }))
+            actions.add { goToMessageChat(m) }
+        }
         if (withButtons && m.buttons.isNotEmpty()) {
             labels.add(getString(R.string.tgacc_buttons, m.buttons.size))
             actions.add { showButtons(m) }
