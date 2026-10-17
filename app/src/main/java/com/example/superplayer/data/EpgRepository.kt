@@ -171,6 +171,23 @@ object EpgRepository {
         return EpgSchedule(now?.toEntry(), next?.toEntry(), tonight?.toEntry())
     }
 
+    /** "2021 | [16] | ★★★★☆" con lo que haya (año, edad, valoración); vacío si no hay nada. */
+    fun metaLine(d: Details?): String {
+        if (d == null) return ""
+        val parts = ArrayList<String>()
+        d.year?.let { parts.add(it) }
+        d.rating?.let { parts.add("[$it]") }
+        d.stars?.let { parts.add("★".repeat(it) + "☆".repeat(5 - it)) }
+        return parts.joinToString(" | ")
+    }
+
+    /** Título con episodio y subtítulo si los hay: "Serie · T1 E2 · Subtítulo". */
+    fun fullTitle(e: EpgEntry): String {
+        val d = e.details ?: return e.title
+        val extra = listOfNotNull(d.episode, d.subTitle?.takeIf { !it.equals(e.title, ignoreCase = true) })
+        return if (extra.isEmpty()) e.title else e.title + " · " + extra.joinToString(" · ")
+    }
+
     /** "17:30–18:00" en la hora local del dispositivo. */
     fun formatRange(entry: EpgEntry): String {
         val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())

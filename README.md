@@ -1466,3 +1466,5 @@ Ir al chat desde la búsqueda de Telegram: al tocar (o mantener pulsado) un resu
 ## Más información del programa en el EPG + guardar varios archivos
 - La barra del reproductor muestra, si el XMLTV lo trae: episodio y subtítulo junto al título (`Serie · T1 E2 · Subtítulo`), una línea `2021 | [16] | ★★★★☆`, la sinopsis precedida de la categoría (hasta 3 líneas) y `País · Reparto`. Datos leídos en `EpgRepository.parseXmlTv` (`<sub-title>`, `<desc>`, `<category>`, `<date>`, `<rating>`, `<star-rating>`, `<country>`, `<actor>`, `<episode-num>`); las guías JSON no traen estos datos.
 - En la selección múltiple de Telegram, **«Guardar en el móvil»** descarga los archivos elegidos uno tras otro y los copia a `Descargas/Socram TV` (Android 10+; en versiones anteriores, a la carpeta de la app).
+
+La misma información extra del programa (episodio y subtítulo en el título, `año | [edad] | ★★★★☆`, categoría y sinopsis, país y reparto) sale también en la **parrilla del EPG**: al abrir los detalles de un programa (se hace scroll si es largo) y, el año/edad/estrellas, en la barra del programa enfocado con el mando. Funciones comunes: `EpgRepository.metaLine` y `fullTitle`.

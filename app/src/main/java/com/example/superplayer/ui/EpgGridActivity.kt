@@ -195,7 +195,7 @@ class EpgGridActivity : AppCompatActivity() {
         val reminder = if (ReminderManager.isSet(this, stream.id, entry.startMillis)) "  ⏰" else ""
         binding.focusInfoText.text = getString(
             R.string.epg_grid_focus_info, stream.name, entry.title, EpgRepository.formatRange(entry)
-        ) + reminder
+        ) + reminder + EpgRepository.metaLine(entry.details).let { if (it.isEmpty()) "" else "  ·  $it" }
         binding.focusInfoText.visibility = View.VISIBLE
     }
 
@@ -421,9 +421,43 @@ class EpgGridActivity : AppCompatActivity() {
             }
         )
 
+        // Más información del programa (si la guía XMLTV la trae): año | edad | estrellas, categoría y sinopsis, país y reparto.
+        val det = entry.details
+        val meta = EpgRepository.metaLine(det)
+        if (meta.isNotEmpty()) {
+            container.addView(TextView(this).apply {
+                text = meta
+                textSize = 14f
+                setPadding(0, (6 * density).toInt(), 0, 0)
+                setTextColor(ContextCompat.getColor(this@EpgGridActivity, R.color.on_background))
+            })
+        }
+        val body = listOfNotNull(det?.category, det?.desc).joinToString(" · ")
+        if (body.isNotEmpty()) {
+            container.addView(TextView(this).apply {
+                text = body
+                textSize = 14f
+                setPadding(0, (8 * density).toInt(), 0, 0)
+                setTextColor(ContextCompat.getColor(this@EpgGridActivity, R.color.on_background))
+            })
+        }
+        val extraLine = listOfNotNull(
+            det?.country?.let { getString(R.string.epg_country, it) },
+            det?.cast?.let { getString(R.string.epg_cast, it) }
+        ).joinToString("\n")
+        if (extraLine.isNotEmpty()) {
+            container.addView(TextView(this).apply {
+                text = extraLine
+                textSize = 12f
+                setPadding(0, (8 * density).toInt(), 0, 0)
+                setTextColor(ContextCompat.getColor(this@EpgGridActivity, R.color.on_surface_muted))
+            })
+        }
+        val scroll = android.widget.ScrollView(this).apply { addView(container) }
+
         val builder = androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle(entry.title)
-            .setView(container)
+            .setTitle(EpgRepository.fullTitle(entry))
+            .setView(scroll)
             .setPositiveButton(android.R.string.ok, null)
         // Recordatorio: solo para programas que todavía no han empezado.
         if (entry.startMillis > System.currentTimeMillis()) {
