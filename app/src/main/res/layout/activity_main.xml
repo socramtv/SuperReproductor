@@ -237,75 +237,73 @@
             android:visibility="gone" />
 
         <!-- Portada de bienvenida: se ve mientras no hay ninguna lista cargada (solo la de ejemplo);
-             al cargar una lista de verdad se sustituye por las categorías. -->
-        <ScrollView
-            android:id="@+id/homeInfo"
+             al cargar una lista de verdad se sustituye por las categorías. El logo (en gota de agua)
+             va fijo al fondo, detrás del texto, que se desplaza por encima. Los textos están en
+             res/values/strings.xml (home_*). -->
+        <FrameLayout
+            android:id="@+id/homePanel"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:focusable="true"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="12dp"
             android:visibility="gone">
 
-            <LinearLayout
+            <ImageView
+                android:id="@+id/homeLogo"
+                android:layout_width="300dp"
+                android:layout_height="360dp"
+                android:layout_gravity="center"
+                android:alpha="0.45"
+                android:background="#822324"
+                android:contentDescription="@string/app_name"
+                android:paddingHorizontal="30dp"
+                android:paddingTop="96dp"
+                android:paddingBottom="30dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_launcher_app" />
+
+            <ScrollView
+                android:id="@+id/homeInfo"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <ImageView
-                    android:id="@+id/homeLogo"
-                    android:layout_width="116dp"
-                    android:layout_height="140dp"
-                    android:layout_gravity="center_horizontal"
-                    android:background="#822324"
-                    android:contentDescription="@string/app_name"
-                    android:elevation="8dp"
-                    android:paddingHorizontal="12dp"
-                    android:paddingTop="34dp"
-                    android:paddingBottom="12dp"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/ic_launcher_app" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:gravity="center"
-                    android:text="@string/home_title"
-                    android:textColor="@color/on_background"
-                    android:textSize="24sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="16dp"
-                    android:gravity="center"
-                    android:text="@string/home_subtitle"
-                    android:textColor="@color/on_surface_muted"
-                    android:textSize="14sp" />
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:focusable="true"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp">
 
                 <LinearLayout
-                    android:id="@+id/homeItems"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical" />
+                    android:orientation="vertical">
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="12dp"
-                    android:gravity="center"
-                    android:text="@string/home_start_hint"
-                    android:textColor="@color/primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="16dp"
+                        android:gravity="center"
+                        android:text="@string/home_subtitle"
+                        android:textColor="@color/on_surface_muted"
+                        android:textSize="14sp" />
 
-            </LinearLayout>
-        </ScrollView>
+                    <LinearLayout
+                        android:id="@+id/homeItems"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="12dp"
+                        android:gravity="center"
+                        android:text="@string/home_start_hint"
+                        android:textColor="@color/primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                </LinearLayout>
+            </ScrollView>
+        </FrameLayout>
 
     </FrameLayout>
 

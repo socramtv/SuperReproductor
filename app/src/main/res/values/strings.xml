@@ -19,11 +19,10 @@
     <string name="reminder_channel_name">Recordatorios de programas</string>
     <string name="reminder_notification_text">Empieza a las %1$s en %2$s — toca para verlo</string>
     <string name="favorites_category_name">⭐ Favoritos</string>
-    <string name="home_title">Socram TV+</string>
     <string name="home_subtitle">Tu televisión, radio, cine y Telegram en una sola app</string>
     <string name="home_start_hint">Para empezar, pulsa uno de los botones de arriba y pega la dirección de tu lista (mantenlo pulsado para cambiarla), o abre Telegram.</string>
     <string name="home_t1">📺 Tus listas IPTV</string>
-    <string name="home_d1">Carga hasta cinco listas por dirección (TV, Lista 2, Cine, TDT y Radio) o un archivo M3U/JSON. Se actualizan solas y puedes filtrar, ordenar, ocultar y renombrar categorías y canales.</string>
+    <string name="home_d1">Carga hasta cinco listas por dirección (TV, Acestream+, Cine, TDT y Radio) o un archivo M3U/JSON. Se actualizan solas y puedes filtrar, ordenar, ocultar y renombrar categorías y canales.</string>
     <string name="home_t2">▶ Reproductor completo</string>
     <string name="home_d2">Emisiones HLS, DASH y MP4. Chromecast, imagen en imagen, audio en segundo plano, pausa y retroceso del directo, multivista, reconexión automática, formato de pantalla y temporizador de apagado.</string>
     <string name="home_t3">⭐ Favoritos y «Continuar viendo»</string>

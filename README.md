@@ -1424,4 +1424,6 @@ En la portada, al volver de una categoría (o del reproductor) el foco del mando
 
 ## Portada de bienvenida
 
-Mientras no hay ninguna lista cargada (solo la lista de ejemplo "Demo"), el espacio de las categorías muestra el logo de la app dentro de una **gota de agua** (`ic_launcher_app` recortado con la silueta) y un resumen de lo que hace la app: listas IPTV, reproductor, favoritos, guía y avisos, radio y cine, Telegram, navegador, móvil/TV y copia de seguridad. En cuanto cargas una lista (o buscas), se ven las categorías de siempre. En TV el panel se desplaza con las flechas.
+Mientras no hay ninguna lista cargada (solo la lista de ejemplo "Demo"), el espacio de las categorías muestra un resumen de lo que hace la app, con el logo (`ic_launcher_app` recortado en **gota de agua**) fijo al fondo, detrás del texto (las tarjetas son algo transparentes).
+
+**Dónde editar el texto:** `app/src/main/res/values/strings.xml`, las entradas `home_subtitle`, `home_start_hint` y, para cada tarjeta, `home_t1`…`home_t9` (título) y `home_d1`…`home_d9` (descripción). Para añadir o quitar tarjetas, la lista está en `setupHomeInfo()` de `MainActivity.kt`; el diseño en `res/layout/activity_main.xml` (`homePanel`) y `res/layout/item_home_info.xml`. Contenido: listas IPTV, reproductor, favoritos, guía y avisos, radio y cine, Telegram, navegador, móvil/TV y copia de seguridad. En cuanto cargas una lista (o buscas), se ven las categorías de siempre. En TV el panel se desplaza con las flechas.

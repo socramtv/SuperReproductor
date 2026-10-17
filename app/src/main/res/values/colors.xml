@@ -37,6 +37,8 @@
     <!-- Borde sutil de los botones de lista (ver bg_list_slot_button.xml):
          en claro, un poco de negro sobre el botón blanco; en oscuro (ver
          values-night) el blanco semitransparente de siempre. -->
+    <!-- Tarjetas de la portada de bienvenida: algo transparentes para que se vea el logo del fondo. -->
+    <color name="home_card">#D9FFFFFF</color>
     <color name="list_slot_border">#1F000000</color>
 
     <!-- Burbujas del chat de Telegram -->

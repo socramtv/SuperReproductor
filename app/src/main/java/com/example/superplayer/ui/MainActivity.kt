@@ -175,7 +175,7 @@ class MainActivity : AppCompatActivity() {
     /** La portada de bienvenida sustituye a la lista de ejemplo; en cuanto hay una lista de verdad (o resultados de búsqueda) se ven las categorías. */
     private fun updateHomeInfo() {
         val show = currentListKey == "sample" && binding.recyclerView.adapter === categoryAdapter
-        binding.homeInfo.visibility = if (show) View.VISIBLE else View.GONE
+        binding.homePanel.visibility = if (show) View.VISIBLE else View.GONE
         binding.recyclerView.visibility = if (show) View.GONE else View.VISIBLE
         if (show) binding.emptyView.visibility = View.GONE
     }
