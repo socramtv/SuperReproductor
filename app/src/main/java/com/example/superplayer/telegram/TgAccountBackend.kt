@@ -9,6 +9,9 @@ enum class TgAuthState { STARTING, WAIT_PHONE, WAIT_CODE, WAIT_PASSWORD, READY, 
 /** [kind]: channel, group, bot o private. [userId]: el del otro usuario en chats privados y bots (0 si no aplica). */
 data class TgChat(val id: Long, val title: String, val kind: String, val lastDate: Long, val userId: Long = 0L, val unread: Int = 0, val photoId: Int = 0, val live: Boolean = false)
 
+/** Una carpeta de chats de Telegram ([shared]: es una carpeta compartida por enlace). */
+data class TgFolder(val id: Int, val name: String, val shared: Boolean)
+
 /** Un tema de un supergrupo con temas (foro). */
 data class TgTopic(val id: Long, val name: String, val lastDate: Long = 0L, val unread: Int = 0)
 
@@ -90,6 +93,10 @@ interface TgAccountBackend {
     /** Un trozo del directo. [quality]: 0 ninguna, 1 miniatura, 2 media, 3 completa. [onDone]: (bytes o null, error). */
     fun liveSegment(chatId: Long, timeOffset: Long, scale: Int, channelId: Int, quality: Int, onDone: (ByteArray?, String) -> Unit)
     fun liveLeave(chatId: Long)
+    /** Carpetas de chats de la cuenta (las compartidas llevan [TgFolder.shared]). */
+    fun loadFolders(onDone: (List<TgFolder>) -> Unit)
+    /** Chats de una carpeta, en su orden. */
+    fun loadFolderChats(folderId: Int, onDone: (List<TgChat>) -> Unit)
 }
 
 object TelegramAccountPrefs {
@@ -219,6 +226,16 @@ object TelegramAccountPrefs {
         return now
     }
 
+    /** Orden elegido para los chats favoritos (los que no estén aquí salen al final). */
+    fun favoriteOrder(context: Context): List<Long> {
+        val arr = try { JSONArray(prefs(context).getString("fav_order", "[]")) } catch (e: Exception) { JSONArray() }
+        return (0 until arr.length()).mapNotNull { arr.optLong(it, 0L).takeIf { v -> v != 0L } }
+    }
+
+    fun setFavoriteOrder(context: Context, ids: List<Long>) {
+        prefs(context).edit().putString("fav_order", JSONArray(ids.distinct()).toString()).apply()
+    }
+
     fun favoriteChats(context: Context): Set<Long> =
         prefs(context).getStringSet("fav_chats", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
 
@@ -249,6 +266,7 @@ object TelegramAccountPrefs {
             .put("folders", arr("video_folders"))
             .put("favChats", JSONArray(p.getStringSet("fav_chats", emptySet())!!.toList()))
             .put("favChatInfo", obj("fav_chat_info"))
+            .put("favOrder", JSONArray(favoriteOrder(context)))
     }
 
     /** Suma lo de la copia a lo que ya hay (no borra nada); devuelve cuántos elementos nuevos entraron. */
@@ -307,6 +325,10 @@ object TelegramAccountPrefs {
         if (inc != null) for (i in 0 until inc.length()) if (chats.add(inc.optString(i))) n3++
         val info = try { JSONObject(p.getString("fav_chat_info", "{}")) } catch (e: Exception) { JSONObject() }
         o.optJSONObject("favChatInfo")?.let { bi -> for (k in bi.keys()) if (!info.has(k)) info.put(k, bi.get(k)) }
+        val incOrder = o.optJSONArray("favOrder")
+        if (incOrder != null && favoriteOrder(context).isEmpty()) {
+            setFavoriteOrder(context, (0 until incOrder.length()).mapNotNull { incOrder.optLong(it, 0L).takeIf { v -> v != 0L } })
+        }
         if (n3 > 0 || o.has("favChatInfo")) {
             p.edit().putStringSet("fav_chats", chats).putString("fav_chat_info", info.toString()).apply()
         }

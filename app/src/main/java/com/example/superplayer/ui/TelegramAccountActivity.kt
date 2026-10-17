@@ -45,6 +45,7 @@ import com.example.superplayer.telegram.TgAccountBackend
 import com.example.superplayer.telegram.TgAuthState
 import com.example.superplayer.telegram.TgStreamServer
 import com.example.superplayer.telegram.TgChat
+import com.example.superplayer.telegram.TgFolder
 import com.example.superplayer.telegram.TgLinkSpan
 import com.example.superplayer.telegram.TgMessage
 import com.example.superplayer.telegram.TgTopic
@@ -144,6 +145,13 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** Pestaña de la lista de chats: 0 favoritos, 1 todos, 2 canales, 3 grupos, 4 bots, 5 personas. */
     private var chatFilter = 1
     private val VIDEO_TAB = 7
+    private val FOLDER_TAB = 8
+    /** Pestaña Carpetas: carpetas de chats de Telegram; null = la lista de carpetas, otra = sus chats. */
+    private var tgFolders: List<TgFolder> = emptyList()
+    private var openFolder: TgFolder? = null
+    private var folderChats: List<TgChat> = emptyList()
+    private var folderLoading = false
+    private var returnUntil = 0L
     /** Pestaña Vídeos: null = lista de carpetas, "" = favoritos, otro = carpeta propia. */
     private var videoFolder: String? = null
     private val reloadRunnable = Runnable { refreshNow() }
@@ -699,7 +707,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun updateBack() {
-        backCallback.isEnabled = searching || currentChat != null || (chatFilter == VIDEO_TAB && videoFolder != null)
+        backCallback.isEnabled = searching || currentChat != null || (chatFilter == VIDEO_TAB && videoFolder != null) ||
+            (chatFilter == FOLDER_TAB && openFolder != null)
     }
 
     private fun goBack() {
@@ -717,6 +726,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         } else if (chatFilter == VIDEO_TAB && videoFolder != null) {
             videoFolder = null
             renderChats()
+        } else if (chatFilter == FOLDER_TAB && openFolder != null) {
+            openFolder = null
+            folderChats = emptyList()
+            renderChats()
         } else {
             finish()
         }
@@ -726,7 +739,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val labels = listOf(
             R.string.tgacc_tab_fav, R.string.tgacc_tab_all, R.string.tgacc_tab_channels,
             R.string.tgacc_tab_groups, R.string.tgacc_tab_forums, R.string.tgacc_tab_bots, R.string.tgacc_tab_people,
-            R.string.tgvid_tab
+            R.string.tgvid_tab, R.string.tgacc_tab_folders
         )
         if (TelegramAccountPrefs.favoriteChats(this).isNotEmpty()) chatFilter = 0
         for ((i, res) in labels.withIndex()) {
@@ -737,6 +750,9 @@ class TelegramAccountActivity : AppCompatActivity() {
                 if (chatFilter != tab.position) {
                     chatFilter = tab.position
                     videoFolder = null
+                    openFolder = null
+                    folderChats = emptyList()
+                    if (tab.position == FOLDER_TAB) refreshFolders()
                     if (currentChat == null && !searching) renderChats()
                 }
             }
@@ -764,9 +780,15 @@ class TelegramAccountActivity : AppCompatActivity() {
             renderVideoFavs()
             return
         }
+        if (chatFilter == FOLDER_TAB && openFolder == null) {
+            renderFolders()
+            return
+        }
+        if (chatFilter == FOLDER_TAB) title = openFolder?.name ?: getString(R.string.tgacc_title)
         val favs = TelegramAccountPrefs.favoriteChats(this)
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-        val shown = chats.filter { chat ->
+        val source = if (chatFilter == FOLDER_TAB) folderChats else chats
+        val shown0 = source.filter { chat ->
             when (chatFilter) {
                 0 -> chat.id in favs
                 2 -> chat.kind == "channel"
@@ -777,6 +799,8 @@ class TelegramAccountActivity : AppCompatActivity() {
                 else -> true
             }
         }
+        val favIndex = if (chatFilter == 0) TelegramAccountPrefs.favoriteOrder(this).withIndex().associate { it.value to it.index } else emptyMap()
+        val shown = if (chatFilter == 0) shown0.sortedBy { favIndex[it.id] ?: Int.MAX_VALUE } else shown0
         val rows = shown.map { chat ->
             val sub = (if (chat.live) getString(R.string.tgacc_live_badge) + " · " else "") + kindLabel(chat.kind) +
                 (if (chat.unread > 0) " · " + getString(R.string.tgacc_unread, chat.unread) else "") +
@@ -785,20 +809,106 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val nowFav = TelegramAccountPrefs.toggleFavorite(this, chat.id, chat)
                 Toast.makeText(this, if (nowFav) R.string.tgacc_fav_added else R.string.tgacc_fav_removed, Toast.LENGTH_SHORT).show()
                 renderChats()
-            }, thumbFileId = chat.photoId, circle = true) { openChat(chat) }
+            }, onLong = if (chatFilter == 0) ({ showFavMenu(chat, shown.map { it.id }) }) else null,
+                thumbFileId = chat.photoId, circle = true) { openChat(chat) }
         }
         adapter.submit(rows)
-        val back = returnToChatId
-        returnToChatId = 0L
+        // Al volver de un chat (o mover un favorito) el foco vuelve a esa misma fila, no a la lupa de arriba.
+        val back = if (System.currentTimeMillis() < returnUntil) returnToChatId else 0L
         val backIdx = if (back != 0L) shown.indexOfFirst { it.id == back } else -1
         if (backIdx >= 0) {
-            binding.recyclerView.scrollToPosition(backIdx)
-            binding.recyclerView.post { binding.recyclerView.findViewHolderForAdapterPosition(backIdx)?.itemView?.requestFocus() }
+            focusRowAt(backIdx)
         } else {
             focusItemIfTv()
         }
-        binding.emptyView.text = getString(if (chatFilter == 0) R.string.tgacc_no_favs else R.string.tgacc_no_chats)
+        binding.emptyView.text = getString(
+            when {
+                chatFilter == FOLDER_TAB && folderLoading -> R.string.tgacc_loading
+                chatFilter == 0 -> R.string.tgacc_no_favs
+                else -> R.string.tgacc_no_chats
+            }
+        )
         binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    /** Lleva el foco a una fila, reintentando hasta que la lista esté pintada (si no, el mando salta a la lupa). */
+    private fun focusRowAt(idx: Int, tries: Int = 0) {
+        val rv = binding.recyclerView
+        rv.scrollToPosition(idx)
+        rv.postDelayed({
+            val h = rv.findViewHolderForAdapterPosition(idx)
+            if (h != null) h.itemView.requestFocus() else if (tries < 6) focusRowAt(idx, tries + 1)
+        }, if (tries == 0) 40L else 120L)
+    }
+
+    /** Mover un favorito (pulsación larga): arriba, abajo, al principio o al final. */
+    private fun showFavMenu(chat: TgChat, order: List<Long>) {
+        val i = order.indexOf(chat.id)
+        if (i < 0) return
+        val labels = ArrayList<String>()
+        val acts = ArrayList<() -> Unit>()
+        if (i > 0) {
+            labels.add(getString(R.string.tgacc_fav_up)); acts.add { moveFavorite(order, i, i - 1, chat.id) }
+            labels.add(getString(R.string.tgacc_fav_top)); acts.add { moveFavorite(order, i, 0, chat.id) }
+        }
+        if (i < order.size - 1) {
+            labels.add(getString(R.string.tgacc_fav_down)); acts.add { moveFavorite(order, i, i + 1, chat.id) }
+            labels.add(getString(R.string.tgacc_fav_bottom)); acts.add { moveFavorite(order, i, order.size - 1, chat.id) }
+        }
+        labels.add(getString(R.string.tgacc_fav_remove))
+        acts.add {
+            TelegramAccountPrefs.toggleFavorite(this, chat.id, chat)
+            Toast.makeText(this, R.string.tgacc_fav_removed, Toast.LENGTH_SHORT).show()
+            renderChats()
+        }
+        AlertDialog.Builder(this).setTitle(chat.title).setItems(labels.toTypedArray()) { _, w -> acts[w]() }.show()
+    }
+
+    private fun moveFavorite(order: List<Long>, from: Int, to: Int, id: Long) {
+        val l = order.toMutableList()
+        val x = l.removeAt(from)
+        l.add(to, x)
+        TelegramAccountPrefs.setFavoriteOrder(this, l)
+        returnToChatId = id
+        returnUntil = System.currentTimeMillis() + 3000
+        renderChats()
+    }
+
+    // ---- Carpetas de Telegram (las compartidas, primero) ----
+
+    private fun refreshFolders() {
+        backend?.loadFolders { list ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                tgFolders = list
+                if (currentChat == null && !searching && chatFilter == FOLDER_TAB && openFolder == null) renderChats()
+            }
+        }
+    }
+
+    private fun renderFolders() {
+        val rows = tgFolders.sortedByDescending { it.shared }.map { f ->
+            Row(f.name, getString(if (f.shared) R.string.tgacc_folder_shared else R.string.tgacc_folder_own), circle = true) { openTgFolder(f) }
+        }
+        adapter.submit(rows)
+        binding.emptyView.text = getString(R.string.tgacc_no_folders)
+        binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+        focusItemIfTv()
+    }
+
+    private fun openTgFolder(f: TgFolder) {
+        openFolder = f
+        folderChats = emptyList()
+        folderLoading = true
+        renderChats()
+        backend?.loadFolderChats(f.id) { list ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed || openFolder?.id != f.id) return@runOnUiThread
+                folderChats = list
+                folderLoading = false
+                if (currentChat == null && !searching && chatFilter == FOLDER_TAB) renderChats()
+            }
+        }
     }
 
     private fun openChat(chat: TgChat, messageId: Long = 0L, startParam: String = "", keepStack: Boolean = false) {
@@ -943,6 +1053,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun closeChat() {
         navStack.clear()
         returnToChatId = currentChat?.id ?: 0L
+        returnUntil = System.currentTimeMillis() + 4000
         currentChat = null
         updateLiveBanner()
         currentTopic = null

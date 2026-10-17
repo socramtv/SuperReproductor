@@ -103,8 +103,28 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     }
 
     /** Actualizaciones que cambian de nombre según la versión de TDLib (directos/chats de vídeo): se leen sin nombrar la clase. */
+    @Volatile private var folders: List<TgFolder> = emptyList()
+
     private fun onOtherUpdate(obj: TdApi.Object) {
         val n = obj.javaClass.simpleName
+        if (n == "UpdateChatFolders") {
+            try {
+                val arr = field(obj, "chatFolders") as? Array<*> ?: return
+                folders = arr.mapNotNull { f ->
+                    if (f == null) return@mapNotNull null
+                    val id = (field(f, "id") as? Number)?.toInt() ?: return@mapNotNull null
+                    val nm = field(f, "name", "title")
+                    val name = when (nm) {
+                        is String -> nm
+                        null -> ""
+                        else -> (field(field(nm, "text"), "text") as? String) ?: (field(nm, "text") as? String) ?: ""
+                    }
+                    val shared = (field(f, "isShareable") as? Boolean ?: false) || (field(f, "hasMyInviteLinks") as? Boolean ?: false)
+                    TgFolder(id, name.ifBlank { "Carpeta $id" }, shared)
+                }
+            } catch (e: Exception) { }
+            return
+        }
         if (n == "UpdateChatVideoChat" || n == "UpdateChatVoiceChat") {
             try {
                 val chatId = field(obj, "chatId") as? Long ?: return
@@ -1031,6 +1051,46 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             val data = field(r, "data") as? ByteArray
             onDone(data, if (data == null) log else "")
         }
+    }
+
+    override fun loadFolders(onDone: (List<TgFolder>) -> Unit) {
+        // Telegram manda las carpetas al iniciar sesión: si aún no han llegado, se espera un poco.
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        var tries = 0
+        lateinit var check: Runnable
+        check = Runnable {
+            if (folders.isNotEmpty() || tries >= 8) onDone(folders) else { tries++; h.postDelayed(check, 600) }
+        }
+        check.run()
+    }
+
+    override fun loadFolderChats(folderId: Int, onDone: (List<TgChat>) -> Unit) {
+        val c = client
+        if (c == null) {
+            onDone(emptyList())
+            return
+        }
+        val list = TdApi.ChatListFolder(folderId)
+        val all = java.util.LinkedHashMap<Long, TgChat>()
+        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun finish() {
+            if (finished.compareAndSet(false, true)) onDone(synchronized(all) { all.values.toList() })
+        }
+        fun fetch() {
+            c.send(TdApi.GetChats(list, 1000)) { r ->
+                if (r is TdApi.Chats) synchronized(all) { r.chatIds.forEach { id -> chats[id]?.let { all[id] = tgChatOf(it) } } }
+                finish()
+            }
+        }
+        fun loadAll(round: Int) {
+            if (round >= 20) {
+                fetch()
+                return
+            }
+            c.send(TdApi.LoadChats(list, 100)) { r -> if (r is TdApi.Ok) loadAll(round + 1) else fetch() }
+        }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ if (!finished.get()) { fetch() } }, 20_000)
+        loadAll(0)
     }
 
     override fun liveLeave(chatId: Long) {

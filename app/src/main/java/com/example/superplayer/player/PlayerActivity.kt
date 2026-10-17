@@ -1141,6 +1141,10 @@ class PlayerActivity : AppCompatActivity() {
                 playbackStarted = false
                 stopTimeShift()
                 SleepTimer.cancel()
+            } else if (isTvDevice && !isCastingRemote) {
+                // En Android TV, al salir de la app (Inicio, otra app, apagar la tele) se para todo:
+                // ni radio ni "audio en segundo plano" siguen sonando (en la tele no hay bloqueo de pantalla).
+                ctrl.pause()
             } else if (!isCurrentStreamRadio && !isCastingRemote) {
                 if (AppPrefs.isBackgroundAudio(this) && !isInPictureInPictureMode) {
                     // Vídeo/TV en segundo plano (bloqueo, Home...) con

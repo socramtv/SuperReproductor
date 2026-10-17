@@ -1410,3 +1410,10 @@ Si el póster dice "Serie (Título original)" y los capítulos "Serie - 1x01", a
 ## Telegram: enlaces con texto en mensajes de bots
 
 Los enlaces ocultos tras un texto ("🔗 Opción 1 en reproductor") ahora se ven en azul y se pueden pulsar directamente dentro de la burbuja: se reproducen en el reproductor principal, con las demás opciones del mismo evento como lista para cambiar. Al pulsar el mensaje (o con el mando) se elige primero el evento (cada párrafo del mensaje) y después la opción.
+
+## Ajustes TV y Telegram (favoritos ordenables, carpetas)
+
+- **Android TV:** al salir de la app (Inicio, otra app) el reproductor se pausa siempre; ya no sigue sonando la radio ni el audio en segundo plano (eso queda para el móvil).
+- **Telegram, volver de un chat:** el foco vuelve a la misma fila donde estabas (con reintentos hasta que la lista está pintada), en vez de saltar a la lupa.
+- **Favoritos ordenables:** en la pestaña ⭐ Favoritos, pulsación larga (mantener OK en el mando) en un chat → mover arriba/abajo, al principio o al final, o quitarlo. El orden se guarda y va en la copia de seguridad.
+- **📁 Carpetas:** nueva pestaña con tus carpetas de chats de Telegram (las compartidas por enlace salen primero, marcadas con 🔗). Al abrir una se ven sus chats.

@@ -445,6 +445,16 @@
     <string name="tgvid_watch">▶ Ver</string>
     <string name="tgvid_option">▶ Ver opción %1$d</string>
     <string name="tgvid_tab">🎬 Vídeos</string>
+    <string name="tgacc_tab_folders">📁 Carpetas</string>
+    <string name="tgacc_no_folders">No hay carpetas de Telegram</string>
+    <string name="tgacc_folder_shared">🔗 Carpeta compartida</string>
+    <string name="tgacc_folder_own">Carpeta</string>
+    <string name="tgacc_loading">Cargando…</string>
+    <string name="tgacc_fav_up">⬆ Mover arriba</string>
+    <string name="tgacc_fav_down">⬇ Mover abajo</string>
+    <string name="tgacc_fav_top">⏫ Mover al principio</string>
+    <string name="tgacc_fav_bottom">⏬ Mover al final</string>
+    <string name="tgacc_fav_remove">☆ Quitar de favoritos</string>
     <string name="tgvid_empty">Aún no hay vídeos favoritos. Mantén pulsado un vídeo para guardarlo aquí.</string>
     <string name="tgvid_fav_added">★ Guardado en Vídeos</string>
     <string name="tgvid_fav_removed">Quitado de Vídeos</string>
