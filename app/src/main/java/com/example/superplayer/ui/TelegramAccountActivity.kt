@@ -105,6 +105,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     private lateinit var chatAdapter: ChatAdapter
     private var kbHidden = false
     private lateinit var backCallback: OnBackPressedCallback
+    private var imeWasVisible = false
+    private var imeHiddenAt = 0L
     private var backend: TgAccountBackend? = null
     private var state = TgAuthState.STARTING
     private var chats: List<TgChat> = emptyList()
@@ -200,8 +202,26 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.emptyView.setOnClickListener { promptForState() }
         setupTabs()
 
+        // Seguimiento del teclado: al ocultarlo con «atrás» no se debe cerrar también la búsqueda.
+        binding.root.viewTreeObserver.addOnGlobalLayoutListener {
+            val visible = ViewCompat.getRootWindowInsets(binding.root)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+            if (imeWasVisible && !visible) imeHiddenAt = System.currentTimeMillis()
+            imeWasVisible = visible
+        }
         backCallback = object : OnBackPressedCallback(false) {
-            override fun handleOnBackPressed() = goBack()
+            override fun handleOnBackPressed() {
+                if (searching) {
+                    val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                    val recentlyHidden = System.currentTimeMillis() - imeHiddenAt < 800L
+                    if (imeWasVisible || recentlyHidden) {
+                        // Primer «atrás»: solo esconde el teclado y deja ver los resultados.
+                        imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
+                        searchView?.clearFocus()
+                        return
+                    }
+                }
+                goBack()
+            }
         }
         onBackPressedDispatcher.addCallback(this, backCallback)
 

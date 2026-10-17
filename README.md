@@ -1446,3 +1446,5 @@ Ajustes posteriores: la portada ya no tiene botón «Entrar a mis listas» (la �
 - Debajo hay botones de filtro por tipo: Todo, Vídeos, Música/Audio, Documentos, Fotos y Enlaces. Con Vídeos, Música o Documentos aparece otra fila con el formato (MP4, MKV, AVI, TS…; MP3, FLAC…; PDF, ZIP, M3U…). Se puede elegir un tipo sin escribir nada para ver lo más reciente de ese tipo.
 - Los vídeos y la música que se suben como «documento» (.mkv, .avi, .flac…) también salen en Vídeos/Música. Código: `TelegramAccountActivity` (`fetchMessages`, `matchesSearchFilter`, `updateSearchFilters`) y `searchMessages(..., filter)` en `TdBackend`.
 - El título de la pantalla de Telegram ya no pone «(mi cuenta)»: muestra tu @usuario (o tu nombre si no tienes) — `accountName` en `TdBackend`.
+
+Ajuste del buscador de Telegram: al ocultar el teclado con «atrás» ya no se cierra la búsqueda; el primer «atrás» solo esconde el teclado y deja ver los resultados, el segundo sale de la búsqueda.
