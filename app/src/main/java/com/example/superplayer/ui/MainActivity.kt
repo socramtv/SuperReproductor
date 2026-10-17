@@ -143,7 +143,6 @@ class MainActivity : AppCompatActivity() {
 
     /** Portada de bienvenida (resumen de lo que hace la app con el logo en gota al fondo). */
     private fun setupHomeInfo() {
-        binding.homeEnterButton.setOnClickListener { dismissHome() }
         binding.homeVpnButton.setOnClickListener { VpnHelper.open(this) }
         binding.categoryVpnButton.setOnClickListener { VpnHelper.open(this) }
         // Tocar el logo de la cabecera vuelve a enseñar la portada.

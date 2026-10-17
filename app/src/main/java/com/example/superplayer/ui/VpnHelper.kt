@@ -23,10 +23,10 @@ object VpnHelper {
 
     /** VPN con plan gratuito (en este orden de preferencia). */
     private val KNOWN = listOf(
-        VpnApp("ch.protonvpn.android", "Proton VPN"),
         VpnApp("com.cloudflare.onedotonedotonedotone", "Cloudflare WARP"),
-        VpnApp("com.wireguard.android", "WireGuard"),
-        VpnApp("com.windscribe.vpn", "Windscribe")
+        VpnApp("com.windscribe.vpn", "Windscribe"),
+        VpnApp("ch.protonvpn.android", "Proton VPN"),
+        VpnApp("com.wireguard.android", "WireGuard")
     )
     private val INSTALL_SUGGESTIONS = KNOWN.take(2)
 
@@ -62,11 +62,32 @@ object VpnHelper {
         }
         labels.add(activity.getString(R.string.vpn_open_settings))
         actions.add { openSystemSettings(activity) }
-        AlertDialog.Builder(activity)
+        val dp = activity.resources.displayMetrics.density
+        val list = android.widget.ListView(activity)
+        list.adapter = android.widget.ArrayAdapter(activity, android.R.layout.simple_list_item_1, labels)
+        val explain = android.widget.TextView(activity).apply {
+            setText(R.string.vpn_explain)
+            textSize = 13f
+            setPadding((24 * dp).toInt(), (12 * dp).toInt(), (24 * dp).toInt(), (8 * dp).toInt())
+        }
+        val box = android.widget.LinearLayout(activity).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            addView(list, android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(explain, android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        val dialog = AlertDialog.Builder(activity)
             .setTitle(R.string.vpn_dialog_title)
-            .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
+            .setView(box)
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+        list.setOnItemClickListener { _, _, which, _ ->
+            dialog.dismiss()
+            actions[which]()
+        }
+        dialog.show()
     }
 
     private fun launch(activity: Activity, app: VpnApp) {

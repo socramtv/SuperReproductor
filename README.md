@@ -1430,7 +1430,7 @@ Mientras no hay ninguna lista cargada (solo la lista de ejemplo "Demo"), el espa
 
 ## Portada de bienvenida: siempre al abrir, y detalle del programa en el reproductor
 
-- La portada de bienvenida sale **siempre al abrir la app**, también con una lista cargada. Se cierra al pulsar **«Entrar a mis listas»**, un botón de lista (TV, Lista 2…), al buscar o al abrir un archivo. Tocar el logo de la cabecera la vuelve a mostrar. No reaparece al girar la pantalla ni al cambiar de modo claro/oscuro.
+- La portada de bienvenida sale **siempre al abrir la app**, también con una lista cargada. Se cierra al pulsar un botón de lista (TV, Lista 2…), al buscar o al abrir un archivo. Tocar el logo de la cabecera la vuelve a mostrar. No reaparece al girar la pantalla ni al cambiar de modo claro/oscuro.
 - En el reproductor, el cartel de abajo (al tocar la pantalla) ahora muestra, si la guía EPG trae datos del canal: el programa y el canal, el horario (ej. 15:30 — 17:00) con **barra de progreso** y debajo **«Después · 17:00–18:30 Título»** del siguiente programa. Se actualiza cada minuto y al aparecer.
 
 ## Póster del programa en el reproductor
@@ -1438,3 +1438,5 @@ Si la guía EPG (XMLTV) trae `<icon src="...">` para el programa actual, se mues
 
 ## Botón de VPN gratuita
 La app no incluye VPN propia (necesitaría servidores). El botón de VPN (portada y fila de botones de la lista) abre una VPN gratuita ya instalada (Proton VPN, Cloudflare WARP, WireGuard, Windscribe); si no hay ninguna, ofrece instalar Proton VPN o WARP (Play Store / tienda de Amazon) o abrir los ajustes de VPN del sistema. El icono/texto se pone verde cuando hay una VPN conectada. Para añadir otra app: `VpnHelper.KNOWN` y `<queries>` en `AndroidManifest.xml`.
+
+Ajustes posteriores: la portada ya no tiene botón «Entrar a mis listas» (la última línea quedaba bajo la barra del móvil; ahora hay margen inferior). El orden de VPN es Cloudflare WARP, Windscribe, Proton VPN, WireGuard, y el diálogo explica abajo para qué sirve una VPN (texto `vpn_explain`). El icono de la fila muestra un escudo con la palabra VPN (`ic_vpn_label`).

@@ -21,7 +21,6 @@
     <string name="favorites_category_name">⭐ Favoritos</string>
     <string name="home_subtitle">Tu televisión, radio, cine y Telegram en una sola app</string>
     <string name="epg_next_detail">Después · %1$s  %2$s</string>
-    <string name="home_enter">Entrar a mis listas</string>
     <string name="home_start_hint">Para empezar, pulsa uno de los botones de arriba y pega la dirección de tu lista (mantenlo pulsado para cambiarla), o abre Telegram.</string>
     <string name="home_t1">📺 Tus listas IPTV</string>
     <string name="home_d1">Carga hasta cinco listas por dirección (TV, Acestream+, Cine, TDT y Radio) o un archivo M3U/JSON. Se actualizan solas y puedes filtrar, ordenar, ocultar y renombrar categorías y canales.</string>
@@ -584,5 +583,6 @@
     <string name="vpn_open_app">Abrir %1$s</string>
     <string name="vpn_install_app">Instalar %1$s (plan gratis)</string>
     <string name="vpn_open_settings">Ajustes de VPN del sistema</string>
+    <string name="vpn_explain">¿Para qué sirve? Una VPN cifra tu conexión y oculta tu IP: sirve para ver listas o canales bloqueados por tu operador o tu zona y para más privacidad. Es opcional; la app funciona igual sin ella.</string>
     <string name="vpn_failed">No se pudo abrir la VPN</string>
 </resources>
