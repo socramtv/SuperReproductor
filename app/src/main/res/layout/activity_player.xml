@@ -347,6 +347,53 @@
             android:maxLines="1"
             android:ellipsize="end" />
 
+        <!-- Horario del programa de la guía (EPG) con su barra de progreso; solo si la guía lo trae. -->
+        <LinearLayout
+            android:id="@+id/videoNowPlayingTimeRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/videoNowPlayingStart"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/player_text"
+                android:textSize="13sp" />
+
+            <ProgressBar
+                android:id="@+id/videoNowPlayingProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="4dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="10dp"
+                android:max="1000"
+                android:progressTint="@color/primary"
+                android:progressBackgroundTint="#55FFFFFF" />
+
+            <TextView
+                android:id="@+id/videoNowPlayingEnd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/player_text"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/videoNextPlaying"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/player_text_muted"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone" />
+
     </LinearLayout>
 
     <!--

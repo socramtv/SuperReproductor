@@ -1427,3 +1427,8 @@ En la portada, al volver de una categoría (o del reproductor) el foco del mando
 Mientras no hay ninguna lista cargada (solo la lista de ejemplo "Demo"), el espacio de las categorías muestra un resumen de lo que hace la app, con el logo (`ic_launcher_app` recortado en **gota de agua**) fijo al fondo, detrás del texto (las tarjetas son algo transparentes).
 
 **Dónde editar el texto:** `app/src/main/res/values/strings.xml`, las entradas `home_subtitle`, `home_start_hint` y, para cada tarjeta, `home_t1`…`home_t9` (título) y `home_d1`…`home_d9` (descripción). Para añadir o quitar tarjetas, la lista está en `setupHomeInfo()` de `MainActivity.kt`; el diseño en `res/layout/activity_main.xml` (`homePanel`) y `res/layout/item_home_info.xml`. Contenido: listas IPTV, reproductor, favoritos, guía y avisos, radio y cine, Telegram, navegador, móvil/TV y copia de seguridad. En cuanto cargas una lista (o buscas), se ven las categorías de siempre. En TV el panel se desplaza con las flechas.
+
+## Portada de bienvenida: siempre al abrir, y detalle del programa en el reproductor
+
+- La portada de bienvenida sale **siempre al abrir la app**, también con una lista cargada. Se cierra al pulsar **«Entrar a mis listas»**, un botón de lista (TV, Lista 2…), al buscar o al abrir un archivo. Tocar el logo de la cabecera la vuelve a mostrar. No reaparece al girar la pantalla ni al cambiar de modo claro/oscuro.
+- En el reproductor, el cartel de abajo (al tocar la pantalla) ahora muestra, si la guía EPG trae datos del canal: el programa y el canal, el horario (ej. 15:30 — 17:00) con **barra de progreso** y debajo **«Después · 17:00–18:30 Título»** del siguiente programa. Se actualiza cada minuto y al aparecer.

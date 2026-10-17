@@ -814,6 +814,7 @@ class PlayerActivity : AppCompatActivity() {
         // verdad se ve en el Chromecast).
         binding.pipButton.visibility = if (isCurrentStreamRadio || isTvDevice || isCastingRemote) View.GONE else visibility
         binding.videoNowPlayingBar.visibility = if (isCurrentStreamRadio || isCastingRemote) View.GONE else visibility
+        if (visibility == View.VISIBLE) refreshNowPlayingDisplay()
         binding.timeShiftBar.visibility = if (timeShiftActive && !isCastingRemote) visibility else View.GONE
     }
 
@@ -1644,6 +1645,30 @@ class PlayerActivity : AppCompatActivity() {
         // el cartel de vídeo que aparece/desaparece con los controles.
         applyNowPlayingText(binding.nowPlayingTitle, binding.nowPlayingSubtitle, stationName, nowTitle)
         applyNowPlayingText(binding.videoNowPlayingTitle, binding.videoNowPlayingSubtitle, stationName, nowTitle)
+        applyEpgDetail()
+    }
+
+    /** Horario del programa en emisión con barra de progreso y, debajo, el siguiente (solo si la guía EPG los trae). */
+    private fun applyEpgDetail() {
+        val sched = EpgRepository.schedule(currentStream?.tvgId)
+        val now = sched.now
+        if (now == null || now.stopMillis <= now.startMillis) {
+            binding.videoNowPlayingTimeRow.visibility = View.GONE
+        } else {
+            val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            binding.videoNowPlayingStart.text = fmt.format(java.util.Date(now.startMillis))
+            binding.videoNowPlayingEnd.text = fmt.format(java.util.Date(now.stopMillis))
+            val frac = (System.currentTimeMillis() - now.startMillis).toDouble() / (now.stopMillis - now.startMillis)
+            binding.videoNowPlayingProgress.progress = (frac * 1000).toInt().coerceIn(0, 1000)
+            binding.videoNowPlayingTimeRow.visibility = View.VISIBLE
+        }
+        val next = sched.next
+        if (next == null) {
+            binding.videoNextPlaying.visibility = View.GONE
+        } else {
+            binding.videoNextPlaying.text = getString(R.string.epg_next_detail, EpgRepository.formatRange(next), next.title)
+            binding.videoNextPlaying.visibility = View.VISIBLE
+        }
     }
 
     private fun applyNowPlayingText(titleView: TextView, subtitleView: TextView, stationName: String, nowTitle: String?) {

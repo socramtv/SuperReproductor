@@ -128,6 +128,7 @@ class MainActivity : AppCompatActivity() {
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = categoryAdapter
 
+        homeDismissed = savedInstanceState != null
         setupListSlotButtons()
         setupHomeInfo()
         loadInitialPlaylist()
@@ -137,8 +138,17 @@ class MainActivity : AppCompatActivity() {
         autoRefreshLists()
     }
 
-    /** Portada de bienvenida (logo en gota + resumen de lo que hace la app): se ve mientras solo hay la lista de ejemplo. */
+    /** La portada de bienvenida sale siempre al abrir la app (no al girar la pantalla ni al cambiar de modo). */
+    private var homeDismissed = false
+
+    /** Portada de bienvenida (resumen de lo que hace la app con el logo en gota al fondo). */
     private fun setupHomeInfo() {
+        binding.homeEnterButton.setOnClickListener { dismissHome() }
+        // Tocar el logo de la cabecera vuelve a enseñar la portada.
+        binding.headerLogo.setOnClickListener {
+            homeDismissed = false
+            updateHomeInfo()
+        }
         val logo = binding.homeLogo
         logo.clipToOutline = true
         logo.outlineProvider = object : android.view.ViewOutlineProvider() {
@@ -174,10 +184,22 @@ class MainActivity : AppCompatActivity() {
 
     /** La portada de bienvenida sustituye a la lista de ejemplo; en cuanto hay una lista de verdad (o resultados de búsqueda) se ven las categorías. */
     private fun updateHomeInfo() {
-        val show = currentListKey == "sample" && binding.recyclerView.adapter === categoryAdapter
+        val onCategories = binding.recyclerView.adapter === categoryAdapter
+        val show = !homeDismissed && onCategories
         binding.homePanel.visibility = if (show) View.VISIBLE else View.GONE
         binding.recyclerView.visibility = if (show) View.GONE else View.VISIBLE
-        if (show) binding.emptyView.visibility = View.GONE
+        if (show) {
+            binding.emptyView.visibility = View.GONE
+        } else if (onCategories) {
+            binding.emptyView.visibility = if (playlist.categories.isEmpty()) View.VISIBLE else View.GONE
+        }
+    }
+
+    /** Cierra la portada de bienvenida (al elegir una lista, buscar o pulsar «Entrar»). */
+    private fun dismissHome() {
+        if (homeDismissed) return
+        homeDismissed = true
+        updateHomeInfo()
     }
 
     private fun slotDefs() = listOf(
@@ -250,6 +272,7 @@ class MainActivity : AppCompatActivity() {
         )
         for ((slot, button, label) in slots) {
             button.setOnClickListener {
+                dismissHome()
                 val savedUrl = AppPrefs.getListUrl(this, slot)
                 if (savedUrl.isNullOrBlank()) {
                     promptForListUrl(slot, label)
@@ -260,6 +283,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             button.setOnLongClickListener {
+                dismissHome()
                 promptForListUrl(slot, label)
                 true
             }
@@ -426,6 +450,7 @@ class MainActivity : AppCompatActivity() {
         // Lista recibida por Telegram (ver TelegramImport): se carga como lista principal.
         TelegramImport.pending?.let { imported ->
             TelegramImport.pending = null
+            homeDismissed = true
             setPlaylist(imported, "telegram")
             Toast.makeText(
                 this,
@@ -501,6 +526,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         AppPrefs.saveLastPlaylistUri(this, uri.toString())
+        if (announce) homeDismissed = true
         setPlaylist(data, "file")
         if (announce) {
             val totalStreams = data.categories.sumOf { it.streams.size }
@@ -793,6 +819,7 @@ class MainActivity : AppCompatActivity() {
         })
         searchItem.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
             override fun onMenuItemActionExpand(item: MenuItem): Boolean {
+                dismissHome()
                 refreshSearchIndexIfNeeded()
                 return true
             }
