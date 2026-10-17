@@ -1435,3 +1435,6 @@ Mientras no hay ninguna lista cargada (solo la lista de ejemplo "Demo"), el espa
 
 ## Póster del programa en el reproductor
 Si la guía EPG (XMLTV) trae `<icon src="...">` para el programa actual, se muestra un pequeño póster a la derecha de la barra "ahora en emisión" del reproductor. Si no lo trae (o falla la carga) se oculta. Código: `PlayerActivity.applyEpgDetail()` y `videoNowPlayingPoster` en `activity_player.xml`.
+
+## Botón de VPN gratuita
+La app no incluye VPN propia (necesitaría servidores). El botón de VPN (portada y fila de botones de la lista) abre una VPN gratuita ya instalada (Proton VPN, Cloudflare WARP, WireGuard, Windscribe); si no hay ninguna, ofrece instalar Proton VPN o WARP (Play Store / tienda de Amazon) o abrir los ajustes de VPN del sistema. El icono/texto se pone verde cuando hay una VPN conectada. Para añadir otra app: `VpnHelper.KNOWN` y `<queries>` en `AndroidManifest.xml`.

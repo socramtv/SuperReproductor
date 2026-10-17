@@ -144,6 +144,8 @@ class MainActivity : AppCompatActivity() {
     /** Portada de bienvenida (resumen de lo que hace la app con el logo en gota al fondo). */
     private fun setupHomeInfo() {
         binding.homeEnterButton.setOnClickListener { dismissHome() }
+        binding.homeVpnButton.setOnClickListener { VpnHelper.open(this) }
+        binding.categoryVpnButton.setOnClickListener { VpnHelper.open(this) }
         // Tocar el logo de la cabecera vuelve a enseñar la portada.
         binding.headerLogo.setOnClickListener {
             homeDismissed = false
@@ -193,6 +195,15 @@ class MainActivity : AppCompatActivity() {
         } else if (onCategories) {
             binding.emptyView.visibility = if (playlist.categories.isEmpty()) View.VISIBLE else View.GONE
         }
+    }
+
+    /** Texto/color de los botones de VPN según haya o no una VPN conectada. */
+    private fun refreshVpnState() {
+        val on = VpnHelper.isActive(this)
+        binding.homeVpnButton.setText(if (on) R.string.vpn_home_on else R.string.vpn_home_off)
+        val tint = if (on) android.graphics.Color.parseColor("#4CAF50") else androidx.core.content.ContextCompat.getColor(this, R.color.primary)
+        binding.categoryVpnButton.setColorFilter(tint)
+        binding.homeVpnButton.compoundDrawableTintList = android.content.res.ColorStateList.valueOf(tint)
     }
 
     /** Cierra la portada de bienvenida (al elegir una lista, buscar o pulsar «Entrar»). */
@@ -447,6 +458,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshVpnState()
         // Lista recibida por Telegram (ver TelegramImport): se carga como lista principal.
         TelegramImport.pending?.let { imported ->
             TelegramImport.pending = null

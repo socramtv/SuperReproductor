@@ -577,4 +577,12 @@
     <string name="tgacc_live_badge">🔴 En directo</string>
     <string name="tgacc_menu_live">🔴 Ver el directo en Telegram</string>
     <string name="tgacc_live_error">No se pudo abrir la app de Telegram</string>
+    <string name="vpn_desc">VPN</string>
+    <string name="vpn_home_off">VPN gratuita</string>
+    <string name="vpn_home_on">VPN activa ✓</string>
+    <string name="vpn_dialog_title">VPN gratuita</string>
+    <string name="vpn_open_app">Abrir %1$s</string>
+    <string name="vpn_install_app">Instalar %1$s (plan gratis)</string>
+    <string name="vpn_open_settings">Ajustes de VPN del sistema</string>
+    <string name="vpn_failed">No se pudo abrir la VPN</string>
 </resources>
