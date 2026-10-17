@@ -1432,3 +1432,6 @@ Mientras no hay ninguna lista cargada (solo la lista de ejemplo "Demo"), el espa
 
 - La portada de bienvenida sale **siempre al abrir la app**, también con una lista cargada. Se cierra al pulsar **«Entrar a mis listas»**, un botón de lista (TV, Lista 2…), al buscar o al abrir un archivo. Tocar el logo de la cabecera la vuelve a mostrar. No reaparece al girar la pantalla ni al cambiar de modo claro/oscuro.
 - En el reproductor, el cartel de abajo (al tocar la pantalla) ahora muestra, si la guía EPG trae datos del canal: el programa y el canal, el horario (ej. 15:30 — 17:00) con **barra de progreso** y debajo **«Después · 17:00–18:30 Título»** del siguiente programa. Se actualiza cada minuto y al aparecer.
+
+## Póster del programa en el reproductor
+Si la guía EPG (XMLTV) trae `<icon src="...">` para el programa actual, se muestra un pequeño póster a la derecha de la barra "ahora en emisión" del reproductor. Si no lo trae (o falla la carga) se oculta. Código: `PlayerActivity.applyEpgDetail()` y `videoNowPlayingPoster` en `activity_player.xml`.

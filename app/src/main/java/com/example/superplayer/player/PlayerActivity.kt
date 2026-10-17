@@ -1662,6 +1662,18 @@ class PlayerActivity : AppCompatActivity() {
             binding.videoNowPlayingProgress.progress = (frac * 1000).toInt().coerceIn(0, 1000)
             binding.videoNowPlayingTimeRow.visibility = View.VISIBLE
         }
+        val poster = now?.iconUrl
+        if (poster.isNullOrBlank()) {
+            binding.videoNowPlayingPoster.visibility = View.GONE
+        } else {
+            binding.videoNowPlayingPoster.visibility = View.VISIBLE
+            if (binding.videoNowPlayingPoster.tag != poster) {
+                binding.videoNowPlayingPoster.tag = poster
+                binding.videoNowPlayingPoster.load(poster) {
+                    listener(onError = { _, _ -> binding.videoNowPlayingPoster.visibility = View.GONE })
+                }
+            }
+        }
         val next = sched.next
         if (next == null) {
             binding.videoNextPlaying.visibility = View.GONE

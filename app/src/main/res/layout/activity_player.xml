@@ -321,77 +321,97 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:layout_marginBottom="72dp"
-        android:orientation="vertical"
+        android:orientation="horizontal"
+        android:gravity="bottom"
         android:background="#99000000"
         android:paddingHorizontal="20dp"
         android:paddingVertical="10dp"
         android:visibility="gone">
 
-        <TextView
-            android:id="@+id/videoNowPlayingTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@color/player_text"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end" />
-
-        <TextView
-            android:id="@+id/videoNowPlayingSubtitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/player_text_muted"
-            android:textSize="13sp"
-            android:maxLines="1"
-            android:ellipsize="end" />
-
-        <!-- Horario del programa de la guía (EPG) con su barra de progreso; solo si la guía lo trae. -->
         <LinearLayout
-            android:id="@+id/videoNowPlayingTimeRow"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:visibility="gone">
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/videoNowPlayingStart"
-                android:layout_width="wrap_content"
+        <TextView
+                android:id="@+id/videoNowPlayingTitle"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textColor="@color/player_text"
-                android:textSize="13sp" />
-
-            <ProgressBar
-                android:id="@+id/videoNowPlayingProgress"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="0dp"
-                android:layout_height="4dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="10dp"
-                android:max="1000"
-                android:progressTint="@color/primary"
-                android:progressBackgroundTint="#55FFFFFF" />
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <TextView
-                android:id="@+id/videoNowPlayingEnd"
-                android:layout_width="wrap_content"
+                android:id="@+id/videoNowPlayingSubtitle"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="@color/player_text"
-                android:textSize="13sp" />
+                android:layout_marginTop="2dp"
+                android:textColor="@color/player_text_muted"
+                android:textSize="13sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <!-- Horario del programa de la guía (EPG) con su barra de progreso; solo si la guía lo trae. -->
+            <LinearLayout
+                android:id="@+id/videoNowPlayingTimeRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/videoNowPlayingStart"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/player_text"
+                    android:textSize="13sp" />
+
+                <ProgressBar
+                    android:id="@+id/videoNowPlayingProgress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="4dp"
+                    android:layout_weight="1"
+                    android:layout_marginHorizontal="10dp"
+                    android:max="1000"
+                    android:progressTint="@color/primary"
+                    android:progressBackgroundTint="#55FFFFFF" />
+
+                <TextView
+                    android:id="@+id/videoNowPlayingEnd"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/player_text"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/videoNextPlaying"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/player_text_muted"
+                android:textSize="13sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:visibility="gone" />
+
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/videoNextPlaying"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/player_text_muted"
-            android:textSize="13sp"
-            android:maxLines="1"
-            android:ellipsize="end"
+        <!-- Póster del programa actual (icon de la guía XMLTV); oculto si no hay. -->
+        <ImageView
+            android:id="@+id/videoNowPlayingPoster"
+            android:layout_width="56dp"
+            android:layout_height="84dp"
+            android:layout_marginStart="12dp"
+            android:layout_gravity="bottom"
+            android:scaleType="centerCrop"
+            android:contentDescription="@null"
             android:visibility="gone" />
 
     </LinearLayout>
