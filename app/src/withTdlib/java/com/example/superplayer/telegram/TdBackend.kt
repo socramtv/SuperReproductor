@@ -663,7 +663,26 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         send(TdApi.CancelDownloadFile(fileId, false))
     }
 
-    override fun searchMessages(query: String, chatId: Long, onDone: (List<TgMessage>) -> Unit) {
+    private fun searchFilterOf(kind: String): TdApi.SearchMessagesFilter = when (kind) {
+        "video" -> TdApi.SearchMessagesFilterVideo()
+        "audio" -> TdApi.SearchMessagesFilterAudio()
+        "document" -> TdApi.SearchMessagesFilterDocument()
+        "photo" -> TdApi.SearchMessagesFilterPhoto()
+        "url" -> TdApi.SearchMessagesFilterUrl()
+        else -> TdApi.SearchMessagesFilterEmpty()
+    }
+
+    override fun accountName(onDone: (String?) -> Unit) {
+        sendQuiet(TdApi.GetMe()) { me ->
+            val active = (field(field(me, "usernames"), "activeUsernames") as? Array<*>)?.firstOrNull() as? String
+            val old = field(me, "username") as? String
+            val uname = (active ?: old)?.takeIf { it.isNotBlank() }
+            val full = ((field(me, "firstName") as? String ?: "") + " " + (field(me, "lastName") as? String ?: "")).trim()
+            onDone(if (uname != null) "@$uname" else full.ifEmpty { null })
+        }
+    }
+
+    override fun searchMessages(query: String, chatId: Long, filter: String, onDone: (List<TgMessage>) -> Unit) {
         val request: TdApi.Function<*>
         if (chatId != 0L) {
             val r = TdApi.SearchChatMessages()
@@ -672,6 +691,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             r.fromMessageId = 0L
             r.offset = 0
             r.limit = 100
+            r.filter = searchFilterOf(filter)
             request = r
         } else {
             val r = TdApi.SearchMessages()
@@ -679,6 +699,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
             r.query = query
             r.offset = ""
             r.limit = 100
+            r.filter = searchFilterOf(filter)
             request = r
         }
         send(request) { result ->

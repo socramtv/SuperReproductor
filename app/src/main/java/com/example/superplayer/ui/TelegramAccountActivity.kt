@@ -115,8 +115,15 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var searchResults: List<TgMessage>? = null
     private var searchQuery = ""
     private var searching = false
-    /** Búsqueda global: 0 = por nombre (chats, canales, bots), 1 = en mensajes. */
-    private var searchMode = 0
+    /** Búsqueda global: [SM_ALL] = todo a la vez (chats y mensajes), [SM_NAMES] = solo chats/canales/bots, [SM_MSGS] = solo mensajes. */
+    private var searchMode = SM_ALL
+    /** Filtro de tipo de archivo del buscador: "" (todo), "video", "audio", "document", "photo" o "url". */
+    private var searchType = ""
+    /** Filtro de formato (extensión en minúsculas, p. ej. "mkv"); "" = todos. */
+    private var searchFormat = ""
+    private var searchSeq = 0
+    /** @usuario o nombre de la cuenta, para el título de la pantalla. */
+    private var accountTitle: String? = null
     private var searchChatResults: List<TgChat> = emptyList()
     private var replyTo: TgMessage? = null
     private var scrollToEnd = true
@@ -175,7 +182,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         applySystemBarInsets(top = binding.toolbar, bottom = binding.recyclerView)
-        title = getString(R.string.tgacc_title)
+        title = rootTitle()
 
         // Abierto desde el widget con un vídeo favorito: se reproduce en cuanto la sesión esté lista.
         val playChat = intent.getLongExtra(EXTRA_PLAY_CHAT, 0L)
@@ -242,6 +249,9 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var pendingPlay: TgMessage? = null
 
     companion object {
+        private const val SM_ALL = 0
+        private const val SM_NAMES = 1
+        private const val SM_MSGS = 2
         const val EXTRA_PLAY_CHAT = "play_chat"
         const val EXTRA_PLAY_MSG = "play_msg"
     }
@@ -413,6 +423,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     b.cleanCache()
                 }
                 loadChatList()
+                loadAccountTitle()
                 pendingPlay?.let {
                     pendingPlay = null
                     playVideo(it)
@@ -505,7 +516,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 searchQuery = newText.orEmpty().trim()
                 if (searching) {
                     binding.root.removeCallbacks(searchDebounce)
-                    binding.root.postDelayed(searchDebounce, if (searchMode == 0 && currentChat == null) 400L else 700L)
+                    binding.root.postDelayed(searchDebounce, if (searchMode != SM_MSGS && currentChat == null) 400L else 700L)
                 }
                 return true
             }
@@ -769,11 +780,11 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun renderChats() {
         if (chatFilter != VIDEO_TAB) useList()
-        title = getString(R.string.tgacc_title)
+        title = rootTitle()
         searchResults = null
         binding.inputBar.visibility = View.GONE
         binding.tgTabs.visibility = View.VISIBLE
-        binding.tgSearchTabs.visibility = View.GONE
+        hideSearchTabs()
         updateBack()
         invalidateOptionsMenu()
         if (chatFilter == VIDEO_TAB) {
@@ -784,7 +795,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             renderFolders()
             return
         }
-        if (chatFilter == FOLDER_TAB) title = openFolder?.name ?: getString(R.string.tgacc_title)
+        if (chatFilter == FOLDER_TAB) title = openFolder?.name ?: rootTitle()
         val favs = TelegramAccountPrefs.favoriteChats(this)
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val source = if (chatFilter == FOLDER_TAB) folderChats else chats
@@ -919,7 +930,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             suppressExit = false
             searching = false
         }
-        binding.tgSearchTabs.visibility = View.GONE
+        hideSearchTabs()
         currentChat = chat
         currentTopic = null
         showingTopics = false
@@ -959,7 +970,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         title = chat.title
         binding.inputBar.visibility = View.GONE
         binding.tgTabs.visibility = View.GONE
-        binding.tgSearchTabs.visibility = View.GONE
+        hideSearchTabs()
         updateBack()
         invalidateOptionsMenu()
         adapter.submit(emptyList())
@@ -1090,7 +1101,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun renderMessages() {
         binding.inputBar.visibility = View.VISIBLE
         updateKeyboard()
-        binding.tgSearchTabs.visibility = View.GONE
+        hideSearchTabs()
         updateBack()
         if (mediaMode) {
             renderMedia()
@@ -1382,8 +1393,29 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun normalize(text: String): String =
         java.text.Normalizer.normalize(text.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
 
+    private fun rootTitle(): String = accountTitle ?: getString(R.string.tgacc_title)
+
+    /** Pide el @usuario (o nombre) de la cuenta una vez y lo pone como título. */
+    private fun loadAccountTitle() {
+        if (accountTitle != null) return
+        backend?.accountName { name ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed || name.isNullOrBlank()) return@runOnUiThread
+                accountTitle = name
+                val atRoot = currentChat == null && !searching && !(chatFilter == FOLDER_TAB && openFolder != null)
+                if (atRoot) title = name
+            }
+        }
+    }
+
+    private fun hideSearchTabs() {
+        binding.tgSearchTabs.visibility = View.GONE
+        binding.tgSearchFilters.visibility = View.GONE
+    }
+
     private fun setupSearchTabs() {
-        binding.tgSearchTabs.addTab(binding.tgSearchTabs.newTab().setText(R.string.tgacc_search_tab_names), true)
+        binding.tgSearchTabs.addTab(binding.tgSearchTabs.newTab().setText(R.string.tgacc_search_tab_all), true)
+        binding.tgSearchTabs.addTab(binding.tgSearchTabs.newTab().setText(R.string.tgacc_search_tab_names), false)
         binding.tgSearchTabs.addTab(binding.tgSearchTabs.newTab().setText(R.string.tgacc_search_tab_messages), false)
         binding.tgSearchTabs.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
@@ -1391,6 +1423,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     searchMode = tab.position
                     if (searching) {
                         updateSearchHint()
+                        updateSearchFilters()
                         runSearchNow()
                     }
                 }
@@ -1401,29 +1434,123 @@ class TelegramAccountActivity : AppCompatActivity() {
         })
     }
 
+    private fun searchPromptText(): String = getString(
+        when {
+            currentChat != null || searchMode == SM_MSGS -> R.string.tgacc_search_prompt_messages
+            searchMode == SM_NAMES -> R.string.tgacc_search_prompt_names
+            else -> R.string.tgacc_search_prompt_all
+        }
+    )
+
     private fun updateSearchHint() {
         val inChat = currentChat != null
         searchView?.queryHint = getString(
-            if (inChat || searchMode == 1) R.string.tgacc_search_hint_messages else R.string.tgacc_search_hint_names
+            when {
+                inChat || searchMode == SM_MSGS -> R.string.tgacc_search_hint_messages
+                searchMode == SM_NAMES -> R.string.tgacc_search_hint_names
+                else -> R.string.tgacc_search_hint_all
+            }
         )
+    }
+
+    private fun typeLabel(type: String): String = getString(
+        when (type) {
+            "video" -> R.string.tgacc_f_video
+            "audio" -> R.string.tgacc_f_audio
+            "document" -> R.string.tgacc_f_doc
+            "photo" -> R.string.tgacc_f_photo
+            "url" -> R.string.tgacc_f_link
+            else -> R.string.tgacc_f_all
+        }
+    )
+
+    /** Formatos que se ofrecen según el tipo elegido. */
+    private fun formatsFor(type: String): List<String> = when (type) {
+        "video" -> listOf("mp4", "mkv", "avi", "ts", "mov", "webm")
+        "audio" -> listOf("mp3", "flac", "m4a", "ogg", "wav")
+        "document" -> listOf("pdf", "zip", "rar", "epub", "m3u", "apk")
+        else -> emptyList()
+    }
+
+    private fun makeChip(label: String, selected: Boolean, onClick: () -> Unit): android.widget.TextView {
+        val d = resources.displayMetrics.density
+        return android.widget.TextView(this).apply {
+            text = label
+            textSize = 14f
+            setTextColor(android.graphics.Color.WHITE)
+            setBackgroundResource(R.drawable.bg_search_chip)
+            setPadding((16 * d).toInt(), (8 * d).toInt(), (16 * d).toInt(), (8 * d).toInt())
+            isSelected = selected
+            isFocusable = true
+            isClickable = true
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = (8 * d).toInt() }
+            setOnClickListener { onClick() }
+        }
+    }
+
+    /** Dibuja las filas de filtros (tipo y formato) del buscador y las muestra u oculta. */
+    private fun updateSearchFilters() {
+        val msgMode = currentChat != null || searchMode != SM_NAMES
+        if (!searching || !msgMode) {
+            binding.tgSearchFilters.visibility = View.GONE
+            return
+        }
+        binding.tgSearchFilters.visibility = View.VISIBLE
+        binding.tgTypeChips.removeAllViews()
+        for (t in listOf("", "video", "audio", "document", "photo", "url")) {
+            binding.tgTypeChips.addView(makeChip(typeLabel(t), searchType == t) {
+                if (searchType != t) {
+                    searchType = t
+                    searchFormat = ""
+                    updateSearchFilters()
+                    runSearchNow()
+                }
+            })
+        }
+        val formats = formatsFor(searchType)
+        binding.tgFormatChips.removeAllViews()
+        if (formats.isEmpty()) {
+            binding.tgFormatScroll.visibility = View.GONE
+        } else {
+            binding.tgFormatScroll.visibility = View.VISIBLE
+            binding.tgFormatChips.addView(makeChip(getString(R.string.tgacc_f_fmt_all), searchFormat.isEmpty()) {
+                searchFormat = ""
+                updateSearchFilters()
+                runSearchNow()
+            })
+            for (f in formats) {
+                binding.tgFormatChips.addView(makeChip(f.uppercase(), searchFormat == f) {
+                    searchFormat = if (searchFormat == f) "" else f
+                    updateSearchFilters()
+                    runSearchNow()
+                })
+            }
+        }
     }
 
     private fun enterSearchUi() {
         searchResults = null
         searchChatResults = emptyList()
         searchQuery = ""
+        searchType = ""
+        searchFormat = ""
         binding.inputBar.visibility = View.GONE
         binding.tgTabs.visibility = View.GONE
         binding.tgSearchTabs.visibility = if (currentChat == null) View.VISIBLE else View.GONE
         updateSearchHint()
-        showMessage(getString(if (currentChat != null || searchMode == 1) R.string.tgacc_search_prompt_messages else R.string.tgacc_search_prompt_names))
+        updateSearchFilters()
+        showMessage(searchPromptText())
         updateBack()
         updateMenuItems()
     }
 
     private fun exitSearchUi() {
         binding.root.removeCallbacks(searchDebounce)
-        binding.tgSearchTabs.visibility = View.GONE
+        searchSeq++
+        hideSearchTabs()
         searchResults = null
         searchChatResults = emptyList()
         val open = currentChat
@@ -1441,33 +1568,119 @@ class TelegramAccountActivity : AppCompatActivity() {
         invalidateOptionsMenu()
     }
 
+    /** Extensión (minúsculas) del archivo del mensaje: del nombre o, si no, del tipo MIME. */
+    private fun extOf(m: TgMessage): String {
+        val byName = m.fileName?.substringAfterLast('.', "")?.lowercase().orEmpty()
+        if (byName.length in 1..5) return byName
+        val sub = (m.mime ?: "").substringAfter('/', "").lowercase()
+        return when {
+            sub.contains("matroska") -> "mkv"
+            sub.contains("x-msvideo") -> "avi"
+            sub.contains("mp2t") -> "ts"
+            sub.contains("quicktime") -> "mov"
+            sub == "mpeg" && (m.mime ?: "").startsWith("audio") -> "mp3"
+            sub.contains("mpegurl") -> "m3u"
+            else -> sub
+        }
+    }
+
+    private val videoExts = setOf("mp4", "mkv", "avi", "ts", "mov", "webm", "m4v", "wmv", "flv", "mpg", "mpeg", "3gp")
+    private val audioExts = setOf("mp3", "flac", "m4a", "ogg", "wav", "opus", "aac", "wma")
+
+    private fun matchesSearchFilter(m: TgMessage, type: String, format: String): Boolean {
+        val ext = extOf(m)
+        val mime = m.mime ?: ""
+        val okType = when (type) {
+            "video" -> m.kind == "video" || (m.kind == "document" && (mime.startsWith("video/") || ext in videoExts))
+            "audio" -> m.kind == "audio" || (m.kind == "document" && (mime.startsWith("audio/") || ext in audioExts))
+            "document" -> m.kind == "document"
+            "photo" -> m.kind == "photo"
+            "url" -> m.links.isNotEmpty()
+            else -> true
+        }
+        return okType && (format.isEmpty() || ext == format)
+    }
+
+    /**
+     * Busca mensajes de un tipo. Los vídeos y la música también llegan como «documento» (.mkv,
+     * .avi, .flac…), así que en esos tipos se piden dos listas y se unen, ordenadas por fecha.
+     */
+    private fun fetchMessages(b: TgAccountBackend, q: String, chatId: Long, type: String, format: String, onDone: (List<TgMessage>) -> Unit) {
+        val filters = when (type) {
+            "video" -> listOf("video", "document")
+            "audio" -> listOf("audio", "document")
+            "" -> listOf("")
+            else -> listOf(type)
+        }
+        val query = if (q.isEmpty() && format.isNotEmpty()) format else q
+        val acc = ArrayList<TgMessage>()
+        var pending = filters.size
+        for (f in filters) {
+            b.searchMessages(query, chatId, f) { list ->
+                var finished = false
+                synchronized(acc) {
+                    acc.addAll(list)
+                    pending--
+                    finished = pending == 0
+                }
+                if (finished) {
+                    val out = synchronized(acc) { acc.toList() }
+                        .distinctBy { it.chatId to it.messageId }
+                        .filter { matchesSearchFilter(it, type, format) }
+                        .sortedByDescending { it.date }
+                    onDone(out)
+                }
+            }
+        }
+    }
+
     private fun runSearchNow() {
         val b = backend ?: return
         if (!searching) return
         val q = searchQuery.trim()
-        if (q.isEmpty()) {
-            showMessage(getString(if (currentChat != null || searchMode == 1) R.string.tgacc_search_prompt_messages else R.string.tgacc_search_prompt_names))
+        val chat = currentChat
+        val msgMode = chat != null || searchMode != SM_NAMES
+        // Con un tipo de archivo elegido se puede buscar sin escribir nada (lo más reciente de ese tipo).
+        if (q.isEmpty() && !(msgMode && searchType.isNotEmpty())) {
+            searchSeq++
+            showMessage(searchPromptText())
             return
         }
-        val chat = currentChat
-        if (chat == null && searchMode == 0) {
+        val seq = ++searchSeq
+        val type = searchType
+        val format = searchFormat
+        val wantChats = chat == null && searchMode != SM_MSGS && q.isNotEmpty() && type.isEmpty()
+        val wantMsgs = msgMode
+        var pending = (if (wantChats) 1 else 0) + (if (wantMsgs) 1 else 0)
+        var chatRes: List<TgChat> = emptyList()
+        var msgRes: List<TgMessage>? = null
+        showMessage(getString(R.string.tgacc_searching))
+        fun stale() = isFinishing || isDestroyed || !searching || seq != searchSeq
+        fun part() {
+            pending--
+            if (pending == 0) {
+                searchChatResults = chatRes
+                searchResults = msgRes
+                renderSearch()
+            }
+        }
+        if (wantChats) {
             b.searchChats(q) { list ->
                 runOnUiThread {
-                    if (isFinishing || isDestroyed || !searching || searchQuery.trim() != q || searchMode != 0 || currentChat != null) return@runOnUiThread
+                    if (stale()) return@runOnUiThread
                     val nq = normalize(q)
                     val own = chats.filter { normalize(it.title).contains(nq) }
-                    searchChatResults = (own + list).distinctBy { it.id }
-                    searchResults = null
-                    renderSearch()
+                    chatRes = (own + list).distinctBy { it.id }
+                    part()
                 }
             }
-        } else {
-            b.searchMessages(q, chat?.id ?: 0L) { list ->
+        }
+        if (wantMsgs) {
+            fetchMessages(b, q, chat?.id ?: 0L, type, format) { list ->
                 runOnUiThread {
-                    if (isFinishing || isDestroyed || !searching || searchQuery.trim() != q) return@runOnUiThread
-                    searchChatResults = emptyList()
-                    searchResults = list
-                    renderSearch()
+                    if (stale()) return@runOnUiThread
+                    msgRes = list
+                    part()
                 }
             }
         }
@@ -1475,7 +1688,8 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun renderSearch() {
         useList()
-        title = getString(R.string.tgacc_search_results, searchQuery)
+        title = if (searchQuery.isNotEmpty()) getString(R.string.tgacc_search_results, searchQuery)
+        else typeLabel(searchType) + (if (searchFormat.isNotEmpty()) " · " + searchFormat.uppercase() else "")
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val favs = TelegramAccountPrefs.favoriteChats(this)
         val rows = ArrayList<Row>()

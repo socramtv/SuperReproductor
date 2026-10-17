@@ -1440,3 +1440,9 @@ Si la guía EPG (XMLTV) trae `<icon src="...">` para el programa actual, se mues
 La app no incluye VPN propia (necesitaría servidores). El botón de VPN (portada y fila de botones de la lista) abre una VPN gratuita ya instalada (Proton VPN, Cloudflare WARP, WireGuard, Windscribe); si no hay ninguna, ofrece instalar Proton VPN o WARP (Play Store / tienda de Amazon) o abrir los ajustes de VPN del sistema. El icono/texto se pone verde cuando hay una VPN conectada. Para añadir otra app: `VpnHelper.KNOWN` y `<queries>` en `AndroidManifest.xml`.
 
 Ajustes posteriores: la portada ya no tiene botón «Entrar a mis listas» (la última línea quedaba bajo la barra del móvil; ahora hay margen inferior). El orden de VPN es Cloudflare WARP, Windscribe, Proton VPN, WireGuard, y el diálogo explica abajo para qué sirve una VPN (texto `vpn_explain`). El icono de la fila muestra un escudo con la palabra VPN (`ic_vpn_label`).
+
+## Buscador de Telegram completo
+- La lupa de Telegram tiene 3 pestañas: **Todo** (chats, canales, bots y mensajes a la vez), **Chats** y **Mensajes**. Dentro de un chat busca solo en ese chat.
+- Debajo hay botones de filtro por tipo: Todo, Vídeos, Música/Audio, Documentos, Fotos y Enlaces. Con Vídeos, Música o Documentos aparece otra fila con el formato (MP4, MKV, AVI, TS…; MP3, FLAC…; PDF, ZIP, M3U…). Se puede elegir un tipo sin escribir nada para ver lo más reciente de ese tipo.
+- Los vídeos y la música que se suben como «documento» (.mkv, .avi, .flac…) también salen en Vídeos/Música. Código: `TelegramAccountActivity` (`fetchMessages`, `matchesSearchFilter`, `updateSearchFilters`) y `searchMessages(..., filter)` en `TdBackend`.
+- El título de la pantalla de Telegram ya no pone «(mi cuenta)»: muestra tu @usuario (o tu nombre si no tienes) — `accountName` en `TdBackend`.

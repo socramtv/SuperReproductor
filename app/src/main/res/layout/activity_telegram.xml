@@ -36,6 +36,47 @@
         app:tabSelectedTextColor="@color/primary"
         app:tabTextColor="@color/on_background" />
 
+    <!-- Filtros del buscador: tipo de archivo y, según el tipo, formato (ver TelegramAccountActivity.updateSearchFilters) -->
+    <LinearLayout
+        android:id="@+id/tgSearchFilters"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_dark"
+        android:orientation="vertical"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/tgTypeChips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp"
+                android:paddingTop="6dp" />
+        </HorizontalScrollView>
+
+        <HorizontalScrollView
+            android:id="@+id/tgFormatScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/tgFormatChips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp"
+                android:paddingTop="6dp" />
+        </HorizontalScrollView>
+    </LinearLayout>
+
     <!-- Aviso de directo en el chat (como en Telegram): toca para unirte -->
     <TextView
         android:id="@+id/tgLiveBanner"

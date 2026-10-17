@@ -50,7 +50,15 @@ interface TgAccountBackend {
     fun download(fileId: Int, onProgress: (Long, Long) -> Unit, onDone: (String?) -> Unit)
     fun cancelDownload(fileId: Int)
     /** Busca mensajes: en un chat ([chatId] != 0) o en todos los chats (0). */
-    fun searchMessages(query: String, chatId: Long, onDone: (List<TgMessage>) -> Unit)
+    fun searchMessages(query: String, chatId: Long, onDone: (List<TgMessage>) -> Unit) =
+        searchMessages(query, chatId, "", onDone)
+    /**
+     * Como arriba, pero solo de un tipo: "video", "audio", "document", "photo", "url" ("" = todos).
+     * Con [query] vacío devuelve lo más reciente de ese tipo.
+     */
+    fun searchMessages(query: String, chatId: Long, filter: String, onDone: (List<TgMessage>) -> Unit)
+    /** Nombre de la cuenta: @usuario si lo tiene, si no nombre y apellidos (null si no se sabe). */
+    fun accountName(onDone: (String?) -> Unit)
     /** Envía un mensaje de texto al chat; [onDone] con true si salió bien. */
     fun sendText(chatId: Long, text: String, replyTo: Long = 0L, topicId: Long = 0L, onDone: (Boolean) -> Unit)
     /** Envía un archivo local como foto o documento, con texto opcional. */

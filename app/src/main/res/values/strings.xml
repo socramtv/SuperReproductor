@@ -393,7 +393,7 @@
     <string name="tg_playlist_empty">la lista no tiene canales</string>
     <string name="tg_playlist_error">no se pudo leer la lista</string>
     <string name="tg_playlist_title">Lista (%1$d canales)</string>
-    <string name="tgacc_title">Telegram (mi cuenta)</string>
+    <string name="tgacc_title">Telegram</string>
     <string name="tgacc_menu_api">Credenciales API…</string>
     <string name="tgacc_menu_logout">Cerrar sesión</string>
     <string name="tgacc_logout_confirm">¿Cerrar la sesión de Telegram en este dispositivo?</string>
@@ -453,7 +453,7 @@
     <string name="tgacc_menu_join">➕ Unirme a este canal/grupo</string>
     <string name="tgacc_joined">Te has unido</string>
     <string name="tgacc_join_error">No se pudo unir</string>
-    <string name="tgacc_search_tab_names">Chats, canales y bots</string>
+    <string name="tgacc_search_tab_names">Chats</string>
     <string name="tgacc_search_tab_messages">Mensajes</string>
     <string name="tgacc_search_prompt_names">Escribe el nombre de un canal, grupo, bot o persona</string>
     <string name="tgacc_search_prompt_messages">Escribe el texto a buscar en tus mensajes</string>
@@ -585,4 +585,14 @@
     <string name="vpn_open_settings">Ajustes de VPN del sistema</string>
     <string name="vpn_explain">¿Para qué sirve? Una VPN cifra tu conexión y oculta tu IP: sirve para ver listas o canales bloqueados por tu operador o tu zona y para más privacidad. Es opcional; la app funciona igual sin ella.</string>
     <string name="vpn_failed">No se pudo abrir la VPN</string>
+    <string name="tgacc_search_tab_all">Todo</string>
+    <string name="tgacc_search_prompt_all">Escribe lo que buscas (chats, canales, mensajes) o elige un tipo de archivo</string>
+    <string name="tgacc_search_hint_all">Buscar en todo Telegram…</string>
+    <string name="tgacc_f_all">Todo</string>
+    <string name="tgacc_f_video">Vídeos</string>
+    <string name="tgacc_f_audio">Música/Audio</string>
+    <string name="tgacc_f_doc">Documentos</string>
+    <string name="tgacc_f_photo">Fotos</string>
+    <string name="tgacc_f_link">Enlaces</string>
+    <string name="tgacc_f_fmt_all">Todos</string>
 </resources>
