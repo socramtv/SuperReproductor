@@ -31,34 +31,40 @@ class SuperPlayerApp : Application() {
             else AppCompatDelegate.MODE_NIGHT_NO
         )
 
-        // Recordatorios de la guía EPG: se vuelven a programar por si el
-        // sistema perdió las alarmas (reinicio, "forzar detención"...).
-        try {
-            com.example.superplayer.reminder.ReminderManager.rescheduleAll(this)
-        } catch (e: Exception) {
-            // Nunca debe impedir que arranque la app.
-        }
+        // Tareas de arranque que no hacen falta para pintar la primera pantalla: en segundo plano,
+        // para que la app abra antes (antes se hacían todas aquí, bloqueando el arranque).
+        Thread({
+            try { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) } catch (e: Exception) { }
+            // Recordatorios de la guía EPG: se vuelven a programar por si el
+            // sistema perdió las alarmas (reinicio, "forzar detención"...).
+            try {
+                com.example.superplayer.reminder.ReminderManager.rescheduleAll(this)
+            } catch (e: Exception) {
+                // Nunca debe impedir que arranque la app.
+            }
 
-        // Avisos de goles: si están activados, se asegura de que haya una alarma pendiente.
-        try {
-            com.example.superplayer.sports.GoalAlerts.ensureScheduled(this)
-        } catch (e: Exception) {
-            // Nunca debe impedir que arranque la app.
-        }
+            // Avisos de goles: si están activados, se asegura de que haya una alarma pendiente.
+            try {
+                com.example.superplayer.sports.GoalAlerts.ensureScheduled(this)
+            } catch (e: Exception) {
+                // Nunca debe impedir que arranque la app.
+            }
 
-        // Fila "Continuar viendo" del inicio de Android TV al día (solo hace algo en TV).
-        try {
-            com.example.superplayer.tv.WatchNextSync.sync(this)
-        } catch (e: Exception) {
-            // Nunca debe impedir que arranque la app.
-        }
+            // Fila "Continuar viendo" del inicio de Android TV al día (solo hace algo en TV).
+            try {
+                com.example.superplayer.tv.WatchNextSync.sync(this)
+            } catch (e: Exception) {
+                // Nunca debe impedir que arranque la app.
+            }
 
-        // Restos del buffer de pausa en directo si la app se cerró a la fuerza.
-        try {
-            com.example.superplayer.player.TimeShiftSession.cleanupLeftovers(this)
-        } catch (e: Exception) {
-            // Nunca debe impedir que arranque la app.
-        }
+            // Restos del buffer de pausa en directo si la app se cerró a la fuerza.
+            try {
+                com.example.superplayer.player.TimeShiftSession.cleanupLeftovers(this)
+            } catch (e: Exception) {
+                // Nunca debe impedir que arranque la app.
+            }
+
+        }, "app-init").start()
 
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
 

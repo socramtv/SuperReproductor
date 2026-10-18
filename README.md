@@ -1495,3 +1495,7 @@ En Android TV / Fire TV el navegador usa un cursor que se mueve con las flechas 
 
 ### Cruceta del mando en todas las pantallas
 La cruceta ahora mueve el foco (flechas) y pulsa (OK) en cualquier pantalla de la app abierta en la tele, no solo en el reproductor: si la pantalla no usa la tecla por sí misma, se mueve el foco a mano. La app sigue qué pantalla está al frente desde que arranca.
+
+### Arranque más rápido y cruceta en diálogos
+- Mando del móvil: la cruceta, OK, Atrás y «Escribir» ahora van a la ventana que tiene el foco (por ejemplo la ficha de una película en Telegram) y no a la pantalla que queda debajo.
+- Arranque: las tareas de inicio (alarmas, goles, «Continuar viendo», restos de pausa en directo) se hacen en segundo plano, y la guía EPG solo guarda sinopsis/reparto de los programas cercanos (−3 h / +30 h) con prioridad baja, para gastar menos memoria y no frenar la apertura.

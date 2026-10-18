@@ -370,20 +370,51 @@ object RemoteServer {
     // Teclas y texto para la pantalla que esté abierta en la tele
     // -----------------------------------------------------------------
 
+    /**
+     * La ventana que tiene ahora el foco de teclas: normalmente la pantalla, pero si hay un diálogo (la ficha de una
+     * película, un menú…) abierto encima es esa ventana, que es la que debe recibir las flechas del mando del móvil.
+     */
+    private fun focusedRoot(a: Activity): View {
+        try {
+            val cls = Class.forName("android.view.WindowManagerGlobal")
+            val global = cls.getMethod("getInstance").invoke(null)
+            val field = cls.getDeclaredField("mViews")
+            field.isAccessible = true
+            val views = (field.get(global) as? List<*>)?.toList() ?: return a.window.decorView
+            for (i in views.indices.reversed()) {
+                val v = views[i] as? View ?: continue
+                if (v.isAttachedToWindow && v.hasWindowFocus()) return v
+            }
+        } catch (e: Throwable) {
+            // Sin esto solo se controla la pantalla, no los diálogos.
+        }
+        return a.window.decorView
+    }
+
     private fun pressKey(code: Int): Boolean {
         return onMain {
             val a = resumed?.get() ?: return@onMain false
+            val root = focusedRoot(a)
+            val isActivityWindow = root === a.window.decorView
+            val t = android.os.SystemClock.uptimeMillis()
+            fun send(action: Int, time: Long): Boolean {
+                val ev = android.view.KeyEvent(t, time, action, code, 0)
+                return if (isActivityWindow) a.dispatchKeyEvent(ev) else root.dispatchKeyEvent(ev)
+            }
             if (code == android.view.KeyEvent.KEYCODE_BACK) {
-                (a as? androidx.activity.ComponentActivity)?.onBackPressedDispatcher?.onBackPressed()
-                    ?: a.finish()
+                if (isActivityWindow) {
+                    (a as? androidx.activity.ComponentActivity)?.onBackPressedDispatcher?.onBackPressed() ?: a.finish()
+                } else {
+                    send(android.view.KeyEvent.ACTION_DOWN, t)
+                    send(android.view.KeyEvent.ACTION_UP, t + 40)
+                }
                 return@onMain true
             }
-            val t = android.os.SystemClock.uptimeMillis()
-            val down = a.dispatchKeyEvent(android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_DOWN, code, 0))
-            val up = a.dispatchKeyEvent(android.view.KeyEvent(t, t + 40, android.view.KeyEvent.ACTION_UP, code, 0))
+            val down = send(android.view.KeyEvent.ACTION_DOWN, t)
+            val up = send(android.view.KeyEvent.ACTION_UP, t + 40)
             if (!down && !up) {
                 // La pantalla no usa esa tecla por su cuenta (en Android, mover el foco con las flechas lo hace el sistema
-                // y no la pantalla): se hace aquí a mano.
+                // y no la pantalla): se hace aquí a mano, dentro de la ventana que tiene el foco.
                 val dir = when (code) {
                     android.view.KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP
                     android.view.KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN
@@ -391,8 +422,7 @@ object RemoteServer {
                     android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> View.FOCUS_RIGHT
                     else -> 0
                 }
-                val root = a.window.decorView
-                val cur = a.currentFocus ?: root.findFocus()
+                val cur = root.findFocus()
                 if (dir != 0) {
                     if (cur == null) {
                         root.requestFocus(View.FOCUS_DOWN)
@@ -402,7 +432,7 @@ object RemoteServer {
                     }
                 } else if (code == android.view.KeyEvent.KEYCODE_DPAD_CENTER) {
                     if (cur == null) root.requestFocus(View.FOCUS_DOWN) else cur.performClick()
-                } else if (code == android.view.KeyEvent.KEYCODE_MENU) {
+                } else if (code == android.view.KeyEvent.KEYCODE_MENU && isActivityWindow) {
                     a.openOptionsMenu()
                 }
             }
@@ -414,8 +444,7 @@ object RemoteServer {
     private fun typeText(text: String, submit: Boolean): Boolean {
         return onMain {
             val a = resumed?.get() ?: return@onMain false
-            val f = a.currentFocus ?: a.window.decorView.findFocus()
-            val et = f as? android.widget.EditText ?: return@onMain false
+            val et = focusedRoot(a).findFocus() as? android.widget.EditText ?: return@onMain false
             et.setText(text)
             et.setSelection(et.text.length)
             if (submit) {

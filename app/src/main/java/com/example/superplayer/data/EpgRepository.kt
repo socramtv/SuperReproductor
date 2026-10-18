@@ -86,6 +86,8 @@ object EpgRepository {
         if (loading) return
         loading = true
         Thread {
+            // Prioridad baja: que analizar la guía no frene la pantalla mientras se abre la app.
+            try { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) } catch (e: Exception) { }
             try {
                 val parsed = fetchAndParse(url)
                 byChannel = parsed
@@ -348,6 +350,11 @@ object EpgRepository {
         var episode: String? = null
         val actors = ArrayList<String>()
 
+        // Los datos extra (sinopsis, reparto…) solo se guardan de los programas cercanos en el tiempo:
+        // guardarlos de TODA la guía gastaba mucha memoria y ralentizaba la app al arrancar.
+        val detailsFrom = System.currentTimeMillis() - 3 * 3_600_000L
+        val detailsTo = System.currentTimeMillis() + 30 * 3_600_000L
+
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT) {
             when (event) {
@@ -396,11 +403,11 @@ object EpgRepository {
                         } else when (cap) {
                             "sub" -> subTitle = text.take(120)
                             "desc" -> desc = text.take(400)
-                            "cat" -> cats.add(text.take(40))
-                            "date" -> year = Regex("(19|20)\\d{2}").find(text)?.value
-                            "country" -> country = text.take(40)
+                            "cat" -> cats.add(text.take(40).intern())
+                            "date" -> year = RE_YEAR.find(text)?.value
+                            "country" -> country = text.take(40).intern()
                             "actor" -> actors.add(text.take(40))
-                            "rating" -> rating = text.take(12)
+                            "rating" -> rating = text.take(12).intern()
                             "star" -> stars = parseStars(text)
                             "ep" -> episode = parseEpisodeNum(text, epSystem)
                         }
@@ -415,7 +422,8 @@ object EpgRepository {
                         val ch = channel
                         val t = title
                         if (!ch.isNullOrBlank() && !t.isNullOrBlank() && start > 0 && stop > start) {
-                            val det = if (subTitle != null || desc != null || cats.isNotEmpty() || year != null ||
+                            val det = if (stop < detailsFrom || start > detailsTo) null
+                            else if (subTitle != null || desc != null || cats.isNotEmpty() || year != null ||
                                 rating != null || stars != null || country != null || episode != null || actors.isNotEmpty()) {
                                 Details(subTitle, desc, cats.joinToString(", ").ifEmpty { null }, year, rating, stars,
                                     country, episode, actors.joinToString(", ").ifEmpty { null })
@@ -439,6 +447,8 @@ object EpgRepository {
         for (list in result.values) list.sortBy { it.startMillis }
         return result
     }
+
+    private val RE_YEAR = Regex("(19|20)\\d{2}")
 
     /** "3/5", "7.5/10" o "4" -> estrellas de 0 a 5 (null si no se entiende). */
     private fun parseStars(raw: String): Int? {
