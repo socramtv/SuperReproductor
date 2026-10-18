@@ -185,12 +185,37 @@ class PlayerActivity : AppCompatActivity() {
         override fun open(stream: Stream) = openRemoteStream(stream)
         override fun status(): String {
             val current = currentStream
-            return org.json.JSONObject()
+            val json = org.json.JSONObject()
                 .put("title", current?.name ?: "")
+                .put("logo", current?.icon ?: "")
                 .put("now", EpgRepository.currentTitle(current?.tvgId) ?: "")
                 .put("playing", controller?.playWhenReady == true)
                 .put("timeshift", timeShiftActive)
-                .toString()
+                .put("tvNow", System.currentTimeMillis())
+            try {
+                val sched = EpgRepository.schedule(current?.tvgId)
+                val now = sched.now
+                if (now != null) {
+                    val d = now.details
+                    json.put("epg", org.json.JSONObject()
+                        .put("title", EpgRepository.fullTitle(now))
+                        .put("start", now.startMillis)
+                        .put("stop", now.stopMillis)
+                        .put("meta", EpgRepository.metaLine(d))
+                        .put("desc", d?.desc ?: "")
+                        .put("category", d?.category ?: "")
+                        .put("country", d?.country ?: "")
+                        .put("cast", d?.cast ?: "")
+                        .put("poster", now.iconUrl ?: ""))
+                }
+                val from = now?.stopMillis ?: System.currentTimeMillis()
+                val later = org.json.JSONArray()
+                for (e in EpgRepository.entriesInRange(current?.tvgId, from, from + 8 * 3_600_000L).take(4)) {
+                    later.put(org.json.JSONObject().put("title", EpgRepository.fullTitle(e)).put("start", e.startMillis).put("stop", e.stopMillis))
+                }
+                json.put("later", later)
+            } catch (e: Exception) { }
+            return json.toString()
         }
     }
 

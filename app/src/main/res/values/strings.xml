@@ -650,4 +650,21 @@
     <string name="web_home_saved">Página de inicio guardada</string>
     <string name="web_cursor_opt">🖱 Cursor con el mando</string>
     <string name="web_cursor_hint">Mando: flechas = mover el cursor (mantén para ir más rápido) · OK = clic · en el borde de arriba/abajo la página se desplaza · arriba del todo = atajos · Menú = opciones</string>
+    <string name="remote_back5m">⏪ 5 min</string>
+    <string name="remote_fwd5m">5 min ⏩</string>
+    <string name="remote_pad_title">Cruceta: manejar los menús de la tele</string>
+    <string name="remote_back">↩ Atrás</string>
+    <string name="remote_menu">☰ Menú</string>
+    <string name="remote_home">🏠 Inicio</string>
+    <string name="remote_type">⌨ Escribir</string>
+    <string name="remote_type_hint">Texto para la tele</string>
+    <string name="remote_type_message">Antes, en la tele, deja el cursor sobre el campo de texto (buscador, dirección…).</string>
+    <string name="remote_type_send">Escribir y enviar</string>
+    <string name="remote_type_only">Solo escribir</string>
+    <string name="remote_type_fail">En la tele no hay ningún campo de texto seleccionado</string>
+    <string name="remote_vol_muted">🔇 Silenciado</string>
+    <string name="remote_vol_level">🔊 Volumen %1$d %%</string>
+    <string name="remote_vol_app">🔊 Volumen de la app %1$d %% (la tele no deja cambiar el suyo)</string>
+    <string name="remote_minutes_left">quedan %1$d min</string>
+    <string name="remote_next_programs">A continuación</string>
 </resources>

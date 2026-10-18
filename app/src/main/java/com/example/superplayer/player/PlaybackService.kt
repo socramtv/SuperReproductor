@@ -69,6 +69,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         player.setHandleAudioBecomingNoisy(true)
         localPlayer = player
+        exo = player
 
         val sessionPlayer: Player = try {
             CastPlayer.Builder(this).setLocalPlayer(player).build()
@@ -147,12 +148,16 @@ class PlaybackService : MediaSessionService() {
         }
         localPlayer?.release()
         localPlayer = null
+        exo = null
         mediaSession = null
         super.onDestroy()
     }
 
-    private companion object {
-        const val FALLBACK_CHANNEL = "playback_fallback"
-        const val FALLBACK_ID = 4711
+    companion object {
+        /** El ExoPlayer local, para que el control remoto pueda bajar el volumen de la app cuando el de la tele es fijo. */
+        @Volatile var exo: ExoPlayer? = null
+
+        private const val FALLBACK_CHANNEL = "playback_fallback"
+        private const val FALLBACK_ID = 4711
     }
 }

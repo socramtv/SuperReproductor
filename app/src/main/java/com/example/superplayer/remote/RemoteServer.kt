@@ -1,5 +1,7 @@
 package com.example.superplayer.remote
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -49,11 +51,16 @@ object RemoteServer {
         fun playPause()
         fun seek(deltaMs: Long)
         fun open(stream: Stream)
-        /** JSON con lo que se está viendo. */
+        /** JSON con lo que se está viendo (canal, programa, guía…). */
         fun status(): String
     }
 
     @Volatile var player: PlayerCommands? = null
+
+    /** Pantalla de la app que está al frente: recibe las flechas / OK / Atrás del mando del móvil. */
+    @Volatile private var resumed: java.lang.ref.WeakReference<Activity>? = null
+    private var callbacksRegistered = false
+    private var savedAppVolume = 1f
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var server: ServerSocket? = null
@@ -109,6 +116,18 @@ object RemoteServer {
     fun ensureStarted(context: Context) {
         val app = context.applicationContext
         appContext = app
+        if (!callbacksRegistered && isEnabled(app)) {
+            (app as? Application)?.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityResumed(activity: Activity) { resumed = java.lang.ref.WeakReference(activity) }
+                override fun onActivityPaused(activity: Activity) { if (resumed?.get() === activity) resumed = null }
+                override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
+                override fun onActivityStarted(activity: Activity) {}
+                override fun onActivityStopped(activity: Activity) {}
+                override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
+                override fun onActivityDestroyed(activity: Activity) {}
+            })
+            callbacksRegistered = true
+        }
         if (server != null || !isEnabled(app)) return
         val socket = try {
             try {
@@ -238,11 +257,16 @@ object RemoteServer {
                     val playerStatus = player?.let { p -> onMain { p.status() } }
                     val json = JSONObject().put("name", deviceName())
                     if (playerStatus != null) json.put("player", JSONObject(playerStatus))
+                    json.put("volume", volumeStatus(app))
                     respond(socket, 200, json)
                 }
                 "/cmd" -> {
                     val c = query.split("&").firstOrNull { it.startsWith("c=") }?.substringAfter("c=").orEmpty()
                     respond(socket, 200, JSONObject().put("ok", runCommand(app, c)))
+                }
+                "/text" -> {
+                    val o = try { JSONObject(body) } catch (e: Exception) { JSONObject() }
+                    respond(socket, 200, JSONObject().put("ok", typeText(o.optString("text"), o.optBoolean("submit", false))))
                 }
                 "/open" -> {
                     val stream = streamFromJson(body)
@@ -261,21 +285,134 @@ object RemoteServer {
         }
     }
 
-    private fun runCommand(app: Context, command: String): Boolean {
+    // -----------------------------------------------------------------
+    // Volumen: se intenta el de la tele/aparato; si es fijo (HDMI-CEC, cajas sin volumen propio) o
+    // no cambia nada, se sube/baja el volumen de la propia app (el del reproductor).
+    // -----------------------------------------------------------------
+
+    private fun toastMain(app: Context, text: String) {
+        main.post { android.widget.Toast.makeText(app, text, android.widget.Toast.LENGTH_SHORT).show() }
+    }
+
+    private fun volumeStatus(app: Context): JSONObject {
         val audio = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val sys = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val sysMuted = if (Build.VERSION.SDK_INT >= 23) audio.isStreamMute(AudioManager.STREAM_MUSIC) else sys == 0
+        val gain = com.example.superplayer.player.PlaybackService.exo?.let { e -> onMain { e.volume } } ?: 1f
+        val fixed = Build.VERSION.SDK_INT >= 21 && audio.isVolumeFixed
+        val pct = if (fixed || gain < 1f) Math.round(gain * 100) else Math.round(sys * 100f / max)
+        return JSONObject().put("pct", pct).put("muted", sysMuted || gain <= 0f).put("app", fixed || gain < 1f)
+    }
+
+    private fun changeVolume(app: Context, dir: Int): Boolean {
+        val audio = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val exo = com.example.superplayer.player.PlaybackService.exo
+        val fixed = Build.VERSION.SDK_INT >= 21 && audio.isVolumeFixed
+        var worked = false
+        if (!fixed) {
+            val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            val before = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+            audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (dir > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                AudioManager.FLAG_SHOW_UI
+            )
+            val after = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+            worked = after != before || (dir > 0 && before >= max) || (dir < 0 && before <= 0)
+        }
+        if (worked) {
+            // El del aparato responde: se quita cualquier bajada anterior hecha solo en la app.
+            if (exo != null) onMain { if (exo.volume < 1f) { exo.volume = 1f }; Unit }
+            return true
+        }
+        if (exo == null) return false
+        onMain {
+            val v = (exo.volume + dir * 0.1f).coerceIn(0f, 1f)
+            exo.volume = v
+            toastMain(app, (if (v <= 0f) "🔇 " else "🔊 ") + Math.round(v * 100) + " %")
+        }
+        return true
+    }
+
+    private fun toggleMute(app: Context): Boolean {
+        val audio = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val exo = com.example.superplayer.player.PlaybackService.exo
+        // Silenciado desde la app: se devuelve el volumen.
+        if (exo != null && onMain { exo.volume } == 0f) {
+            onMain { exo.volume = if (savedAppVolume > 0f) savedAppVolume else 1f; Unit }
+            toastMain(app, "🔊")
+            return true
+        }
+        val fixed = Build.VERSION.SDK_INT >= 21 && audio.isVolumeFixed
+        if (!fixed && Build.VERSION.SDK_INT >= 23) {
+            val before = audio.isStreamMute(AudioManager.STREAM_MUSIC)
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI)
+            if (audio.isStreamMute(AudioManager.STREAM_MUSIC) != before) return true
+        }
+        if (exo == null) return false
+        onMain {
+            savedAppVolume = if (exo.volume > 0f) exo.volume else 1f
+            exo.volume = 0f
+            toastMain(app, "🔇")
+        }
+        return true
+    }
+
+    // -----------------------------------------------------------------
+    // Teclas y texto para la pantalla que esté abierta en la tele
+    // -----------------------------------------------------------------
+
+    private fun pressKey(code: Int): Boolean {
+        return onMain {
+            val a = resumed?.get() ?: return@onMain false
+            if (code == android.view.KeyEvent.KEYCODE_BACK) {
+                (a as? androidx.activity.ComponentActivity)?.onBackPressedDispatcher?.onBackPressed()
+                    ?: a.finish()
+            } else {
+                val t = android.os.SystemClock.uptimeMillis()
+                a.dispatchKeyEvent(android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_DOWN, code, 0))
+                a.dispatchKeyEvent(android.view.KeyEvent(t, t + 40, android.view.KeyEvent.ACTION_UP, code, 0))
+            }
+            true
+        } ?: false
+    }
+
+    /** Escribe [text] en el campo de texto que tenga el foco en la tele (buscadores, direcciones…); con [submit], lo envía. */
+    private fun typeText(text: String, submit: Boolean): Boolean {
+        return onMain {
+            val a = resumed?.get() ?: return@onMain false
+            val f = a.currentFocus ?: a.window.decorView.findFocus()
+            val et = f as? android.widget.EditText ?: return@onMain false
+            et.setText(text)
+            et.setSelection(et.text.length)
+            if (submit) {
+                val action = et.imeOptions and android.view.inputmethod.EditorInfo.IME_MASK_ACTION
+                et.onEditorAction(if (action == 0 || action == android.view.inputmethod.EditorInfo.IME_ACTION_UNSPECIFIED)
+                    android.view.inputmethod.EditorInfo.IME_ACTION_GO else action)
+            }
+            true
+        } ?: false
+    }
+
+    private fun runCommand(app: Context, command: String): Boolean {
         when (command) {
-            "volup" -> {
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
-                return true
-            }
-            "voldown" -> {
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
-                return true
-            }
-            "mute" -> {
-                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI)
-                return true
-            }
+            "volup" -> return changeVolume(app, 1)
+            "voldown" -> return changeVolume(app, -1)
+            "mute" -> return toggleMute(app)
+            "key_up" -> return pressKey(android.view.KeyEvent.KEYCODE_DPAD_UP)
+            "key_down" -> return pressKey(android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+            "key_left" -> return pressKey(android.view.KeyEvent.KEYCODE_DPAD_LEFT)
+            "key_right" -> return pressKey(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
+            "key_ok" -> return pressKey(android.view.KeyEvent.KEYCODE_DPAD_CENTER)
+            "key_back" -> return pressKey(android.view.KeyEvent.KEYCODE_BACK)
+            "key_menu" -> return pressKey(android.view.KeyEvent.KEYCODE_MENU)
+            "home" -> return onMain {
+                val i = Intent(app, com.example.superplayer.ui.MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                app.startActivity(i)
+                true
+            } ?: false
         }
         val p = player ?: return false
         return onMain {
@@ -286,6 +423,7 @@ object RemoteServer {
                 "back30" -> p.seek(-30_000L)
                 "fwd30" -> p.seek(30_000L)
                 "back5m" -> p.seek(-5 * 60_000L)
+                "fwd5m" -> p.seek(5 * 60_000L)
                 else -> return@onMain false
             }
             true
