@@ -492,4 +492,138 @@ object MovieInfo {
         val genre = if (genres != null && genres.length() > 0) (0 until genres.length()).joinToString(", ") { genres.optString(it) } else null
         return Info(name, o.optString("premiered").take(4).ifEmpty { null }, genre, summary, poster)
     }
+
+    // -----------------------------------------------------------------
+    // Cambiar carátula / datos a mano
+    // -----------------------------------------------------------------
+
+    /** Una opción de la búsqueda manual; [tmdbKind]/[tmdbId] permiten pedir la ficha completa al elegirla. */
+    class Candidate(val info: Info, val tmdbKind: String? = null, val tmdbId: Int = 0)
+
+    /**
+     * Busca [title] (y [year] si se da) en todas las fuentes y devuelve varias opciones, para que el
+     * usuario elija la correcta. [onDone] se llama desde un hilo de fondo.
+     */
+    fun candidates(context: Context, title: String, year: String?, onDone: (List<Candidate>) -> Unit) {
+        val tmdbKey = AppPrefs.getTmdbKey(context.applicationContext)
+        pool.execute {
+            val out = ArrayList<Candidate>()
+            if (tmdbKey.isNotBlank()) try { out.addAll(candidatesTmdb(tmdbKey, title, year)) } catch (e: Exception) { }
+            try { out.addAll(candidatesItunes(title)) } catch (e: Exception) { }
+            try { out.addAll(candidatesTvmaze(title)) } catch (e: Exception) { }
+            val seen = HashSet<String>()
+            val unique = out
+            .filter { c -> seen.add(norm(c.info.title) + "|" + (c.info.year ?: "") + "|" + (c.info.posterUrl ?: "")) }
+            try { onDone(unique) } catch (e: Exception) { }
+        }
+    }
+
+    private fun candidatesTmdb(key: String, title: String, year: String?): List<Candidate> {
+        val q = URLEncoder.encode(title, "UTF-8")
+        val out = ArrayList<Candidate>()
+        for (kind in listOf("movie", "tv")) {
+            val yearParam = when {
+                year == null -> ""
+                kind == "movie" -> "&year=$year"
+                else -> "&first_air_date_year=$year"
+            }
+            val body = httpGet("$TMDB/search/$kind?api_key=$key&language=es-ES&query=$q$yearParam") ?: continue
+            val results = JSONObject(body).optJSONArray("results") ?: continue
+            for (i in 0 until minOf(results.length(), 8)) {
+                val r = results.optJSONObject(i) ?: continue
+                val isMovie = kind == "movie"
+                val name = r.optString(if (isMovie) "title" else "name")
+                if (name.isBlank()) continue
+                val poster = r.optString("poster_path").ifEmpty { null }?.let { TMDB_IMG + "w500" + it }
+                out.add(
+                    Candidate(
+                        Info(
+                            title = name,
+                            year = r.optString(if (isMovie) "release_date" else "first_air_date").take(4).ifEmpty { null },
+                            genre = null,
+                            overview = r.optString("overview").ifBlank { null },
+                            posterUrl = poster,
+                            rating = r.optDouble("vote_average", 0.0),
+                            isTv = !isMovie,
+                            source = "tmdb",
+                            tmdbChecked = true
+                        ),
+                        kind, r.optInt("id")
+                    )
+                )
+            }
+        }
+        return out
+    }
+
+    private fun candidatesItunes(title: String): List<Candidate> {
+        val term = URLEncoder.encode(title, "UTF-8")
+        val body = httpGet(
+            "https://itunes.apple.com/search?term=$term&media=movie&entity=movie&country=ES&lang=es_es&limit=10"
+        ) ?: return emptyList()
+        val results = JSONObject(body).optJSONArray("results") ?: return emptyList()
+        val out = ArrayList<Candidate>()
+        for (i in 0 until results.length()) {
+            val r = results.optJSONObject(i) ?: continue
+            val name = r.optString("trackName")
+            if (name.isBlank()) continue
+            out.add(
+                Candidate(
+                    Info(
+                        name,
+                        r.optString("releaseDate").take(4).ifEmpty { null },
+                        r.optString("primaryGenreName").ifEmpty { null },
+                        r.optString("longDescription").ifEmpty { r.optString("shortDescription") }.ifEmpty { null },
+                        r.optString("artworkUrl100").ifEmpty { null }?.replace("100x100bb", "600x600bb")
+                    )
+                )
+            )
+        }
+        return out
+    }
+
+    private fun candidatesTvmaze(title: String): List<Candidate> {
+        val term = URLEncoder.encode(title, "UTF-8")
+        val body = httpGet("https://api.tvmaze.com/search/shows?q=$term") ?: return emptyList()
+        val arr = JSONArray(body)
+        val out = ArrayList<Candidate>()
+        for (i in 0 until minOf(arr.length(), 6)) {
+            val o = arr.optJSONObject(i)?.optJSONObject("show") ?: continue
+            val name = o.optString("name")
+            if (name.isEmpty()) continue
+            val image = o.optJSONObject("image")
+            val poster = image?.optString("original")?.ifEmpty { null } ?: image?.optString("medium")?.ifEmpty { null }
+            val summary = o.optString("summary").ifEmpty { null }?.let {
+                android.text.Html.fromHtml(it, android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
+            }
+            val genres = o.optJSONArray("genres")
+            val genre = if (genres != null && genres.length() > 0) (0 until genres.length()).joinToString(", ") { genres.optString(it) } else null
+            out.add(
+                Candidate(
+                    Info(name, o.optString("premiered").take(4).ifEmpty { null }, genre, summary, poster, isTv = true, source = "tvmaze")
+                )
+            )
+        }
+        return out
+    }
+
+    /**
+     * Fija [choice] como datos de [rawQuery] (el título con el que se pidió): desde ese momento la
+     * miniatura y la ficha usan esta carátula, nombre y año. Pide la ficha completa si viene de TMDb.
+     * [onDone] se llama desde un hilo de fondo.
+     */
+    fun applyChoice(context: Context, rawQuery: String, choice: Candidate, onDone: () -> Unit) {
+        val appContext = context.applicationContext
+        val (title, year) = cleanTitle(rawQuery)
+        val key = keyOf(title, year)
+        val tmdbKey = AppPrefs.getTmdbKey(appContext)
+        pool.execute {
+            var info: Info = choice.info
+            if (choice.tmdbKind != null && choice.tmdbId != 0 && tmdbKey.isNotBlank()) {
+                try { tmdbDetails(tmdbKey, choice.tmdbKind, choice.tmdbId)?.let { info = it } } catch (e: Exception) { }
+            }
+            store(appContext, key, info.copy(tmdbChecked = true), true)
+            try { onDone() } catch (e: Exception) { }
+        }
+    }
 }

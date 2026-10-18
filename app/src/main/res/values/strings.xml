@@ -617,4 +617,15 @@
     <string name="tgsel_saving">Guardando archivos…</string>
     <string name="tgsel_nofiles">No hay archivos en la selección</string>
     <string name="tgsel_save_done">Guardados %1$d de %2$d archivos en Descargas/Socram TV</string>
+    <string name="tgcover_btn">🖼 Cambiar carátula / datos</string>
+    <string name="tgcover_title">Cambiar carátula, nombre y año</string>
+    <string name="tgcover_name">Nombre</string>
+    <string name="tgcover_year">Año (opcional)</string>
+    <string name="tgcover_search">Buscar</string>
+    <string name="tgcover_searching">Buscando…</string>
+    <string name="tgcover_pick">Toca la correcta:</string>
+    <string name="tgcover_none">No se ha encontrado nada. Prueba con otro nombre o sin año.</string>
+    <string name="tgcover_kind_movie">Película</string>
+    <string name="tgcover_kind_tv">Serie</string>
+    <string name="tgcover_done">Carátula cambiada</string>
 </resources>

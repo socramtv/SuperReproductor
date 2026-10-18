@@ -1905,6 +1905,12 @@ class TelegramAccountActivity : AppCompatActivity() {
             ).apply { topMargin = dp(12) }
         }
         val localThumb = if (thumbId != 0) thumbPaths[thumbId] else null
+        var dialog: AlertDialog? = null
+        val changeCover = {
+            dialog?.dismiss()
+            showChangeCover(query) { showMovieInfo(options, query, thumbId) }
+        }
+        if (query.isNotEmpty()) poster.setOnClickListener { changeCover() }
         if (info?.posterUrl != null) poster.load(info.posterUrl)
         else if (localThumb != null) poster.load(File(localThumb))
         else poster.visibility = View.GONE
@@ -1931,7 +1937,6 @@ class TelegramAccountActivity : AppCompatActivity() {
             tv.text = sb.toString()
             col.addView(tv)
         }
-        var dialog: AlertDialog? = null
         // Capítulos en orden (una versión por capítulo; la elegida si hay varias): para el "siguiente capítulo" automático.
         fun queueFor(m: TgMessage): List<TgMessage> {
             if (!series) return emptyList()
@@ -1985,6 +1990,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         } else {
             for ((i, m) in options.withIndex()) col.addView(optionButton(m, i + 1, options.size > 1) { play(m) })
         }
+        if (query.isNotEmpty()) col.addView(android.widget.Button(this).apply {
+            text = getString(R.string.tgcover_btn)
+            isAllCaps = false
+            setOnClickListener { changeCover() }
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(16), dp(10), dp(16), 0) }
+        })
         col.addView(android.widget.Button(this).apply {
             text = getString(R.string.tgfwd_action)
             isAllCaps = false
@@ -2024,16 +2037,131 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     /** Sin ficha de TMDb: una sola versión se reproduce directa; si hay varias, se elige cuál ver. */
-    private fun chooseVideoOption(options: List<TgMessage>, query: String) {
+    private fun chooseVideoOption(options: List<TgMessage>, query: String, thumbId: Int = 0) {
         if (options.size <= 1) {
             options.firstOrNull()?.let { playVideo(it) }
             return
         }
-        AlertDialog.Builder(this)
+        val b = AlertDialog.Builder(this)
             .setTitle(query.ifEmpty { titleOf(options[0]) })
             .setItems(options.mapIndexed { i, m -> optionLabel(m, i + 1, true) }.toTypedArray()) { _, which -> playVideo(options[which]) }
             .setNeutralButton(R.string.tgfwd_action) { _, _ -> forwardVideoOptions(options, query) }
+        if (query.isNotEmpty()) {
+            b.setNegativeButton(R.string.tgcover_btn) { _, _ ->
+                showChangeCover(query) { onVideoClick(options, query, thumbId) }
+            }
+        }
+        b.show()
+    }
+
+    /**
+     * Cambiar la carátula, el nombre y el año de un vídeo a mano: se puede corregir el nombre y el año
+     * para buscar de nuevo, y al tocar una de las opciones encontradas queda fijada. [after] se llama al cerrar.
+     */
+    private fun showChangeCover(query: String, after: () -> Unit) {
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+        val (cleanName, cleanYear) = MovieInfo.cleanTitle(query)
+        val col = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+        }
+        val nameEt = android.widget.EditText(this).apply {
+            hint = getString(R.string.tgcover_name)
+            setText(cleanName)
+            setSingleLine()
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+        }
+        val yearEt = android.widget.EditText(this).apply {
+            hint = getString(R.string.tgcover_year)
+            setText(cleanYear ?: "")
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(android.text.InputFilter.LengthFilter(4))
+            setSingleLine()
+        }
+        val searchBtn = android.widget.Button(this).apply {
+            text = getString(R.string.tgcover_search)
+            isAllCaps = false
+        }
+        val status = TextView(this).apply {
+            textSize = 13f
+            setPadding(0, dp(8), 0, dp(4))
+        }
+        val results = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+        col.addView(nameEt)
+        col.addView(yearEt)
+        col.addView(searchBtn)
+        col.addView(status)
+        col.addView(results)
+        var dialog: AlertDialog? = null
+        var seq = 0
+        var finished = false
+        fun closeWith() {
+            if (finished) return
+            finished = true
+            after()
+        }
+        fun search() {
+            val name = nameEt.text.toString().trim()
+            if (name.isEmpty()) return
+            val year = yearEt.text.toString().trim().takeIf { it.length == 4 }
+            val mine = ++seq
+            results.removeAllViews()
+            status.text = getString(R.string.tgcover_searching)
+            MovieInfo.candidates(this, name, year) { list ->
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || mine != seq || dialog?.isShowing != true) return@runOnUiThread
+                    status.text = if (list.isEmpty()) getString(R.string.tgcover_none) else getString(R.string.tgcover_pick)
+                    for (c in list) {
+                        val row = android.widget.LinearLayout(this).apply {
+                            orientation = android.widget.LinearLayout.HORIZONTAL
+                            setPadding(0, dp(6), 0, dp(6))
+                            isClickable = true
+                            isFocusable = true
+                            setBackgroundResource(android.R.drawable.list_selector_background)
+                        }
+                        val img = android.widget.ImageView(this).apply {
+                            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                            setBackgroundColor(0xFF222222.toInt())
+                            layoutParams = android.widget.LinearLayout.LayoutParams(dp(64), dp(96))
+                        }
+                        c.info.posterUrl?.let { img.load(it) }
+                        val tv = TextView(this).apply {
+                            val head = c.info.title + (c.info.year?.let { " ($it)" } ?: "")
+                            val kind = getString(if (c.info.isTv) R.string.tgcover_kind_tv else R.string.tgcover_kind_movie)
+                            val over = c.info.overview?.take(110)?.let { "\n$it…" } ?: ""
+                            text = "$head\n$kind$over"
+                            textSize = 13f
+                            setPadding(dp(12), 0, 0, 0)
+                            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        }
+                        row.addView(img)
+                        row.addView(tv)
+                        row.setOnClickListener {
+                            row.isEnabled = false
+                            MovieInfo.applyChoice(this, query, c) {
+                                runOnUiThread {
+                                    if (isFinishing || isDestroyed) return@runOnUiThread
+                                    mediaAdapter.infoLoaded(query)
+                                    Toast.makeText(this, R.string.tgcover_done, Toast.LENGTH_SHORT).show()
+                                    dialog?.dismiss()
+                                }
+                            }
+                        }
+                        results.addView(row)
+                    }
+                }
+            }
+        }
+        searchBtn.setOnClickListener { search() }
+        nameEt.setOnEditorActionListener { _, _, _ -> search(); true }
+        dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.tgcover_title)
+            .setView(android.widget.ScrollView(this).apply { addView(col) })
+            .setNegativeButton(R.string.channel_check_close, null)
+            .setOnDismissListener { closeWith() }
             .show()
+        search()
     }
 
     /** Reenviar un vídeo: si tiene varias versiones, primero se elige cuál. */
@@ -2061,7 +2189,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** Pulsar un vídeo: con información, ficha con carátula y "Ver"; sin ella, se reproduce directamente (o se elige versión). */
     private fun onVideoClick(options: List<TgMessage>, query: String, thumbId: Int) {
         if ((query.isNotEmpty() && MovieInfo.peek(this, query) != null) || isSeriesGroup(options)) showMovieInfo(options, query, thumbId)
-        else chooseVideoOption(options, query)
+        else chooseVideoOption(options, query, thumbId)
     }
 
     /** Pulsación larga: guarda o quita el vídeo (con todas sus versiones) de la carpeta "Vídeos". */

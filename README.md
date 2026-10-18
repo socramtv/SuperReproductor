@@ -1471,3 +1471,6 @@ La misma información extra del programa (episodio y subtítulo en el título, `
 
 ## Arranque automático del reproductor más fiable
 Al abrir un canal, una red de seguridad vigila los primeros segundos: si el reproductor queda en pausa o parado sin que hayas tocado nada, le da a play solo. Además, una pantalla de reproducción antigua que se cierra tarde ya no pausa el canal recién abierto.
+
+## Cambiar carátula, nombre y año (Telegram)
+En la ficha de un vídeo (o serie) de Telegram, toca la imagen o el botón «Cambiar carátula / datos». Se abre un buscador con el nombre y el año ya rellenados: corrígelos y pulsa Buscar; salen varias opciones (TMDb si hay clave, iTunes y TVMaze) con su carátula y sinopsis. Al tocar la correcta queda fijada para ese vídeo en las miniaturas y en la ficha. También está en el diálogo de elegir versión de los vídeos sin ficha.
