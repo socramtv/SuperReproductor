@@ -35,10 +35,65 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
                 // No es imprescindible.
             }
             client = Client.create({ obj -> onUpdate(obj) }, null, null)
+            registerNetworkCallback()
         } else {
             listener.onState(state)
         }
         watchStartup(0)
+    }
+
+    // -----------------------------------------------------------------
+    // Red: TDLib no se entera solo de los cambios de red de Android. Si el sistema corta la
+    // conexión mientras la app lleva un rato quieta, se queda esperando para siempre y nada carga
+    // hasta reiniciar la app. Se le avisa del tipo de red actual cada vez que cambia y al volver.
+    // -----------------------------------------------------------------
+
+    @Volatile private var netCallbackRegistered = false
+    @Volatile private var lastRefreshAt = 0L
+    @Volatile private var connectionOk = true
+
+    private fun currentNetworkType(): TdApi.NetworkType {
+        return try {
+            val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val net = cm.activeNetwork ?: return TdApi.NetworkTypeNone()
+            val caps = cm.getNetworkCapabilities(net) ?: return TdApi.NetworkTypeNone()
+            when {
+                caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                    caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> TdApi.NetworkTypeWiFi()
+                caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> TdApi.NetworkTypeMobile()
+                else -> TdApi.NetworkTypeOther()
+            }
+        } catch (e: Throwable) {
+            TdApi.NetworkTypeOther()
+        }
+    }
+
+    private fun registerNetworkCallback() {
+        if (netCallbackRegistered) return
+        try {
+            val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) { refreshConnection(true) }
+                override fun onLost(network: android.net.Network) { refreshConnection(true) }
+                override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) {
+                    refreshConnection(true)
+                }
+            })
+            netCallbackRegistered = true
+        } catch (e: Throwable) {
+            // Sin esto sigue funcionando como antes; solo se pierde el aviso automático.
+        }
+    }
+
+    override fun refreshConnection(online: Boolean) {
+        val c = synchronized(this) { client } ?: return
+        val now = System.currentTimeMillis()
+        if (online && now - lastRefreshAt < 1500) return
+        lastRefreshAt = now
+        try {
+            c.send(TdApi.SetNetworkType(currentNetworkType())) { }
+            c.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(online))) { }
+        } catch (e: Throwable) { }
     }
 
     /**
@@ -79,6 +134,15 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     private fun onUpdate(obj: TdApi.Object) {
         when (obj) {
             is TdApi.UpdateAuthorizationState -> handleAuth(obj.authorizationState)
+            is TdApi.UpdateConnectionState -> {
+                connectionOk = obj.state is TdApi.ConnectionStateReady
+                // Si se queda esperando la red o conectando, se le vuelve a decir cuál es la red actual.
+                if (obj.state is TdApi.ConnectionStateWaitingForNetwork || obj.state is TdApi.ConnectionStateConnecting) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        if (!connectionOk) refreshConnection(true)
+                    }, 4000)
+                }
+            }
             is TdApi.UpdateNewChat -> chats[obj.chat.id] = obj.chat
             is TdApi.UpdateUser -> {
                 if (obj.user.type is TdApi.UserTypeBot) botIds.add(obj.user.id)
@@ -879,8 +943,15 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
 
     override fun readBytes(fileId: Int, pos: Long, maxLen: Int, cancelled: () -> Boolean): ByteArray? {
         val deadline = System.currentTimeMillis() + 40_000
+        var nudged = false
         var last: TdApi.File? = null
         while (System.currentTimeMillis() < deadline && !cancelled()) {
+            if (!nudged && !connectionOk || (!nudged && System.currentTimeMillis() > deadline - 28_000 && (last?.local?.downloadedPrefixSize ?: 0L) == 0L)) {
+                // Lleva un rato sin llegar nada: se despierta la conexión de TDLib (una sola vez por lectura).
+                nudged = true
+                lastRefreshAt = 0L
+                refreshConnection(true)
+            }
             val f = getFileBlocking(fileId)
             if (f == null) {
                 // TDLib ocupado: no cortar la conexión, reintentar.

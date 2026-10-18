@@ -77,6 +77,12 @@ interface TgAccountBackend {
     /** Borra los archivos que Telegram ha ido descargando (vídeos, fotos…) menos los más recientes. */
     fun cleanCache()
 
+    /**
+     * Despierta la conexión con Telegram (tras un rato sin usarla Android corta la red a la app y
+     * TDLib se queda esperando): se le dice el tipo de red actual y que la app está activa.
+     */
+    fun refreshConnection(online: Boolean = true) {}
+
     fun loadBotCommands(userId: Long, onDone: (List<Pair<String, String>>) -> Unit)
     /** Pulsa un botón "cb" de un mensaje; [onDone] recibe el texto de respuesta y/o una URL, si el bot los da. */
     fun pressButton(chatId: Long, messageId: Long, data: String, onDone: (String?, String?) -> Unit)

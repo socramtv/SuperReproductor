@@ -1093,7 +1093,14 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Tras un rato sin usar Telegram la conexión de TDLib puede haberse quedado dormida: se despierta.
+        backend?.refreshConnection(true)
         refreshLive()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isFinishing) backend?.refreshConnection(false)
     }
 
     private fun closeChat() {
