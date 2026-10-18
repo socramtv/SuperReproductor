@@ -25,6 +25,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import coil.load
 import com.example.superplayer.R
 import com.example.superplayer.databinding.ActivityWebBinding
 import com.example.superplayer.model.Stream
@@ -58,7 +59,7 @@ class WebActivity : AppCompatActivity() {
         binding = ActivityWebBinding.inflate(layoutInflater)
         setContentView(binding.root)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        applySystemBarInsets(top = binding.webBar, bottom = binding.webView)
+        applySystemBarInsets(top = binding.webBar, bottom = binding.webBody)
         title = getString(R.string.web_title)
 
         val wv = binding.webView
@@ -105,6 +106,7 @@ class WebActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 currentPage = url
+                hideHome()
                 detected.clear()
                 updateVideosButton()
                 binding.webProgress.visibility = View.VISIBLE
@@ -116,7 +118,7 @@ class WebActivity : AppCompatActivity() {
                 binding.webProgress.visibility = View.GONE
                 if (!binding.webUrl.hasFocus()) binding.webUrl.setText(url)
                 updateNavButtons()
-                prefs().edit().putString("last", url).apply()
+                updateSaveButton()
             }
         }
         wv.webChromeClient = object : WebChromeClient() {
@@ -154,6 +156,15 @@ class WebActivity : AppCompatActivity() {
         binding.webReload.setOnClickListener { wv.reload() }
         binding.webVideos.setOnClickListener { showDetectedVideos() }
         binding.webMenu.setOnClickListener { showMenu(it) }
+        binding.webFavsBtn.setOnClickListener { toggleFavStrip() }
+        binding.webSaveBtn.setOnClickListener { toggleSaveCurrent() }
+        binding.webHomeBtn.setOnClickListener { goHome() }
+        binding.webShareBtn.setOnClickListener { shareCurrent() }
+        binding.webHomeSearch.setOnClickListener {
+            binding.webUrl.requestFocus()
+            (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                .showSoftInput(binding.webUrl, 0)
+        }
         binding.webUrl.setOnEditorActionListener { v, actionId, event ->
             val go = actionId == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
@@ -171,6 +182,9 @@ class WebActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 when {
                     customView != null -> hideCustomView()
+                    homeVisible() && wv.url != null -> hideHome()
+                    homeVisible() -> finish()
+                    binding.webFavScroll.visibility == View.VISIBLE -> binding.webFavScroll.visibility = View.GONE
                     wv.canGoBack() -> wv.goBack()
                     else -> finish()
                 }
@@ -178,12 +192,9 @@ class WebActivity : AppCompatActivity() {
         })
 
         updateNavButtons()
-        val start = intent?.data?.toString() ?: savedInstanceState?.getString("url") ?: prefs().getString("last", null)
-        if (start.isNullOrBlank()) {
-            load(HOME)
-        } else {
-            load(start)
-        }
+        updateSaveButton()
+        val start = intent?.data?.toString() ?: savedInstanceState?.getString("url")
+        if (start.isNullOrBlank()) goHome() else load(start)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -193,7 +204,7 @@ class WebActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        binding.webView.onResume()
+        if (!homeVisible()) binding.webView.onResume()
     }
 
     override fun onPause() {
@@ -214,6 +225,7 @@ class WebActivity : AppCompatActivity() {
     private fun load(input: String) {
         val t = input.trim()
         if (t.isEmpty()) return
+        hideHome()
         val url = when {
             t.startsWith("http://", true) || t.startsWith("https://", true) -> t
             Regex("^[\\w.-]+:\\d+(/.*)?$").matches(t) -> "http://$t"
@@ -327,6 +339,19 @@ class WebActivity : AppCompatActivity() {
     // ---- Marcadores ----
 
     private fun bookmarks(): MutableList<Pair<String, String>> {
+        val p = prefs()
+        if (!p.contains("bookmarks") && !p.getBoolean("seeded", false)) {
+            // Primera vez: unos favoritos de ejemplo para que la página de inicio no esté vacía.
+            saveBookmarks(listOf(
+                "Google" to "https://www.google.com",
+                "YouTube" to "https://m.youtube.com",
+                "Wikipedia" to "https://es.wikipedia.org",
+                "Maps" to "https://maps.google.com",
+                "Marca" to "https://www.marca.com",
+                "Telegram" to "https://web.telegram.org"
+            ))
+            p.edit().putBoolean("seeded", true).apply()
+        }
         val arr = try { JSONArray(prefs().getString("bookmarks", "[]")) } catch (e: Exception) { JSONArray() }
         return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
             .map { it.optString("t") to it.optString("u") }.filter { it.second.isNotEmpty() }.toMutableList()
@@ -339,6 +364,7 @@ class WebActivity : AppCompatActivity() {
     }
 
     private fun addBookmark() {
+        if (homeVisible()) { editBookmark(null); return }
         val url = binding.webView.url ?: return
         val list = bookmarks()
         if (list.any { it.second == url }) {
@@ -348,6 +374,281 @@ class WebActivity : AppCompatActivity() {
         list.add(0, (binding.webView.title?.takeIf { it.isNotBlank() } ?: url) to url)
         saveBookmarks(list)
         Toast.makeText(this, R.string.web_bookmark_added, Toast.LENGTH_SHORT).show()
+        refreshFavUi()
+    }
+
+    // ---- Favoritos: atajos, tira y página de inicio ----
+
+    private fun homeVisible() = binding.webHome.visibility == View.VISIBLE
+
+    private fun refreshFavUi() {
+        updateSaveButton()
+        if (binding.webFavScroll.visibility == View.VISIBLE) renderFavStrip()
+        if (homeVisible()) renderHome()
+    }
+
+    private fun updateSaveButton() {
+        val url = if (homeVisible()) null else binding.webView.url
+        val saved = url != null && bookmarks().any { it.second == url }
+        binding.webSaveBtn.setText(if (saved) R.string.web_saved_btn else R.string.web_save_btn)
+    }
+
+    private fun toggleSaveCurrent() {
+        val url = if (homeVisible()) null else binding.webView.url
+        if (url == null) { editBookmark(null); return }
+        val list = bookmarks()
+        if (list.any { it.second == url }) {
+            saveBookmarks(list.filter { it.second != url })
+            Toast.makeText(this, R.string.web_fav_removed, Toast.LENGTH_SHORT).show()
+            refreshFavUi()
+        } else addBookmark()
+    }
+
+    private fun toggleFavStrip() {
+        val sc = binding.webFavScroll
+        if (sc.visibility == View.VISIBLE) sc.visibility = View.GONE
+        else { renderFavStrip(); sc.visibility = View.VISIBLE }
+    }
+
+    private fun renderFavStrip() {
+        val strip = binding.webFavStrip
+        strip.removeAllViews()
+        val d = resources.displayMetrics.density
+        val list = bookmarks()
+        if (list.isEmpty()) {
+            strip.addView(android.widget.TextView(this).apply {
+                setText(R.string.web_no_favs)
+                setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_surface_muted))
+                setPadding((10 * d).toInt(), (8 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
+            })
+            return
+        }
+        for (b in list) {
+            val chip = android.widget.TextView(this).apply {
+                text = b.first.take(22)
+                textSize = 13f
+                maxLines = 1
+                setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_background))
+                setBackgroundResource(R.drawable.bg_web_chip)
+                setPadding((14 * d).toInt(), (8 * d).toInt(), (14 * d).toInt(), (8 * d).toInt())
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { binding.webFavScroll.visibility = View.GONE; load(b.second) }
+                setOnLongClickListener { favOptions(b); true }
+            }
+            strip.addView(chip, android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0) })
+        }
+    }
+
+    private fun favOptions(b: Pair<String, String>) {
+        AlertDialog.Builder(this)
+            .setTitle(b.first.take(50))
+            .setItems(arrayOf(getString(R.string.web_fav_edit_opt), getString(R.string.web_fav_delete_opt))) { _, which ->
+                if (which == 0) editBookmark(b)
+                else {
+                    saveBookmarks(bookmarks().filter { it.second != b.second })
+                    refreshFavUi()
+                }
+            }
+            .show()
+    }
+
+    /** Añade un favorito a mano (old = null) o edita su nombre y dirección. */
+    private fun editBookmark(old: Pair<String, String>?) {
+        val d = resources.displayMetrics.density
+        val col = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((20 * d).toInt(), (8 * d).toInt(), (20 * d).toInt(), 0)
+        }
+        val nameEt = android.widget.EditText(this).apply { hint = getString(R.string.web_fav_name); setText(old?.first ?: ""); setSingleLine() }
+        val urlEt = android.widget.EditText(this).apply {
+            hint = getString(R.string.web_fav_url)
+            setText(old?.second ?: "")
+            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine()
+        }
+        col.addView(nameEt)
+        col.addView(urlEt)
+        AlertDialog.Builder(this)
+            .setTitle(if (old == null) R.string.web_fav_add else R.string.web_fav_edit)
+            .setView(col)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                var u = urlEt.text.toString().trim()
+                if (u.isEmpty()) return@setPositiveButton
+                if (!u.startsWith("http://", true) && !u.startsWith("https://", true)) u = "https://$u"
+                val n = nameEt.text.toString().trim().ifEmpty { Uri.parse(u).host?.removePrefix("www.") ?: u }
+                val list = bookmarks()
+                val i = if (old == null) -1 else list.indexOfFirst { it.second == old.second }
+                if (i >= 0) list[i] = n to u else list.add(n to u)
+                saveBookmarks(list)
+                refreshFavUi()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun shareCurrent() {
+        val url = (if (homeVisible()) null else binding.webView.url) ?: return
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, binding.webView.title ?: url)
+            .putExtra(Intent.EXTRA_TEXT, url)
+        try { startActivity(Intent.createChooser(send, null)) } catch (e: Exception) { }
+    }
+
+    // ---- Página de inicio ----
+
+    private fun homeSetting(): String = prefs().getString("home", "") ?: ""
+
+    /** Va a la página de inicio elegida: la cuadrícula de favoritos (por defecto) o la dirección que se haya puesto. */
+    private fun goHome() {
+        val h = homeSetting()
+        if (h.isBlank()) showHome() else load(h)
+    }
+
+    private fun showHome() {
+        binding.webFavScroll.visibility = View.GONE
+        binding.webHome.visibility = View.VISIBLE
+        binding.webView.onPause()
+        binding.webUrl.setText("")
+        binding.webUrl.clearFocus()
+        renderHome()
+        updateSaveButton()
+    }
+
+    private fun hideHome() {
+        if (!homeVisible()) return
+        binding.webHome.visibility = View.GONE
+        binding.webView.onResume()
+        updateSaveButton()
+    }
+
+    private fun tileColor(seed: String): Int {
+        val colors = intArrayOf(0xFFE57373.toInt(), 0xFF64B5F6.toInt(), 0xFF81C784.toInt(), 0xFFFFB74D.toInt(),
+            0xFFBA68C8.toInt(), 0xFF4DB6AC.toInt(), 0xFFF06292.toInt(), 0xFF7986CB.toInt())
+        return colors[(seed.hashCode() and 0x7fffffff) % colors.size]
+    }
+
+    private fun renderHome() {
+        val grid = binding.webHomeGrid
+        grid.removeAllViews()
+        val d = resources.displayMetrics.density
+        val widthDp = resources.displayMetrics.widthPixels / d
+        val cols = maxOf(3, minOf(8, ((widthDp - 32) / 92).toInt()))
+        grid.columnCount = cols
+        val items = bookmarks().map { it as Pair<String, String>? } + listOf<Pair<String, String>?>(null)
+        for (b in items) {
+            val tile = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                setPadding(0, (8 * d).toInt(), 0, (8 * d).toInt())
+                isFocusable = true
+                isClickable = true
+                setBackgroundResource(R.drawable.bg_web_chip)
+            }
+            val circle = android.widget.FrameLayout(this).apply {
+                val bg = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(if (b == null) 0xFF9E9E9E.toInt() else tileColor(b.second))
+                }
+                background = bg
+                tag = bg
+            }
+            val letter = android.widget.TextView(this).apply {
+                text = if (b == null) "+" else b.first.trim().take(1).uppercase().ifEmpty { "?" }
+                textSize = 24f
+                setTextColor(0xFFFFFFFF.toInt())
+                gravity = android.view.Gravity.CENTER
+            }
+            circle.addView(letter, android.widget.FrameLayout.LayoutParams(-1, -1))
+            if (b != null) {
+                val host = try { Uri.parse(b.second).host } catch (e: Exception) { null }
+                if (!host.isNullOrEmpty()) {
+                    val icon = android.widget.ImageView(this).apply {
+                        scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                        setPadding((14 * d).toInt(), (14 * d).toInt(), (14 * d).toInt(), (14 * d).toInt())
+                    }
+                    circle.addView(icon, android.widget.FrameLayout.LayoutParams(-1, -1))
+                    icon.load("https://www.google.com/s2/favicons?domain=$host&sz=128") {
+                        listener(onSuccess = { _, _ ->
+                            (circle.tag as? android.graphics.drawable.GradientDrawable)?.setColor(0xFFFFFFFF.toInt())
+                            letter.visibility = View.GONE
+                        })
+                    }
+                }
+            }
+            tile.addView(circle, android.widget.LinearLayout.LayoutParams((56 * d).toInt(), (56 * d).toInt()))
+            tile.addView(android.widget.TextView(this).apply {
+                text = if (b == null) getString(R.string.web_fav_add) else b.first
+                textSize = 12f
+                maxLines = 2
+                gravity = android.view.Gravity.CENTER
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_background))
+                setPadding((4 * d).toInt(), (6 * d).toInt(), (4 * d).toInt(), 0)
+            }, android.widget.LinearLayout.LayoutParams(-1, -2))
+            tile.setOnClickListener { if (b == null) editBookmark(null) else load(b.second) }
+            if (b != null) tile.setOnLongClickListener { favOptions(b); true }
+            val lp = android.widget.GridLayout.LayoutParams(
+                android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
+                android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
+            ).apply {
+                width = 0
+                setMargins((4 * d).toInt(), (4 * d).toInt(), (4 * d).toInt(), (4 * d).toInt())
+            }
+            grid.addView(tile, lp)
+        }
+    }
+
+    /** Elegir qué se abre como página de inicio: la cuadrícula de favoritos, una web de la lista o la dirección que quieras. */
+    private fun chooseHomePage() {
+        val current = binding.webView.url?.takeIf { !homeVisible() }
+        val labels = ArrayList<String>()
+        labels.add(getString(R.string.web_home_grid))
+        labels.add("Google")
+        labels.add("DuckDuckGo")
+        if (current != null) labels.add(getString(R.string.web_home_current))
+        labels.add(getString(R.string.web_home_other))
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_home_pick)
+            .setItems(labels.toTypedArray()) { _, which ->
+                fun save(v: String) {
+                    prefs().edit().putString("home", v).apply()
+                    Toast.makeText(this, R.string.web_home_saved, Toast.LENGTH_SHORT).show()
+                }
+                when (labels[which]) {
+                    getString(R.string.web_home_grid) -> save("")
+                    "Google" -> save("https://www.google.com")
+                    "DuckDuckGo" -> save("https://duckduckgo.com")
+                    getString(R.string.web_home_current) -> save(current ?: "")
+                    else -> {
+                        val et = android.widget.EditText(this).apply {
+                            hint = getString(R.string.web_fav_url)
+                            setText(homeSetting())
+                            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+                            setSingleLine()
+                        }
+                        val box = android.widget.FrameLayout(this).apply {
+                            val m = (20 * resources.displayMetrics.density).toInt()
+                            setPadding(m, 8, m, 0)
+                            addView(et)
+                        }
+                        AlertDialog.Builder(this)
+                            .setTitle(R.string.web_home_other)
+                            .setView(box)
+                            .setPositiveButton(android.R.string.ok) { _, _ ->
+                                var u = et.text.toString().trim()
+                                if (u.isNotEmpty() && !u.startsWith("http://", true) && !u.startsWith("https://", true)) u = "https://$u"
+                                save(u)
+                            }
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show()
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun showBookmarks() {
@@ -388,7 +689,8 @@ class WebActivity : AppCompatActivity() {
         menu.menu.add(0, 4, 3, R.string.web_desktop).apply { isCheckable = true; isChecked = desktop }
         menu.menu.add(0, 5, 4, R.string.web_home)
         menu.menu.add(0, 6, 5, R.string.web_open_external)
-        menu.menu.add(0, 7, 6, R.string.web_clear)
+        menu.menu.add(0, 8, 6, R.string.web_home_set)
+        menu.menu.add(0, 7, 7, R.string.web_clear)
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> showBookmarks()
@@ -398,9 +700,11 @@ class WebActivity : AppCompatActivity() {
                     desktop = !desktop
                     binding.webView.settings.userAgentString = if (desktop) DESKTOP_UA else defaultUa
                     binding.webView.reload()
+                    hideHome()
                 }
-                5 -> load(HOME)
-                6 -> binding.webView.url?.let { openUri(it) }
+                5 -> goHome()
+                8 -> chooseHomePage()
+                6 -> (if (homeVisible()) null else binding.webView.url)?.let { openUri(it) }
                 7 -> AlertDialog.Builder(this)
                     .setMessage(R.string.web_clear_confirm)
                     .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -419,7 +723,6 @@ class WebActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val HOME = "https://www.google.com"
         private val MEDIA_EXT = listOf(".m3u8", ".mpd", ".mp4", ".mkv", ".m4v", ".mp3", ".aac", ".ts")
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"

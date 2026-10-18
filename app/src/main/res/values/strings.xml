@@ -628,4 +628,24 @@
     <string name="tgcover_kind_movie">Película</string>
     <string name="tgcover_kind_tv">Serie</string>
     <string name="tgcover_done">Carátula cambiada</string>
+    <string name="web_home_title">Socram Web</string>
+    <string name="web_home_search">🔍  Buscar o escribir una dirección</string>
+    <string name="web_favs_btn">⭐ Favoritos</string>
+    <string name="web_save_btn">☆ Guardar</string>
+    <string name="web_saved_btn">★ Guardado</string>
+    <string name="web_share_btn">↗ Compartir</string>
+    <string name="web_no_favs">Aún no hay favoritos: pulsa ☆ Guardar</string>
+    <string name="web_fav_add">Añadir favorito</string>
+    <string name="web_fav_edit">Editar favorito</string>
+    <string name="web_fav_name">Nombre</string>
+    <string name="web_fav_url">Dirección</string>
+    <string name="web_fav_edit_opt">✏ Editar</string>
+    <string name="web_fav_delete_opt">🗑 Borrar</string>
+    <string name="web_fav_removed">Quitado de favoritos</string>
+    <string name="web_home_set">⚙ Elegir página de inicio</string>
+    <string name="web_home_pick">Página de inicio</string>
+    <string name="web_home_grid">Cuadrícula de favoritos</string>
+    <string name="web_home_current">La página actual</string>
+    <string name="web_home_other">Otra dirección…</string>
+    <string name="web_home_saved">Página de inicio guardada</string>
 </resources>

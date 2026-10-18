@@ -1477,3 +1477,9 @@ En la ficha de un vídeo (o serie) de Telegram, toca la imagen o el botón «Cam
 
 ## Telegram: reconexión tras un rato sin usarlo
 Si Telegram se quedaba sin cargar tras un rato quieto (hasta reiniciar la app), ahora se avisa a TDLib del tipo de red cada vez que Android la cambia o la app vuelve a primer plano, y la reproducción directa despierta la conexión si no llegan datos.
+
+## Web: favoritos, atajos y página de inicio
+- Bajo la barra de direcciones hay una fila de atajos: **⭐ Favoritos** (despliega/oculta una tira con tus favoritos; mantener pulsado uno = editar o borrar), **☆/★ Guardar** (guarda o quita la página actual), **🏠 Inicio** y **↗ Compartir**.
+- La página de inicio por defecto es una **cuadrícula de favoritos** (con su icono) y un buscador, como en Brave o Chrome; el botón «+» añade un favorito a mano. La primera vez trae algunos de ejemplo.
+- Menú ⋮ → **Elegir página de inicio**: cuadrícula, Google, DuckDuckGo, la página actual o la dirección que quieras.
+- La barra de direcciones es ahora una píldora redondeada. Los favoritos siguen siendo los mismos marcadores de siempre (entran en la copia de seguridad).

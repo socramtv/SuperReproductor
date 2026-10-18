@@ -66,6 +66,10 @@
                 android:imeOptions="actionGo"
                 android:inputType="textUri"
                 android:maxLines="1"
+                android:background="@drawable/bg_web_url"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
+                android:layout_marginHorizontal="4dp"
                 android:selectAllOnFocus="true"
                 android:textColor="@color/on_background"
                 android:textColorHint="@color/on_surface_muted"
@@ -97,6 +101,91 @@
                 android:background="@drawable/bg_tg_star" />
         </LinearLayout>
 
+        <!-- Atajos bajo la barra de direcciones -->
+        <LinearLayout
+            android:id="@+id/webShortcuts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="4dp"
+            android:paddingBottom="6dp"
+            android:background="@color/surface_dark">
+            <TextView
+                android:id="@+id/webFavsBtn"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:gravity="center"
+                android:text="⭐ Favoritos"
+                android:textSize="13sp"
+                android:textColor="@color/on_background"
+                android:singleLine="true"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_web_chip" />
+            <TextView
+                android:id="@+id/webSaveBtn"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:gravity="center"
+                android:text="☆ Guardar"
+                android:textSize="13sp"
+                android:textColor="@color/on_background"
+                android:singleLine="true"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_web_chip" />
+            <TextView
+                android:id="@+id/webHomeBtn"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:gravity="center"
+                android:text="🏠 Inicio"
+                android:textSize="13sp"
+                android:textColor="@color/on_background"
+                android:singleLine="true"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_web_chip" />
+            <TextView
+                android:id="@+id/webShareBtn"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:gravity="center"
+                android:text="↗ Compartir"
+                android:textSize="13sp"
+                android:textColor="@color/on_background"
+                android:singleLine="true"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_web_chip" />
+        </LinearLayout>
+
+        <!-- Tira de favoritos (se muestra / oculta con el botón Favoritos) -->
+        <HorizontalScrollView
+            android:id="@+id/webFavScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:visibility="gone"
+            android:background="@color/surface_dark">
+
+            <LinearLayout
+                android:id="@+id/webFavStrip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="6dp"
+                android:paddingBottom="6dp" />
+        </HorizontalScrollView>
+
         <ProgressBar
             android:id="@+id/webProgress"
             style="?android:attr/progressBarStyleHorizontal"
@@ -105,11 +194,66 @@
             android:max="100"
             android:visibility="gone" />
 
-        <WebView
-            android:id="@+id/webView"
+        <FrameLayout
+            android:id="@+id/webBody"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1">
+
+            <WebView
+                android:id="@+id/webView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <!-- Página de inicio: cuadrícula de favoritos -->
+            <ScrollView
+                android:id="@+id/webHome"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/background_dark"
+                android:fillViewport="true"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="16dp"
+                    android:paddingTop="28dp"
+                    android:paddingBottom="24dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="@string/web_home_title"
+                        android:textColor="@color/primary"
+                        android:textSize="30sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/webHomeSearch"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="18dp"
+                        android:layout_marginBottom="22dp"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="18dp"
+                        android:text="@string/web_home_search"
+                        android:textColor="@color/on_surface_muted"
+                        android:textSize="15sp"
+                        android:focusable="true"
+                        android:clickable="true"
+                        android:background="@drawable/bg_web_chip" />
+
+                    <GridLayout
+                        android:id="@+id/webHomeGrid"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:columnCount="4" />
+                </LinearLayout>
+            </ScrollView>
+        </FrameLayout>
     </LinearLayout>
 
     <!-- Vídeo de la página a pantalla completa -->
