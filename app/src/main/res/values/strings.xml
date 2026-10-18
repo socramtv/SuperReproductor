@@ -648,4 +648,6 @@
     <string name="web_home_current">La página actual</string>
     <string name="web_home_other">Otra dirección…</string>
     <string name="web_home_saved">Página de inicio guardada</string>
+    <string name="web_cursor_opt">🖱 Cursor con el mando</string>
+    <string name="web_cursor_hint">Mando: flechas = mover el cursor (mantén para ir más rápido) · OK = clic · en el borde de arriba/abajo la página se desplaza · arriba del todo = atajos · Menú = opciones</string>
 </resources>

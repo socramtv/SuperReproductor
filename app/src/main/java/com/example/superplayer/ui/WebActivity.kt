@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -44,6 +45,7 @@ import java.net.URLEncoder
  */
 class WebActivity : AppCompatActivity() {
     private lateinit var binding: ActivityWebBinding
+    private var isTv = false
     private var customView: View? = null
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var desktop = false
@@ -192,6 +194,8 @@ class WebActivity : AppCompatActivity() {
         })
 
         updateNavButtons()
+        isTv = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+        if (isTv) setupTv()
         updateSaveButton()
         val start = intent?.data?.toString() ?: savedInstanceState?.getString("url")
         if (start.isNullOrBlank()) goHome() else load(start)
@@ -510,18 +514,22 @@ class WebActivity : AppCompatActivity() {
     private fun showHome() {
         binding.webFavScroll.visibility = View.GONE
         binding.webHome.visibility = View.VISIBLE
+        binding.webView.visibility = View.INVISIBLE // así el mando no puede enfocar el navegador oculto
         binding.webView.onPause()
         binding.webUrl.setText("")
         binding.webUrl.clearFocus()
         renderHome()
         updateSaveButton()
+        if (isTv) binding.webHome.post { binding.webHomeGrid.getChildAt(0)?.requestFocus() }
     }
 
     private fun hideHome() {
         if (!homeVisible()) return
         binding.webHome.visibility = View.GONE
+        binding.webView.visibility = View.VISIBLE
         binding.webView.onResume()
         updateSaveButton()
+        if (isTv) binding.webView.post { binding.webView.requestFocus() }
     }
 
     private fun tileColor(seed: String): Int {
@@ -690,7 +698,8 @@ class WebActivity : AppCompatActivity() {
         menu.menu.add(0, 5, 4, R.string.web_home)
         menu.menu.add(0, 6, 5, R.string.web_open_external)
         menu.menu.add(0, 8, 6, R.string.web_home_set)
-        menu.menu.add(0, 7, 7, R.string.web_clear)
+        if (isTv) menu.menu.add(0, 9, 8, R.string.web_cursor_opt).apply { isCheckable = true; isChecked = cursorEnabled() }
+        menu.menu.add(0, 7, 9, R.string.web_clear)
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> showBookmarks()
@@ -704,6 +713,10 @@ class WebActivity : AppCompatActivity() {
                 }
                 5 -> goHome()
                 8 -> chooseHomePage()
+                9 -> {
+                    prefs().edit().putBoolean("cursor", !cursorEnabled()).apply()
+                    if (cursorEnabled()) showCursor() else cursorView?.visibility = View.GONE
+                }
                 6 -> (if (homeVisible()) null else binding.webView.url)?.let { openUri(it) }
                 7 -> AlertDialog.Builder(this)
                     .setMessage(R.string.web_clear_confirm)
@@ -720,6 +733,206 @@ class WebActivity : AppCompatActivity() {
             true
         }
         menu.show()
+    }
+
+    // -----------------------------------------------------------------
+    // Mando de la tele: cursor que se mueve con las flechas
+    //  - Flechas: mueven el cursor (cuanto más tiempo se mantienen, más rápido).
+    //  - Cursor en el borde de arriba/abajo: la página se desplaza. Arriba del todo: salta a los atajos.
+    //  - OK: clic (mantener: pulsación larga). Canal +/-: página arriba/abajo.
+    //  - Rebobinar / Avanzar: atrás / adelante en el historial. Menú: abre el menú del navegador.
+    // En los atajos, la tira de favoritos y la página de inicio se navega con las flechas normales.
+    // -----------------------------------------------------------------
+
+    private class CursorView(context: Context) : View(context) {
+        private val d = context.resources.displayMetrics.density
+        private val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xAAFF6B4A.toInt()
+        }
+        private val ring = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 2.5f * d
+        }
+        private val dark = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF000000.toInt()
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 5f * d
+        }
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            val c = width / 2f
+            val r = c - 4f * d
+            canvas.drawCircle(c, c, r, dark)
+            canvas.drawCircle(c, c, r, fill)
+            canvas.drawCircle(c, c, r, ring)
+            canvas.drawCircle(c, c, 2.5f * d, ring)
+        }
+    }
+
+    private var cursorView: CursorView? = null
+    private var cursorX = 0f
+    private var cursorY = 0f
+    private var okDownAt = 0L
+    private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val fadeCursor = Runnable { cursorView?.animate()?.alpha(0.4f)?.setDuration(300)?.start() }
+
+    private fun cursorEnabled() = prefs().getBoolean("cursor", true)
+
+    private fun setupTv() {
+        val d = resources.displayMetrics.density
+        val size = (44 * d).toInt()
+        val cv = CursorView(this)
+        cv.visibility = View.GONE
+        cv.isFocusable = false
+        binding.webBody.addView(cv, android.widget.FrameLayout.LayoutParams(size, size))
+        cursorView = cv
+        val wv = binding.webView
+        wv.isFocusable = true
+        wv.isFocusableInTouchMode = true
+        wv.setOnFocusChangeListener { _, has ->
+            if (has && cursorEnabled()) showCursor() else cv.visibility = View.GONE
+        }
+        binding.webUrl.setOnClickListener {
+            (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                .showSoftInput(binding.webUrl, 0)
+        }
+        binding.webBody.post {
+            cursorX = binding.webBody.width / 2f
+            cursorY = binding.webBody.height / 2f
+            placeCursor()
+        }
+        if (!prefs().getBoolean("tvhint", false)) {
+            prefs().edit().putBoolean("tvhint", true).apply()
+            Toast.makeText(this, R.string.web_cursor_hint, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun placeCursor() {
+        val cv = cursorView ?: return
+        val w = binding.webBody.width.toFloat()
+        val h = binding.webBody.height.toFloat()
+        cursorX = cursorX.coerceIn(0f, maxOf(0f, w))
+        cursorY = cursorY.coerceIn(0f, maxOf(0f, h))
+        cv.translationX = cursorX - cv.width.coerceAtLeast(cv.layoutParams.width) / 2f
+        cv.translationY = cursorY - cv.height.coerceAtLeast(cv.layoutParams.height) / 2f
+    }
+
+    private fun showCursor() {
+        val cv = cursorView ?: return
+        cv.visibility = View.VISIBLE
+        cv.animate().cancel()
+        cv.alpha = 1f
+        placeCursor()
+        uiHandler.removeCallbacks(fadeCursor)
+        uiHandler.postDelayed(fadeCursor, 3500)
+    }
+
+    private fun scrollPage(dy: Int) {
+        binding.webView.scrollBy(0, dy)
+    }
+
+    private fun moveCursorKey(code: Int, repeat: Int) {
+        val d = resources.displayMetrics.density
+        val step = (12f + minOf(repeat, 25) * 3.2f) * d
+        val zone = 56f * d
+        val w = binding.webBody.width.toFloat()
+        val h = binding.webBody.height.toFloat()
+        when (code) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> cursorX -= step
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (cursorX >= w - 8f * d) binding.webView.scrollBy(step.toInt(), 0) else cursorX += step
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (cursorY >= h - zone) scrollPage((step * 1.6f).toInt()) else cursorY += step
+            }
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                if (cursorY <= zone) {
+                    if (binding.webView.scrollY > 0) scrollPage(-(step * 1.6f).toInt())
+                    else if (cursorY <= 10f * d) {
+                        leaveToBars()
+                        return
+                    } else cursorY -= step
+                } else cursorY -= step
+            }
+        }
+        if (code == KeyEvent.KEYCODE_DPAD_LEFT && cursorX <= 0f && binding.webView.scrollX > 0) binding.webView.scrollBy(-step.toInt(), 0)
+        showCursor()
+    }
+
+    /** Cursor en el borde de arriba y sin más página que subir: el foco pasa a los atajos, en la columna más cercana. */
+    private fun leaveToBars() {
+        val btns = listOf<View>(binding.webFavsBtn, binding.webSaveBtn, binding.webHomeBtn, binding.webShareBtn)
+        val w = binding.webBody.width.coerceAtLeast(1)
+        val i = (cursorX / w * btns.size).toInt().coerceIn(0, btns.size - 1)
+        btns[i].requestFocus()
+    }
+
+    private fun clickAtCursor(long: Boolean) {
+        val wv = binding.webView
+        val x = cursorX
+        val y = cursorY
+        val t = SystemClock.uptimeMillis()
+        val down = android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, x, y, 0)
+        down.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+        wv.dispatchTouchEvent(down)
+        down.recycle()
+        cursorView?.animate()?.scaleX(0.6f)?.scaleY(0.6f)?.setDuration(90)?.withEndAction {
+            cursorView?.animate()?.scaleX(1f)?.scaleY(1f)?.setDuration(120)?.start()
+        }?.start()
+        uiHandler.postDelayed({
+            val t2 = SystemClock.uptimeMillis()
+            val up = android.view.MotionEvent.obtain(t, t2, android.view.MotionEvent.ACTION_UP, x, y, 0)
+            up.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+            wv.dispatchTouchEvent(up)
+            up.recycle()
+        }, if (long) 700L else 60L)
+        showCursor()
+    }
+
+    private fun handleCursorKey(event: KeyEvent): Boolean {
+        val down = event.action == KeyEvent.ACTION_DOWN
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (down) moveCursorKey(event.keyCode, event.repeatCount)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (down) {
+                    if (event.repeatCount == 0) okDownAt = SystemClock.uptimeMillis()
+                } else {
+                    clickAtCursor(SystemClock.uptimeMillis() - okDownAt >= 650L)
+                }
+                return true
+            }
+            KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
+                if (down) scrollPage(-(binding.webView.height * 0.8f).toInt())
+                return true
+            }
+            KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                if (down) scrollPage((binding.webView.height * 0.8f).toInt())
+                return true
+            }
+            KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                if (down && binding.webView.canGoBack()) binding.webView.goBack()
+                return true
+            }
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                if (down && binding.webView.canGoForward()) binding.webView.goForward()
+                return true
+            }
+            KeyEvent.KEYCODE_MENU -> {
+                if (down) showMenu(binding.webMenu)
+                return true
+            }
+        }
+        return false
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (isTv && customView == null && !homeVisible() && cursorEnabled() &&
+            binding.webView.hasFocus() && handleCursorKey(event)
+        ) return true
+        return super.dispatchKeyEvent(event)
     }
 
     companion object {

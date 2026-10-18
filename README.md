@@ -1483,3 +1483,6 @@ Si Telegram se quedaba sin cargar tras un rato quieto (hasta reiniciar la app), 
 - La página de inicio por defecto es una **cuadrícula de favoritos** (con su icono) y un buscador, como en Brave o Chrome; el botón «+» añade un favorito a mano. La primera vez trae algunos de ejemplo.
 - Menú ⋮ → **Elegir página de inicio**: cuadrícula, Google, DuckDuckGo, la página actual o la dirección que quieras.
 - La barra de direcciones es ahora una píldora redondeada. Los favoritos siguen siendo los mismos marcadores de siempre (entran en la copia de seguridad).
+
+## Web en la tele: cursor con el mando
+En Android TV / Fire TV el navegador usa un cursor que se mueve con las flechas (más rápido cuanto más tiempo se mantienen). **OK** = clic (mantener = pulsación larga), **cursor en el borde de abajo/arriba** = desplaza la página, **arriba del todo** = salta a los atajos, **Canal +/−** = página arriba/abajo, **Rebobinar/Avanzar** = atrás/adelante, **Menú** = opciones. En atajos, favoritos y página de inicio se navega con las flechas normales (la cuadrícula coge el foco sola). Se puede desactivar en ⋮ → «Cursor con el mando».
