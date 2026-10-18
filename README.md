@@ -1502,3 +1502,6 @@ La cruceta ahora mueve el foco (flechas) y pulsa (OK) en cualquier pantalla de l
 
 ## Guía EPG: etiquetas de color
 Las guías pensadas para Kodi traen etiquetas dentro de los textos (`[COLOR teal]…[/COLOR]`, `[B]`, `[I]`, `[CR]`…). Ahora la sinopsis las muestra con su color, negrita y saltos de línea (en la ficha de la parrilla, en la barra del reproductor y en el mando del móvil), con los colores demasiado oscuros/claros ajustados para que se lean; en títulos, categorías y reparto se quitan. Las marcas como `[TP]` o `[16]` se dejan tal cual.
+
+### Póster de la guía en el reproductor
+El póster del programa va arriba a la derecha de la barra de información (junto al texto) y más metido hacia dentro, para que no quede detrás del borde del vídeo ni de la barra de navegación.
