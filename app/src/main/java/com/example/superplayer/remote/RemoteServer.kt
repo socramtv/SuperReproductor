@@ -10,6 +10,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.Handler
+import android.view.View
 import android.os.Looper
 import com.example.superplayer.model.Stream
 import com.example.superplayer.model.streamFromJson
@@ -72,6 +73,23 @@ object RemoteServer {
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /** Sigue qué pantalla de la app está al frente (se llama una vez desde la Application, antes de crear ninguna pantalla). */
+    @Synchronized
+    fun trackActivities(context: Context) {
+        if (callbacksRegistered) return
+        val app = context.applicationContext as? Application ?: return
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: Activity) { resumed = java.lang.ref.WeakReference(activity) }
+            override fun onActivityPaused(activity: Activity) { if (resumed?.get() === activity) resumed = null }
+            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
+            override fun onActivityStarted(activity: Activity) {}
+            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        })
+        callbacksRegistered = true
+    }
+
     fun isTv(context: Context): Boolean = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
     fun isEnabled(context: Context): Boolean = prefs(context).getBoolean("enabled", isTv(context))
@@ -116,18 +134,7 @@ object RemoteServer {
     fun ensureStarted(context: Context) {
         val app = context.applicationContext
         appContext = app
-        if (!callbacksRegistered && isEnabled(app)) {
-            (app as? Application)?.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-                override fun onActivityResumed(activity: Activity) { resumed = java.lang.ref.WeakReference(activity) }
-                override fun onActivityPaused(activity: Activity) { if (resumed?.get() === activity) resumed = null }
-                override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
-                override fun onActivityStarted(activity: Activity) {}
-                override fun onActivityStopped(activity: Activity) {}
-                override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
-                override fun onActivityDestroyed(activity: Activity) {}
-            })
-            callbacksRegistered = true
-        }
+        trackActivities(app)
         if (server != null || !isEnabled(app)) return
         val socket = try {
             try {
@@ -369,10 +376,35 @@ object RemoteServer {
             if (code == android.view.KeyEvent.KEYCODE_BACK) {
                 (a as? androidx.activity.ComponentActivity)?.onBackPressedDispatcher?.onBackPressed()
                     ?: a.finish()
-            } else {
-                val t = android.os.SystemClock.uptimeMillis()
-                a.dispatchKeyEvent(android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_DOWN, code, 0))
-                a.dispatchKeyEvent(android.view.KeyEvent(t, t + 40, android.view.KeyEvent.ACTION_UP, code, 0))
+                return@onMain true
+            }
+            val t = android.os.SystemClock.uptimeMillis()
+            val down = a.dispatchKeyEvent(android.view.KeyEvent(t, t, android.view.KeyEvent.ACTION_DOWN, code, 0))
+            val up = a.dispatchKeyEvent(android.view.KeyEvent(t, t + 40, android.view.KeyEvent.ACTION_UP, code, 0))
+            if (!down && !up) {
+                // La pantalla no usa esa tecla por su cuenta (en Android, mover el foco con las flechas lo hace el sistema
+                // y no la pantalla): se hace aquí a mano.
+                val dir = when (code) {
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> View.FOCUS_LEFT
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> View.FOCUS_RIGHT
+                    else -> 0
+                }
+                val root = a.window.decorView
+                val cur = a.currentFocus ?: root.findFocus()
+                if (dir != 0) {
+                    if (cur == null) {
+                        root.requestFocus(View.FOCUS_DOWN)
+                    } else {
+                        val next = cur.focusSearch(dir)
+                        if (next != null && next !== cur) next.requestFocus(dir)
+                    }
+                } else if (code == android.view.KeyEvent.KEYCODE_DPAD_CENTER) {
+                    if (cur == null) root.requestFocus(View.FOCUS_DOWN) else cur.performClick()
+                } else if (code == android.view.KeyEvent.KEYCODE_MENU) {
+                    a.openOptionsMenu()
+                }
             }
             true
         } ?: false

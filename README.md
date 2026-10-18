@@ -1492,3 +1492,6 @@ En Android TV / Fire TV el navegador usa un cursor que se mueve con las flechas 
 - **Cruceta** (▲ ◀ OK ▶ ▼ + Atrás, Menú, Inicio) para manejar con el móvil los menús de la app en la tele; **⌨ Escribir** manda texto al campo que tenga el foco en la tele (buscadores, direcciones…).
 - Mantener pulsados canal ±, volumen ±, flechas y saltos de 30 s / 5 min **repite** la orden.
 - **Volumen y silencio arreglados**: si la tele/caja tiene volumen fijo o no responde al del sistema, se usa el volumen de la propia app (se avisa en pantalla). El volumen actual se ve en el móvil.
+
+### Cruceta del mando en todas las pantallas
+La cruceta ahora mueve el foco (flechas) y pulsa (OK) en cualquier pantalla de la app abierta en la tele, no solo en el reproductor: si la pantalla no usa la tecla por sí misma, se mueve el foco a mano. La app sigue qué pantalla está al frente desde que arranca.

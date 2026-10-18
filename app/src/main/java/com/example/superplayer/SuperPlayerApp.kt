@@ -18,6 +18,9 @@ class SuperPlayerApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // El control remoto necesita saber qué pantalla está al frente para moverse por ella con la cruceta.
+        com.example.superplayer.remote.RemoteServer.trackActivities(this)
+
         // Modo claro/oscuro (ver MainActivity.toggleTheme y
         // Storage.kt/AppPrefs.isDarkMode): hay que fijarlo aquí, antes de
         // crear ninguna pantalla, para que la app arranque ya en el modo
