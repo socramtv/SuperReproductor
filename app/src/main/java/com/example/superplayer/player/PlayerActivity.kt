@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Rational
 import android.view.GestureDetector
@@ -885,6 +886,7 @@ class PlayerActivity : AppCompatActivity() {
     // -----------------------------------------------------------------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) lastUserInputAt = SystemClock.elapsedRealtime()
         // Tecla GUÍA del mando, o MENÚ (el botón de las tres rayas del mando
         // de Fire TV): abre/cierra la mini-guía.
         if ((event.keyCode == KeyEvent.KEYCODE_GUIDE || event.keyCode == KeyEvent.KEYCODE_MENU) && channelList.size > 1) {
@@ -1068,6 +1070,7 @@ class PlayerActivity : AppCompatActivity() {
         super.onStart()
         launchingMultiView = false
         if (currentStream == null) return // canal no válido, o ya redirigido a una app externa (ver onCreate)
+        activeInstance = this
         com.example.superplayer.remote.RemoteServer.player = remoteCommands
         com.example.superplayer.remote.RemoteServer.ensureStarted(applicationContext)
         scoreHandler.removeCallbacks(scoreRunnable)
@@ -1128,9 +1131,15 @@ class PlayerActivity : AppCompatActivity() {
         cancelStuckControlsWatchdog()
         autoReconnectAttempts = 0
         saveContinueWatching()
+        cancelAutoPlayGuard()
         val ctrl = controller
+        val otherActive = activeInstance.let { it != null && it !== this }
+        if (activeInstance === this) activeInstance = null
         if (ctrl != null) {
-            if (launchingMultiView) {
+            if (otherActive) {
+                // Otra pantalla de reproducción ya está al frente y usa el mismo reproductor: no se toca
+                // (si no, esta, al detenerse tarde, pausaría el canal que acaba de abrirse).
+            } else if (launchingMultiView) {
                 // Se abre la multivista (dos reproductores propios): este se pausa para que no suenen dos
                 // cosas a la vez, y se reanuda solo al volver (ver onControllerConnected).
                 ctrl.pause()
@@ -1178,6 +1187,8 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        cancelAutoPlayGuard()
+        if (activeInstance === this) activeInstance = null
         tsHandler.removeCallbacks(tsUiRunnable)
         nextEpisodeHandler.removeCallbacks(nextEpisodeTick)
         if (isFinishing) stopTimeShift()
@@ -1399,6 +1410,46 @@ class PlayerActivity : AppCompatActivity() {
         ctrl.playWhenReady = true
         ctrl.prepare()
         startStuckControlsWatchdog()
+        startAutoPlayGuard()
+    }
+
+    // -----------------------------------------------------------------
+    // Red de seguridad de arranque: al abrir un canal debe sonar solo. Si en los primeros
+    // segundos el reproductor queda en pausa (o parado) sin que el usuario haya tocado nada
+    // (p. ej. porque otra instancia lo pausó, o un cambio de estado perdido), se le da a play.
+    // -----------------------------------------------------------------
+    private var lastUserInputAt = 0L
+    private val autoPlayHandler = Handler(Looper.getMainLooper())
+    private var autoPlayRunnable: Runnable? = null
+
+    private fun cancelAutoPlayGuard() {
+        autoPlayRunnable?.let { autoPlayHandler.removeCallbacks(it) }
+        autoPlayRunnable = null
+    }
+
+    private fun startAutoPlayGuard() {
+        cancelAutoPlayGuard()
+        val startedAt = SystemClock.elapsedRealtime()
+        val r = object : Runnable {
+            override fun run() {
+                val ctrl = controller ?: return
+                if (ctrl.isPlaying || isFinishing || isDestroyed) return
+                val elapsed = SystemClock.elapsedRealtime() - startedAt
+                val userTouched = lastUserInputAt > startedAt
+                if (!userTouched && !isCastingRemote && pendingReconnectRunnable == null && ctrl.mediaItemCount > 0) {
+                    if (ctrl.playbackState == Player.STATE_IDLE) ctrl.prepare()
+                    if (!ctrl.playWhenReady && ctrl.playbackState != Player.STATE_ENDED) ctrl.play()
+                }
+                if (elapsed < 12_000L && !userTouched) autoPlayHandler.postDelayed(this, 1000L)
+            }
+        }
+        autoPlayRunnable = r
+        autoPlayHandler.postDelayed(r, 1500L)
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_DOWN) lastUserInputAt = SystemClock.elapsedRealtime()
+        return super.dispatchTouchEvent(ev)
     }
 
     // -----------------------------------------------------------------
@@ -1976,6 +2027,9 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     companion object {
+        /** Pantalla de reproducción que está al frente: una instancia vieja que se detiene tarde no debe pausar el canal nuevo. */
+        @Volatile private var activeInstance: PlayerActivity? = null
+
         var pendingStream: Stream? = null
 
         // Lista de canales de la categoría/favoritos/búsqueda desde la que

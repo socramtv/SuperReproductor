@@ -1468,3 +1468,6 @@ Ir al chat desde la búsqueda de Telegram: al tocar (o mantener pulsado) un resu
 - En la selección múltiple de Telegram, **«Guardar en el móvil»** descarga los archivos elegidos uno tras otro y los copia a `Descargas/Socram TV` (Android 10+; en versiones anteriores, a la carpeta de la app).
 
 La misma información extra del programa (episodio y subtítulo en el título, `año | [edad] | ★★★★☆`, categoría y sinopsis, país y reparto) sale también en la **parrilla del EPG**: al abrir los detalles de un programa (se hace scroll si es largo) y, el año/edad/estrellas, en la barra del programa enfocado con el mando. Funciones comunes: `EpgRepository.metaLine` y `fullTitle`.
+
+## Arranque automático del reproductor más fiable
+Al abrir un canal, una red de seguridad vigila los primeros segundos: si el reproductor queda en pausa o parado sin que hayas tocado nada, le da a play solo. Además, una pantalla de reproducción antigua que se cierra tarde ya no pausa el canal recién abierto.
