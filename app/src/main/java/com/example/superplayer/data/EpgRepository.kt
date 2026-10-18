@@ -399,15 +399,17 @@ object EpgRepository {
                     val text = parser.text?.trim()
                     if (!text.isNullOrBlank()) {
                         if (inTitle && title == null) {
-                            title = text
+                            title = EpgFormat.strip(text)
                         } else when (cap) {
-                            "sub" -> subTitle = text.take(120)
-                            "desc" -> desc = text.take(400)
-                            "cat" -> cats.add(text.take(40).intern())
+                            // Las etiquetas de formato ([COLOR…], [B]…) se quitan de todo menos de la sinopsis,
+                            // que las conserva para pintarlas con color (ver EpgFormat).
+                            "sub" -> subTitle = EpgFormat.strip(text).take(120)
+                            "desc" -> desc = text.take(700)
+                            "cat" -> cats.add(EpgFormat.strip(text).take(40).intern())
                             "date" -> year = RE_YEAR.find(text)?.value
-                            "country" -> country = text.take(40).intern()
-                            "actor" -> actors.add(text.take(40))
-                            "rating" -> rating = text.take(12).intern()
+                            "country" -> country = EpgFormat.strip(text).take(40).intern()
+                            "actor" -> actors.add(EpgFormat.strip(text).take(40))
+                            "rating" -> rating = EpgFormat.strip(text).take(12).intern()
                             "star" -> stars = parseStars(text)
                             "ep" -> episode = parseEpisodeNum(text, epSystem)
                         }

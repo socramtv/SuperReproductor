@@ -45,6 +45,7 @@ import com.example.superplayer.R
 import com.example.superplayer.ui.showTimeShiftDialog
 import com.example.superplayer.data.AppPrefs
 import com.example.superplayer.data.ContinueWatching
+import com.example.superplayer.data.EpgFormat
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.databinding.ActivityPlayerBinding
 import com.example.superplayer.model.Stream
@@ -1739,7 +1740,7 @@ class PlayerActivity : AppCompatActivity() {
         binding.videoNowPlayingMeta.text = meta.joinToString(" | ")
         binding.videoNowPlayingMeta.visibility = if (meta.isEmpty()) View.GONE else View.VISIBLE
         val body = listOfNotNull(det?.category, det?.desc).joinToString(" · ")
-        binding.videoNowPlayingDesc.text = body
+        binding.videoNowPlayingDesc.text = EpgFormat.spanned(body, true) // la barra va sobre vídeo oscuro
         binding.videoNowPlayingDesc.visibility = if (body.isEmpty()) View.GONE else View.VISIBLE
         val extraLine = listOfNotNull(
             det?.country?.let { getString(R.string.epg_country, it) },

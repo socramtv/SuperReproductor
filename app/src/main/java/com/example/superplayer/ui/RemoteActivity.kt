@@ -27,6 +27,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.example.superplayer.R
+import com.example.superplayer.data.EpgFormat
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.model.Stream
 import com.example.superplayer.model.toJson
@@ -370,7 +371,9 @@ class RemoteActivity : AppCompatActivity() {
                 val extra = listOf(epg.optString("desc"),
                     epg.optString("cast").takeIf { it.isNotBlank() }?.let { getString(R.string.cine_cast) + ": " + it }.orEmpty())
                     .filter { it.isNotBlank() }.joinToString("\n")
-                bind(cardDesc, extra)
+                cardDesc.text = EpgFormat.spanned(extra, (resources.configuration.uiMode and
+                    android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES)
+                cardDesc.visibility = if (extra.isBlank()) View.GONE else View.VISIBLE
                 val start = epg.optLong("start")
                 val stop = epg.optLong("stop")
                 val tvNow = player.optLong("tvNow", System.currentTimeMillis())

@@ -1499,3 +1499,6 @@ La cruceta ahora mueve el foco (flechas) y pulsa (OK) en cualquier pantalla de l
 ### Arranque más rápido y cruceta en diálogos
 - Mando del móvil: la cruceta, OK, Atrás y «Escribir» ahora van a la ventana que tiene el foco (por ejemplo la ficha de una película en Telegram) y no a la pantalla que queda debajo.
 - Arranque: las tareas de inicio (alarmas, goles, «Continuar viendo», restos de pausa en directo) se hacen en segundo plano, y la guía EPG solo guarda sinopsis/reparto de los programas cercanos (−3 h / +30 h) con prioridad baja, para gastar menos memoria y no frenar la apertura.
+
+## Guía EPG: etiquetas de color
+Las guías pensadas para Kodi traen etiquetas dentro de los textos (`[COLOR teal]…[/COLOR]`, `[B]`, `[I]`, `[CR]`…). Ahora la sinopsis las muestra con su color, negrita y saltos de línea (en la ficha de la parrilla, en la barra del reproductor y en el mando del móvil), con los colores demasiado oscuros/claros ajustados para que se lean; en títulos, categorías y reparto se quitan. Las marcas como `[TP]` o `[16]` se dejan tal cual.

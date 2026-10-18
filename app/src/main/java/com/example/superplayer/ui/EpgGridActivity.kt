@@ -19,6 +19,7 @@ import coil.load
 import com.example.superplayer.R
 import com.example.superplayer.sports.MatchCache
 import com.example.superplayer.sports.MatchFeed
+import com.example.superplayer.data.EpgFormat
 import com.example.superplayer.data.EpgRepository
 import com.example.superplayer.data.FavoritesStore
 import com.example.superplayer.databinding.ActivityEpgGridBinding
@@ -384,6 +385,9 @@ class EpgGridActivity : AppCompatActivity() {
      * <icon> para ese programa (ver EpgRepository.parseXmlTv)- su póster.
      * Las celdas vacías (sin programa) no llaman a esto.
      */
+    private fun isNightTheme(): Boolean =
+        (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+
     private fun showProgrammeDetails(stream: Stream, cell: EpgGridMath.Cell) {
         val entry = cell.entry ?: return
         val density = resources.displayMetrics.density
@@ -435,7 +439,7 @@ class EpgGridActivity : AppCompatActivity() {
         val body = listOfNotNull(det?.category, det?.desc).joinToString(" · ")
         if (body.isNotEmpty()) {
             container.addView(TextView(this).apply {
-                text = body
+                text = EpgFormat.spanned(body, isNightTheme())
                 textSize = 14f
                 setPadding(0, (8 * density).toInt(), 0, 0)
                 setTextColor(ContextCompat.getColor(this@EpgGridActivity, R.color.on_background))
