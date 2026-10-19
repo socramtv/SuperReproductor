@@ -285,7 +285,7 @@ class MainActivity : AppCompatActivity() {
         for ((slot, button, label) in slots) {
             button.setOnClickListener {
                 dismissHome()
-                val section = when (slot) { 1 -> com.example.superplayer.data.AccessControl.S_TV; 2 -> com.example.superplayer.data.AccessControl.S_LIST2; 4 -> com.example.superplayer.data.AccessControl.S_TDT; 5 -> com.example.superplayer.data.AccessControl.S_RADIO; else -> null }
+                val section = when (slot) { 1 -> com.example.superplayer.data.AccessControl.S_TV; 2 -> com.example.superplayer.data.AccessControl.S_LIST2; 3 -> com.example.superplayer.data.AccessControl.S_CINE; 4 -> com.example.superplayer.data.AccessControl.S_TDT; 5 -> com.example.superplayer.data.AccessControl.S_RADIO; else -> null }
                 if (section != null && com.example.superplayer.data.AccessControl.isLocked(this, section)) {
                     com.example.superplayer.data.AccessControl.require(this, section) { button.performClick() }
                     return@setOnClickListener

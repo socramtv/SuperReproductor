@@ -1533,3 +1533,4 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 - **Dos PIN** en el archivo: `pin_hash` (acceso a los apartados bloqueados) y `master_hash` (el maestro: también abre el menú ⋮ > Control de acceso, único sitio donde se cambia la URL o se fuerza la actualización). Ambos son `sha256(salt+pin)` (o `pin` / `master_pin` en claro). El PIN maestro vale también para entrar en los apartados.
 - Si el archivo no define PIN maestro, nadie puede gestionar el control desde la app; el menú solo ofrece el generador del archivo (que no cambia nada). Para generar el archivo con los dos PIN: menú ⋮ > Control de acceso > Crear el archivo de acceso.
 - El menú de gestión del control de acceso lista los nombres válidos para `locked`: tv, lista2, cine, tdt, radio, nowlive, epg, telegram, web, remote, settings (o `all`).
+- Cine: además de la pantalla, el propio botón «Cine 🍿» comprueba el PIN antes de cargar nada.
