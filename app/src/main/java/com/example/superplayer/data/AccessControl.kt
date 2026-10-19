@@ -212,19 +212,35 @@ object AccessControl {
             setSingleLine(true)
             setPadding(dp(a, 20), dp(a, 16), dp(a, 20), dp(a, 8))
         }
-        var done = false
         val dialog = AlertDialog.Builder(a)
             .setTitle(R.string.access_title)
             .setMessage(if (master) R.string.access_enter_master else R.string.access_enter_pin)
             .setView(input)
             .setCancelable(false)
             .setPositiveButton(android.R.string.ok, null)
-            .setNegativeButton(android.R.string.cancel) { _, _ -> done = true; onCancel() }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> onCancel() }
             .create()
         dialog.setOnShowListener {
             input.requestFocus()
             dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val okBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            okBtn.setOnClickListener {
+                // Antes de comprobar el PIN se baja el archivo otra vez (si hace más de unos segundos), para que un
+                // PIN cambiado en GitHub valga al momento y el antiguo deje de valer.
+                okBtn.isEnabled = false
+                val fresh = System.currentTimeMillis() - lastTry > 15_000L
+                refreshAsync(a, force = fresh) {
+                    okBtn.isEnabled = true
+                    if (!a.isFinishing && !a.isDestroyed && dialog.isShowing) attempt(a, dialog, input, master, onOk, onCancel)
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun attempt(a: Activity, dialog: AlertDialog, input: EditText, master: Boolean, onOk: () -> Unit, onCancel: () -> Unit) {
+        run {
+            run {
                 val cfg = config(a)
                 val level = verify(a, input.text.toString().trim())
                 if (level >= (if (master) 2 else 1)) {
@@ -232,7 +248,6 @@ object AccessControl {
                     val until = System.currentTimeMillis() + (cfg?.unlockMinutes ?: 10) * 60_000L
                     unlockedUntil = until
                     if (level == 2) masterUntil = until
-                    done = true
                     dialog.dismiss()
                     onOk()
                 } else {
@@ -241,7 +256,6 @@ object AccessControl {
                     if (failures >= 5) {
                         failures = 0
                         lockedOutUntil = System.currentTimeMillis() + 30_000L
-                        done = true
                         dialog.dismiss()
                         Toast.makeText(a, R.string.access_too_many, Toast.LENGTH_LONG).show()
                         onCancel()
@@ -251,7 +265,6 @@ object AccessControl {
                 }
             }
         }
-        dialog.show()
     }
 
     private fun blockedDialog(a: Activity, reason: String, onClose: () -> Unit, onUnblocked: () -> Unit) {
