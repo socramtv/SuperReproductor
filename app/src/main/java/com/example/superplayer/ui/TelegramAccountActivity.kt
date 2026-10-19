@@ -44,6 +44,7 @@ import com.example.superplayer.telegram.TelegramAccountPrefs
 import com.example.superplayer.telegram.TgAccountBackend
 import com.example.superplayer.telegram.TgAuthState
 import com.example.superplayer.telegram.TgStreamServer
+import com.example.superplayer.telegram.MusicArchive
 import com.example.superplayer.telegram.RarVideo
 import com.example.superplayer.telegram.RarVolumes
 import com.example.superplayer.telegram.TgChat
@@ -3144,9 +3145,14 @@ class TelegramAccountActivity : AppCompatActivity() {
                 actions.add { loadPlaylistFile(m) { data -> TelegramImport.openInMain(this, data) } }
                 labels.add(getString(R.string.tg_open_playlist))
                 actions.add { openPlaylist(m) }
+            } else if (m.kind == "document" && MusicArchive.isZip(m.fileName) && m.size > 0) {
+                labels.add(getString(R.string.music_open))
+                actions.add { openMusicAlbum(m) }
             } else if (m.kind == "document" && RarVolumes.isRar(m.fileName) && m.size > 0) {
                 labels.add(getString(R.string.tgrar_play))
                 actions.add { playRar(m) }
+                labels.add(getString(R.string.music_open))
+                actions.add { openMusicAlbum(m) }
             } else if (m.kind != "document" || looksLikeMedia(m)) {
                 if (m.size > 0) {
                     labels.add(getString(R.string.tgacc_stream_play))
@@ -3419,7 +3425,9 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val v = video
                 if (v == null) {
                     AlertDialog.Builder(this).setMessage(error ?: getString(R.string.tgrar_err_read))
-                        .setPositiveButton(android.R.string.ok, null).show()
+                        .setPositiveButton(android.R.string.ok, null)
+                        .setNeutralButton(R.string.music_open) { _, _ -> openMusicAlbum(m) }
+                        .show()
                     return@runOnUiThread
                 }
                 val appCtx = applicationContext
@@ -3431,6 +3439,55 @@ class TelegramAccountActivity : AppCompatActivity() {
                 open(Stream(name = base, type = "MP4", url = url, icon = null, category = "Telegram"))
             }
         }.start()
+    }
+
+    /**
+     * Álbum de música en un ZIP (o RAR sin comprimir): descarga el archivo, saca las pistas a la caché
+     * y abre la pantalla de música. Si ya se abrió antes, entra directo.
+     */
+    private fun openMusicAlbum(m: TgMessage) {
+        val root = java.io.File(cacheDir, "tgmusic")
+        val dir = java.io.File(root, "${m.chatId}_${m.messageId}")
+        if (MusicArchive.cached(dir) != null) {
+            dir.setLastModified(System.currentTimeMillis())
+            startActivity(MusicPlayerActivity.intent(this, dir))
+            return
+        }
+        val albumName = (m.fileName ?: "Álbum").substringBeforeLast('.').replace('_', ' ')
+        download(m) { path ->
+            var cancelled = false
+            val dialog = AlertDialog.Builder(this)
+                .setTitle(R.string.music_preparing)
+                .setMessage("")
+                .setCancelable(false)
+                .setNegativeButton(android.R.string.cancel) { _, _ -> cancelled = true }
+                .show()
+            Thread {
+                val res = MusicArchive.extract(java.io.File(path), dir, albumName, { d, t ->
+                    runOnUiThread { dialog.setMessage(getString(R.string.music_extracting, d, t)) }
+                }, { cancelled })
+                runOnUiThread {
+                    dialog.dismiss()
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    when (res) {
+                        is MusicArchive.Result.Ok -> {
+                            MusicArchive.prune(root, 5)
+                            startActivity(MusicPlayerActivity.intent(this, dir))
+                        }
+                        is MusicArchive.Result.Fail -> if (res.code != "cancel") {
+                            val msg = when (res.code) {
+                                "encrypted" -> R.string.music_err_encrypted
+                                "compressed" -> R.string.music_err_compressed
+                                "multipart" -> R.string.music_err_multipart
+                                "nomusic" -> R.string.music_err_nomusic
+                                else -> R.string.music_err_read
+                            }
+                            AlertDialog.Builder(this).setMessage(msg).setPositiveButton(android.R.string.ok, null).show()
+                        }
+                    }
+                }
+            }.start()
+        }
     }
 
     private fun downloadAndPlay(m: TgMessage) {

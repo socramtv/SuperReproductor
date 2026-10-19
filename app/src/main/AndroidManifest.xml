@@ -237,6 +237,11 @@
             (notificación / lock screen). PlayerActivity solo controla esto
             a través de un MediaController; el ExoPlayer real vive aquí.
         -->
+        <activity
+            android:name=".ui.MusicPlayerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode" />
+
         <service
             android:name=".player.PlaybackService"
             android:exported="true"

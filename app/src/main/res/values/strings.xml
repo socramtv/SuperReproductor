@@ -667,4 +667,19 @@
     <string name="remote_vol_app">🔊 Volumen de la app %1$d %% (la tele no deja cambiar el suyo)</string>
     <string name="remote_minutes_left">quedan %1$d min</string>
     <string name="remote_next_programs">A continuación</string>
+    <string name="music_open">🎵 Abrir como álbum de música</string>
+    <string name="music_preparing">Preparando el álbum…</string>
+    <string name="music_extracting">Sacando las pistas… %1$d / %2$d</string>
+    <string name="music_err_open">No se pudo abrir el álbum</string>
+    <string name="music_err_read">No se pudo leer el archivo comprimido.</string>
+    <string name="music_err_encrypted">El archivo tiene contraseña: no se puede abrir.</string>
+    <string name="music_err_compressed">Este RAR está comprimido; solo se pueden abrir RAR sin compresión (modo «almacenar») o ZIP.</string>
+    <string name="music_err_multipart">Este RAR viene en varias partes; solo se admite en un único archivo.</string>
+    <string name="music_err_nomusic">No hay pistas de música dentro del archivo.</string>
+    <string name="music_tracks_count">%1$d pistas</string>
+    <string name="music_track_of">Pista %1$d de %2$d · %3$s</string>
+    <string name="music_sleep">Temporizador</string>
+    <string name="music_sleep_off">Desactivado</string>
+    <string name="music_sleep_min">%1$d minutos</string>
+    <string name="music_sleep_set">La música se pausará en %1$d minutos</string>
 </resources>

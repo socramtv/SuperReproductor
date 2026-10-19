@@ -1505,3 +1505,9 @@ Las guías pensadas para Kodi traen etiquetas dentro de los textos (`[COLOR teal
 
 ### Póster de la guía en el reproductor
 El póster del programa va arriba a la derecha de la barra de información (junto al texto) y más metido hacia dentro, para que no quede detrás del borde del vídeo ni de la barra de navegación.
+
+## Álbumes de música desde Telegram (ZIP / RAR)
+- En un chat, al tocar un `.zip` o `.rar` con canciones sale **🎵 Abrir como álbum de música**: se descarga el archivo, se sacan las pistas (mp3, flac, m4a, ogg, wav…) y la portada (cover/folder/front o la primera imagen) a la caché, y se abre una pantalla de música propia (`MusicPlayerActivity`).
+- La pantalla tiene portada, título de pista, barra de progreso, anterior/siguiente, ±10 s, aleatorio, repetir (todo/una), velocidad (0,75x–2x), temporizador de apagado y lista de pistas. Suena por `PlaybackService` (sigue con la pantalla apagada y con notificación).
+- Pistas ordenadas de forma natural (2 antes que 10). Se guardan los 5 últimos álbumes en caché: reabrirlos es instantáneo.
+- Límites: ZIP normal, y RAR de un solo archivo **sin comprimir** (modo «almacenar»); sin contraseña. Si un RAR de vídeo no tiene vídeo, el aviso ofrece abrirlo como álbum. Código en `telegram/MusicArchive.kt`.
