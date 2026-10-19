@@ -53,6 +53,9 @@ object AccessControl {
     private const val K_URL = "url"
     private const val K_JSON = "json"
     private const val K_OK_AT = "ok_at"
+    private const val K_UNL = "unlocked_until"
+    private const val K_MST = "master_until"
+    private const val K_FP = "unlock_fp"
     private const val MIN_REFRESH_MS = 2 * 60 * 1000L
 
     private val main = Handler(Looper.getMainLooper())
@@ -98,6 +101,30 @@ object AccessControl {
         null
     }
 
+    private var unlockLoaded = false
+
+    /** Huella del PIN/bloqueos actuales: un desbloqueo guardado solo vale mientras no cambie el archivo. */
+    private fun fingerprint(c: Context): String {
+        val cfg = config(c) ?: return ""
+        return sha256(cfg.salt + "|" + cfg.pinHash + "|" + cfg.pinPlain + "|" + cfg.masterHash + "|" + cfg.masterPlain)
+    }
+
+    /** El desbloqueo sobrevive a cerrar la app: se recupera de las preferencias si el PIN no ha cambiado. */
+    private fun loadUnlock(c: Context) {
+        if (unlockLoaded) return
+        unlockLoaded = true
+        val p = prefs(c)
+        val fp = fingerprint(c)
+        if (fp.isNotEmpty() && p.getString(K_FP, "") == fp) {
+            unlockedUntil = p.getLong(K_UNL, 0L)
+            masterUntil = p.getLong(K_MST, 0L)
+        }
+    }
+
+    private fun saveUnlock(c: Context) {
+        prefs(c).edit().putString(K_FP, fingerprint(c)).putLong(K_UNL, unlockedUntil).putLong(K_MST, masterUntil).apply()
+    }
+
     private fun config(c: Context): Config? = prefs(c).getString(K_JSON, null)?.let { parse(it) }
 
     fun sha256(text: String): String =
@@ -123,6 +150,7 @@ object AccessControl {
         if (blockReason(c) != null) return true
         val cfg = config(c) ?: return true
         if (!cfg.enabled) return false
+        loadUnlock(c)
         if (System.currentTimeMillis() < unlockedUntil) return false
         return "all" in cfg.locked || section in cfg.locked
     }
@@ -174,7 +202,7 @@ object AccessControl {
         val p = prefs(c)
         val old = p.getString(K_JSON, null)?.let { parse(it) }
         // Si cambió el PIN o la lista de bloqueos, hay que volver a pedirlo.
-        if (old == null || old.pinHash != cfg.pinHash || old.pinPlain != cfg.pinPlain || old.masterHash != cfg.masterHash || old.masterPlain != cfg.masterPlain || old.locked != cfg.locked || old.salt != cfg.salt) { unlockedUntil = 0L; masterUntil = 0L }
+        if (old == null || old.pinHash != cfg.pinHash || old.pinPlain != cfg.pinPlain || old.masterHash != cfg.masterHash || old.masterPlain != cfg.masterPlain || old.locked != cfg.locked || old.salt != cfg.salt) { unlockedUntil = 0L; masterUntil = 0L; p.edit().remove(K_UNL).remove(K_MST).remove(K_FP).apply() }
         p.edit().putString(K_JSON, text).putLong(K_OK_AT, System.currentTimeMillis()).apply()
         return true
     }
@@ -248,6 +276,7 @@ object AccessControl {
                     val until = System.currentTimeMillis() + (cfg?.unlockMinutes ?: 10) * 60_000L
                     unlockedUntil = until
                     if (level == 2) masterUntil = until
+                    saveUnlock(a)
                     dialog.dismiss()
                     onOk()
                 } else {
@@ -362,6 +391,7 @@ object AccessControl {
             makeFileDialog(a)
             return
         }
+        loadUnlock(a)
         if (System.currentTimeMillis() < masterUntil) manageDialog(a)
         else pinDialog(a, onOk = { manageDialog(a) }, onCancel = { }, master = true)
     }

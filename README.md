@@ -1535,3 +1535,4 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 - El menú de gestión del control de acceso lista los nombres válidos para `locked`: tv, lista2, cine, tdt, radio, nowlive, epg, telegram, web, remote, settings (o `all`).
 - Cine: además de la pantalla, el propio botón «Cine 🍿» comprueba el PIN antes de cargar nada.
 - Al pulsar OK en el diálogo de PIN, la app vuelve a bajar `acceso.json` (si hace más de 15 s de la última vez) y comprueba el PIN contra la copia recién bajada: un PIN cambiado en GitHub deja de valer el antiguo en cuanto GitHub «raw» sirve el archivo nuevo (puede tardar unos minutos). Sin conexión se usa la última copia.
+- El desbloqueo con PIN ahora se guarda (con una huella del PIN del archivo): cerrar y volver a abrir la app no lo pierde mientras no pase `unlock_minutes` ni cambies los PIN o la lista `locked` en el archivo.
