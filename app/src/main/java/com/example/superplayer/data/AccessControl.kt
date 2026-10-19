@@ -46,6 +46,9 @@ object AccessControl {
     const val S_NOWLIVE = "nowlive"
     const val S_EPG = "epg"
 
+    /** Nombres válidos para la lista "locked" del archivo (los que se ven en el menú de gestión). */
+    val ALL_SECTIONS = listOf(S_TV, S_LIST2, S_CINE, S_TDT, S_RADIO, S_NOWLIVE, S_EPG, S_TELEGRAM, S_WEB, S_REMOTE, S_SETTINGS)
+
     private const val PREFS = "access_ctl"
     private const val K_URL = "url"
     private const val K_JSON = "json"
@@ -373,6 +376,7 @@ object AccessControl {
             }
         }
         items.add(a.getString(R.string.access_make_file)); acts.add { makeFileDialog(a) }
+        status.append('\n').append(a.getString(R.string.access_names_help, ALL_SECTIONS.joinToString(", ")))
         // Con setMessage() Android no enseña la lista de opciones: el estado va en un título propio.
         val header = android.widget.LinearLayout(a).apply {
             orientation = android.widget.LinearLayout.VERTICAL
