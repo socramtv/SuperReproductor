@@ -35,6 +35,8 @@ class SuperPlayerApp : Application() {
         // para que la app abra antes (antes se hacían todas aquí, bloqueando el arranque).
         Thread({
             try { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) } catch (e: Exception) { }
+            // Control de acceso: baja el archivo de PIN si hay uno configurado.
+            try { com.example.superplayer.data.AccessControl.refreshAsync(this, force = true) } catch (e: Exception) { }
             // Recordatorios de la guía EPG: se vuelven a programar por si el
             // sistema perdió las alarmas (reinicio, "forzar detención"...).
             try {

@@ -97,6 +97,7 @@ class RemoteActivity : AppCompatActivity() {
         root.addView(header)
         root.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
+        com.example.superplayer.data.AccessControl.guardActivity(this, com.example.superplayer.data.AccessControl.S_REMOTE)
         applySystemBarInsets(top = header, bottom = scroll)
 
         deviceButton = button(getString(R.string.remote_choose_device), 1f, 48) { chooseDevice() }

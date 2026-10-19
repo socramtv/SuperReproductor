@@ -60,6 +60,7 @@ class WebActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityWebBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        com.example.superplayer.data.AccessControl.guardActivity(this, com.example.superplayer.data.AccessControl.S_WEB)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         applySystemBarInsets(top = binding.webBar, bottom = binding.webBody)
         title = getString(R.string.web_title)

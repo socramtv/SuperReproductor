@@ -296,7 +296,7 @@ class MainActivity : AppCompatActivity() {
             }
             button.setOnLongClickListener {
                 dismissHome()
-                promptForListUrl(slot, label)
+                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { promptForListUrl(slot, label) }
                 true
             }
         }
@@ -459,6 +459,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.example.superplayer.data.AccessControl.guardMain(this)
         refreshVpnState()
         // Lista recibida por Telegram (ver TelegramImport): se carga como lista principal.
         TelegramImport.pending?.let { imported ->
@@ -1101,19 +1102,19 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             R.id.action_remote_control -> {
-                startActivity(Intent(this, RemoteActivity::class.java))
+                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_REMOTE) { startActivity(Intent(this, RemoteActivity::class.java)) }
                 true
             }
             R.id.action_remote_settings -> {
-                showRemoteControlDialog(this)
+                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { showRemoteControlDialog(this) }
                 true
             }
             R.id.action_load_file -> {
-                openDocumentLauncher.launch(arrayOf("*/*"))
+                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { openDocumentLauncher.launch(arrayOf("*/*")) }
                 true
             }
             R.id.action_profiles -> {
-                showProfilesDialog(this) { restartAfterProfileChange() }
+                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { showProfilesDialog(this) { restartAfterProfileChange() } }
                 true
             }
             R.id.action_program_alerts -> {
@@ -1140,16 +1141,20 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(this, WebActivity::class.java))
                 true
             }
+            R.id.action_access -> {
+                com.example.superplayer.data.AccessControl.showManage(this)
+                true
+            }
             R.id.action_theme_toggle -> {
                 toggleTheme()
                 true
             }
             R.id.action_backup_export -> {
-                exportBackupLauncher.launch("socram-tv-copia.json")
+                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { exportBackupLauncher.launch("socram-tv-copia.json") }
                 true
             }
             R.id.action_backup_import -> {
-                importBackupLauncher.launch(arrayOf("*/*"))
+                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { importBackupLauncher.launch(arrayOf("*/*")) }
                 true
             }
             else -> super.onOptionsItemSelected(item)

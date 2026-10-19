@@ -1515,3 +1515,15 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 ## Arranque más rápido (2)
 - La lista guardada de la última vez ya no se lee ni se analiza en el hilo principal: la pantalla sale al momento con la portada y las categorías aparecen al terminar (`MainActivity.loadInitialPlaylist`, con `playlistGen` para no pisar una lista elegida entretanto).
 - Accesos directos, widgets y refresco de favoritos guardados, y el arranque del control remoto, pasan a segundo plano.
+
+## Control de acceso con PIN remoto
+- Menú ⋮ > **Control de acceso (PIN)**: pones la URL de un JSON (p. ej. un «raw» de GitHub). Solo se guarda si se descarga y es válido. Sin URL no hay ningún bloqueo.
+- Dentro del mismo menú, **Crear el archivo de acceso** genera el JSON con el PIN ya cifrado (SHA-256 con sal) y lo copia al portapapeles para pegarlo en GitHub.
+- Formato (`data/AccessControl.kt`):
+  `{"enabled":true,"salt":"…","pin_hash":"sha256(salt+pin)","locked":["telegram","cine","web","remote","settings"],"block_all":false,"message":"","offline_days":7,"unlock_minutes":10}`
+  - `locked`: apartados con PIN (`"all"` = todos). `settings` cubre ajustes del mando, perfiles, copia de seguridad, abrir archivo y editar listas.
+  - `block_all:true`: nadie entra (sale `message`). `enabled:false`: se desactiva todo. También vale `"pin":"1234"` en claro.
+  - Se baja al abrir la app y cada pocos minutos. Cambiar el PIN o los apartados en el archivo lo aplica en todas las instalaciones (el desbloqueo vigente se anula).
+  - Sin conexión se usa la última copia durante `offline_days`; pasado ese tiempo la app se bloquea hasta poder comprobarla.
+  - 5 fallos seguidos = 30 s de espera. GitHub «raw» puede tardar unos minutos en servir el cambio.
+- Gestionar el control de acceso pide el PIN cuando está activo.

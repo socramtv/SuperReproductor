@@ -99,6 +99,12 @@
         android:title="@string/action_backup_import"
         app:showAsAction="never" />
 
+    <!-- Bloqueo con PIN gestionado a distancia (ver data/AccessControl) -->
+    <item
+        android:id="@+id/action_access"
+        android:title="@string/action_access"
+        app:showAsAction="never" />
+
     <!-- Elegir un archivo JSON/M3U del propio dispositivo (antes era un botón de la pantalla principal) -->
     <item
         android:id="@+id/action_load_file"

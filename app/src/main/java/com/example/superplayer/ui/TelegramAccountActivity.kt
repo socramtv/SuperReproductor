@@ -187,6 +187,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityTelegramBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        com.example.superplayer.data.AccessControl.guardActivity(this, com.example.superplayer.data.AccessControl.S_TELEGRAM)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
