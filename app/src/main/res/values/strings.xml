@@ -708,10 +708,14 @@
     <string name="access_refresh">Actualizar ahora</string>
     <string name="access_refreshed">Acceso actualizado</string>
     <string name="access_refresh_fail">No se pudo actualizar</string>
-    <string name="access_remove">Quitar el control de acceso</string>
-    <string name="access_removed">Control de acceso quitado</string>
+    <string name="access_remove">Volver al archivo de acceso original</string>
+    <string name="access_removed">Vuelve el archivo de acceso original de la app</string>
     <string name="access_make_file">Crear el archivo de acceso (con un PIN)</string>
-    <string name="access_make_help">Escribe el PIN que quieres. Se genera el JSON con el PIN cifrado y se copia al portapapeles para pegarlo en tu archivo de GitHub.</string>
+    <string name="access_make_help">Escribe el PIN de acceso (para entrar en los apartados) y el PIN maestro (además permite gestionar el control de acceso). Se genera el JSON con ambos cifrados y se copia al portapapeles para pegarlo en tu archivo de GitHub.</string>
     <string name="access_pin_short">El PIN debe tener al menos 3 cifras</string>
     <string name="access_make_done">Copiado: pégalo en tu archivo</string>
+    <string name="access_enter_master">Introduce el PIN maestro.</string>
+    <string name="access_pin_user_hint">PIN de acceso a los apartados</string>
+    <string name="access_pin_master_hint">PIN maestro</string>
+    <string name="access_pin_same">Los dos PIN deben ser distintos</string>
 </resources>

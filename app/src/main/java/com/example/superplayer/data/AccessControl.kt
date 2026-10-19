@@ -39,6 +39,12 @@ object AccessControl {
     const val S_WEB = "web"
     const val S_REMOTE = "remote"
     const val S_SETTINGS = "settings"
+    const val S_TV = "tv"
+    const val S_LIST2 = "lista2"
+    const val S_TDT = "tdt"
+    const val S_RADIO = "radio"
+    const val S_NOWLIVE = "nowlive"
+    const val S_EPG = "epg"
 
     private const val PREFS = "access_ctl"
     private const val K_URL = "url"
@@ -48,6 +54,7 @@ object AccessControl {
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var unlockedUntil = 0L
+    @Volatile private var masterUntil = 0L
     @Volatile private var lastTry = 0L
     private var failures = 0
     private var lockedOutUntil = 0L
@@ -55,11 +62,14 @@ object AccessControl {
 
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun url(c: Context): String = prefs(c).getString(K_URL, "").orEmpty()
+    /** Archivo de acceso incluido en la app: todas las instalaciones lo consultan sin tener que configurar nada. */
+    const val DEFAULT_URL = "https://raw.githubusercontent.com/socramtv/m3u/refs/heads/main/acceso.json"
+
+    fun url(c: Context): String = prefs(c).getString(K_URL, "").orEmpty().ifBlank { DEFAULT_URL }
     fun lastOkAt(c: Context): Long = prefs(c).getLong(K_OK_AT, 0L)
 
     class Config(
-        val enabled: Boolean, val salt: String, val pinHash: String, val pinPlain: String,
+        val enabled: Boolean, val salt: String, val pinHash: String, val pinPlain: String, val masterHash: String, val masterPlain: String,
         val locked: Set<String>, val blockAll: Boolean, val message: String, val offlineDays: Int, val unlockMinutes: Int
     )
 
@@ -73,6 +83,8 @@ object AccessControl {
             salt = o.optString("salt", ""),
             pinHash = o.optString("pin_hash", "").lowercase(),
             pinPlain = o.optString("pin", ""),
+            masterHash = o.optString("master_hash", "").lowercase(),
+            masterPlain = o.optString("master_pin", ""),
             locked = set,
             blockAll = o.optBoolean("block_all", false),
             message = o.optString("message", ""),
@@ -112,10 +124,18 @@ object AccessControl {
         return "all" in cfg.locked || section in cfg.locked
     }
 
-    private fun verify(c: Context, pin: String): Boolean {
-        val cfg = config(c) ?: return false
-        if (cfg.pinHash.isNotEmpty()) return sha256(cfg.salt + pin) == cfg.pinHash
-        return cfg.pinPlain.isNotEmpty() && cfg.pinPlain == pin
+    private fun hasMaster(cfg: Config) = cfg.masterHash.isNotEmpty() || cfg.masterPlain.isNotEmpty()
+
+    /** 0 = no vale, 1 = PIN de acceso a los apartados, 2 = PIN maestro (apartados + configuración del control de acceso). */
+    private fun verify(c: Context, pin: String): Int {
+        val cfg = config(c) ?: return 0
+        if (pin.isEmpty()) return 0
+        val master = if (cfg.masterHash.isNotEmpty()) sha256(cfg.salt + pin) == cfg.masterHash
+        else cfg.masterPlain.isNotEmpty() && cfg.masterPlain == pin
+        if (master) return 2
+        val user = if (cfg.pinHash.isNotEmpty()) sha256(cfg.salt + pin) == cfg.pinHash
+        else cfg.pinPlain.isNotEmpty() && cfg.pinPlain == pin
+        return if (user) 1 else 0
     }
 
     // ---- Descarga ----
@@ -147,11 +167,11 @@ object AccessControl {
             conn.disconnect()
         }
         val cfg = parse(text) ?: return false
-        if (cfg.enabled && cfg.pinHash.isEmpty() && cfg.pinPlain.isEmpty()) return false
+        if (cfg.enabled && cfg.pinHash.isEmpty() && cfg.pinPlain.isEmpty() && !hasMaster(cfg)) return false
         val p = prefs(c)
         val old = p.getString(K_JSON, null)?.let { parse(it) }
         // Si cambió el PIN o la lista de bloqueos, hay que volver a pedirlo.
-        if (old == null || old.pinHash != cfg.pinHash || old.pinPlain != cfg.pinPlain || old.locked != cfg.locked || old.salt != cfg.salt) unlockedUntil = 0L
+        if (old == null || old.pinHash != cfg.pinHash || old.pinPlain != cfg.pinPlain || old.masterHash != cfg.masterHash || old.masterPlain != cfg.masterPlain || old.locked != cfg.locked || old.salt != cfg.salt) { unlockedUntil = 0L; masterUntil = 0L }
         p.edit().putString(K_JSON, text).putLong(K_OK_AT, System.currentTimeMillis()).apply()
         return true
     }
@@ -169,13 +189,14 @@ object AccessControl {
     fun clear(c: Context) {
         prefs(c).edit().clear().apply()
         unlockedUntil = 0L
+        masterUntil = 0L
     }
 
     // ---- Interfaz ----
 
     private fun dp(c: Context, v: Int) = (v * c.resources.displayMetrics.density).toInt()
 
-    private fun pinDialog(a: Activity, onOk: () -> Unit, onCancel: () -> Unit) {
+    private fun pinDialog(a: Activity, onOk: () -> Unit, onCancel: () -> Unit, master: Boolean = false) {
         val now = System.currentTimeMillis()
         if (now < lockedOutUntil) {
             Toast.makeText(a, a.getString(R.string.access_wait, ((lockedOutUntil - now) / 1000 + 1).toInt()), Toast.LENGTH_SHORT).show()
@@ -191,7 +212,7 @@ object AccessControl {
         var done = false
         val dialog = AlertDialog.Builder(a)
             .setTitle(R.string.access_title)
-            .setMessage(R.string.access_enter_pin)
+            .setMessage(if (master) R.string.access_enter_master else R.string.access_enter_pin)
             .setView(input)
             .setCancelable(false)
             .setPositiveButton(android.R.string.ok, null)
@@ -202,9 +223,12 @@ object AccessControl {
             dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val cfg = config(a)
-                if (verify(a, input.text.toString().trim())) {
+                val level = verify(a, input.text.toString().trim())
+                if (level >= (if (master) 2 else 1)) {
                     failures = 0
-                    unlockedUntil = System.currentTimeMillis() + (cfg?.unlockMinutes ?: 10) * 60_000L
+                    val until = System.currentTimeMillis() + (cfg?.unlockMinutes ?: 10) * 60_000L
+                    unlockedUntil = until
+                    if (level == 2) masterUntil = until
                     done = true
                     dialog.dismiss()
                     onOk()
@@ -306,25 +330,31 @@ object AccessControl {
         d.show()
     }
 
-    /** Diálogo de gestión (menú ⋮ > Control de acceso). Si ya hay control activo, pide el PIN antes. */
+    /**
+     * Diálogo de gestión (menú ⋮ > Control de acceso). Solo con el PIN MAESTRO del archivo. Si el archivo aún no
+     * define un PIN maestro (o no se ha bajado), solo se ofrece el generador del archivo, que no cambia nada en la app.
+     */
     fun showManage(a: Activity) {
-        if (isConfigured(a)) {
-            // Siempre con PIN, esté o no el apartado en la lista; sin PIN válido en el archivo no hay forma de entrar.
-            val cfg = config(a)
-            if (cfg != null && cfg.enabled && blockReason(a) == null && System.currentTimeMillis() >= unlockedUntil) {
-                pinDialog(a, onOk = { manageDialog(a) }, onCancel = { })
-                return
-            }
+        val cfg = config(a)
+        val reason = blockReason(a)
+        if (reason != null) {
+            AlertDialog.Builder(a).setTitle(R.string.access_title).setMessage(reason)
+                .setPositiveButton(android.R.string.ok, null).show()
+            return
         }
-        manageDialog(a)
+        if (cfg == null || !hasMaster(cfg)) {
+            makeFileDialog(a)
+            return
+        }
+        if (System.currentTimeMillis() < masterUntil) manageDialog(a)
+        else pinDialog(a, onOk = { manageDialog(a) }, onCancel = { }, master = true)
     }
 
     private fun manageDialog(a: Activity) {
         val url = url(a)
         val cfg = config(a)
         val status = StringBuilder()
-        if (url.isBlank()) status.append(a.getString(R.string.access_status_off))
-        else {
+        run {
             status.append(a.getString(R.string.access_status_url, url)).append('\n')
             val ok = lastOkAt(a)
             if (ok > 0) status.append(a.getString(R.string.access_status_checked, java.text.DateFormat.getDateTimeInstance().format(java.util.Date(ok)))).append('\n')
@@ -333,7 +363,7 @@ object AccessControl {
         val items = ArrayList<String>()
         val acts = ArrayList<() -> Unit>()
         items.add(a.getString(R.string.access_set_url)); acts.add { askUrl(a) }
-        if (url.isNotBlank()) {
+        run {
             items.add(a.getString(R.string.access_refresh)); acts.add {
                 refreshAsync(a, force = true) { ok -> Toast.makeText(a, if (ok) R.string.access_refreshed else R.string.access_refresh_fail, Toast.LENGTH_SHORT).show() }
             }
@@ -389,22 +419,34 @@ object AccessControl {
             .show()
     }
 
-    /** Genera el JSON del archivo (con hash) a partir de un PIN, y lo copia al portapapeles para pegarlo en GitHub. */
+    /** Genera el JSON del archivo (con hashes) a partir de los dos PIN, y lo copia al portapapeles para pegarlo en GitHub. */
     private fun makeFileDialog(a: Activity) {
-        val input = EditText(a).apply {
-            hint = a.getString(R.string.access_pin_hint)
+        fun field(hintRes: Int) = EditText(a).apply {
+            hint = a.getString(hintRes)
             inputType = InputType.TYPE_CLASS_NUMBER
             setSingleLine(true)
-            setPadding(dp(a, 20), dp(a, 16), dp(a, 20), dp(a, 8))
+        }
+        val userPin = field(R.string.access_pin_user_hint)
+        val masterPin = field(R.string.access_pin_master_hint)
+        val box = android.widget.LinearLayout(a).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(a, 20), dp(a, 12), dp(a, 20), dp(a, 4))
+            addView(userPin)
+            addView(masterPin)
         }
         AlertDialog.Builder(a)
             .setTitle(R.string.access_make_file)
             .setMessage(R.string.access_make_help)
-            .setView(input)
+            .setView(box)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                val pin = input.text.toString().trim()
-                if (pin.length < 3) {
+                val pin = userPin.text.toString().trim()
+                val master = masterPin.text.toString().trim()
+                if (pin.length < 3 || master.length < 3) {
                     Toast.makeText(a, R.string.access_pin_short, Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                if (pin == master) {
+                    Toast.makeText(a, R.string.access_pin_same, Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 val salt = java.lang.Long.toHexString(java.security.SecureRandom().nextLong())
@@ -412,7 +454,8 @@ object AccessControl {
                     .put("enabled", true)
                     .put("salt", salt)
                     .put("pin_hash", sha256(salt + pin))
-                    .put("locked", JSONArray(listOf(S_TELEGRAM, S_CINE, S_WEB, S_REMOTE, S_SETTINGS)))
+                    .put("master_hash", sha256(salt + master))
+                    .put("locked", JSONArray(listOf(S_TV, S_LIST2, S_CINE, S_TDT, S_RADIO, S_NOWLIVE, S_EPG, S_TELEGRAM, S_WEB, S_REMOTE, S_SETTINGS)))
                     .put("block_all", false)
                     .put("message", "")
                     .put("offline_days", 7)

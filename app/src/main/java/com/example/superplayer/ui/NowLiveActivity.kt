@@ -68,6 +68,7 @@ class NowLiveActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityNowLiveBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        com.example.superplayer.data.AccessControl.guardActivity(this, com.example.superplayer.data.AccessControl.S_NOWLIVE)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)

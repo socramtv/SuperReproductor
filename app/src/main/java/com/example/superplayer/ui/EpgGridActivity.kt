@@ -106,6 +106,7 @@ class EpgGridActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityEpgGridBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        com.example.superplayer.data.AccessControl.guardActivity(this, com.example.superplayer.data.AccessControl.S_EPG)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
