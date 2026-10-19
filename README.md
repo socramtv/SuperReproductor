@@ -1527,3 +1527,4 @@ El póster del programa va arriba a la derecha de la barra de información (junt
   - Sin conexión se usa la última copia durante `offline_days`; pasado ese tiempo la app se bloquea hasta poder comprobarla.
   - 5 fallos seguidos = 30 s de espera. GitHub «raw» puede tardar unos minutos en servir el cambio.
 - Gestionar el control de acceso pide el PIN cuando está activo.
+- Corrección: el menú de Control de acceso no enseñaba sus opciones (Android oculta la lista si el diálogo tiene mensaje); el estado va ahora en el título del diálogo.

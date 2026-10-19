@@ -343,9 +343,23 @@ object AccessControl {
             }
         }
         items.add(a.getString(R.string.access_make_file)); acts.add { makeFileDialog(a) }
+        // Con setMessage() Android no enseña la lista de opciones: el estado va en un título propio.
+        val header = android.widget.LinearLayout(a).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(a, 24), dp(a, 20), dp(a, 24), dp(a, 8))
+            addView(android.widget.TextView(a).apply {
+                setText(R.string.access_manage_title)
+                textSize = 20f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            })
+            addView(android.widget.TextView(a).apply {
+                text = status.toString().trim()
+                textSize = 13f
+                setPadding(0, dp(a, 8), 0, 0)
+            })
+        }
         AlertDialog.Builder(a)
-            .setTitle(R.string.access_manage_title)
-            .setMessage(status.toString())
+            .setCustomTitle(header)
             .setItems(items.toTypedArray()) { _, i -> acts[i]() }
             .setNegativeButton(R.string.channel_check_close, null)
             .show()
