@@ -1511,3 +1511,7 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 - La pantalla tiene portada, título de pista, barra de progreso, anterior/siguiente, ±10 s, aleatorio, repetir (todo/una), velocidad (0,75x–2x), temporizador de apagado y lista de pistas. Suena por `PlaybackService` (sigue con la pantalla apagada y con notificación).
 - Pistas ordenadas de forma natural (2 antes que 10). Se guardan los 5 últimos álbumes en caché: reabrirlos es instantáneo.
 - Límites: ZIP normal, y RAR de un solo archivo **sin comprimir** (modo «almacenar»); sin contraseña. Si un RAR de vídeo no tiene vídeo, el aviso ofrece abrirlo como álbum. Código en `telegram/MusicArchive.kt`.
+
+## Arranque más rápido (2)
+- La lista guardada de la última vez ya no se lee ni se analiza en el hilo principal: la pantalla sale al momento con la portada y las categorías aparecen al terminar (`MainActivity.loadInitialPlaylist`, con `playlistGen` para no pisar una lista elegida entretanto).
+- Accesos directos, widgets y refresco de favoritos guardados, y el arranque del control remoto, pasan a segundo plano.

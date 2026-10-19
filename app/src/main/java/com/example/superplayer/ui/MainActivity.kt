@@ -108,7 +108,8 @@ class MainActivity : AppCompatActivity() {
 
         favoritesStore = FavoritesStore(this)
         // Control remoto desde otro móvil (solo si está activado: por defecto en TV).
-        com.example.superplayer.remote.RemoteServer.ensureStarted(applicationContext)
+        val appForRemote = applicationContext
+        Thread({ com.example.superplayer.remote.RemoteServer.ensureStarted(appForRemote) }, "remote-start").start()
 
         categoryAdapter = CategoryAdapter(emptyList()) { category -> openCategory(category) }
         streamAdapter = StreamAdapter(
@@ -131,6 +132,7 @@ class MainActivity : AppCompatActivity() {
         homeDismissed = savedInstanceState != null
         setupListSlotButtons()
         setupHomeInfo()
+        updateHomeInfo()
         loadInitialPlaylist()
         handleAssistantIntent(intent)
         handleMatchIntent(intent)
@@ -192,7 +194,7 @@ class MainActivity : AppCompatActivity() {
         if (show) {
             binding.emptyView.visibility = View.GONE
         } else if (onCategories) {
-            binding.emptyView.visibility = if (playlist.categories.isEmpty()) View.VISIBLE else View.GONE
+            binding.emptyView.visibility = if (playlist.categories.isEmpty() && !initialLoading) View.VISIBLE else View.GONE
         }
     }
 
@@ -496,27 +498,57 @@ class MainActivity : AppCompatActivity() {
         streamAdapter.notifyDataSetChanged()
     }
 
+    /** Trabajo de fondo ordenado (accesos directos, widgets…) que no debe bloquear la pantalla. */
+    private val bgExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "main-bg").apply { priority = Thread.MIN_PRIORITY } }
+
+    /** Cambia cada vez que se pone una lista: la carga inicial (en segundo plano) no pisa una lista elegida entretanto. */
+    private var playlistGen = 0
+
+    /** Mientras se lee la lista guardada no se enseña el aviso de «lista vacía». */
+    private var initialLoading = true
+
+    /**
+     * Lista de la última vez: se lee y analiza en un hilo aparte (una lista grande tardaba segundos con la
+     * pantalla en blanco). Mientras tanto se ve ya la portada y, al terminar, las categorías.
+     */
     private fun loadInitialPlaylist() {
         val lastUri = AppPrefs.getLastPlaylistUri(this)
-        if (lastUri != null) {
-            try {
-                loadFromUri(Uri.parse(lastUri), announce = false)
-                return
-            } catch (e: Exception) {
-                // El archivo guardado ya no está disponible (se movió, se revocó el permiso, etc.)
-                // Seguimos abajo con la lista de ejemplo.
+        val gen = playlistGen
+        val app = applicationContext
+        Thread({
+            var data: PlaylistData? = null
+            var key = "sample"
+            if (lastUri != null) {
+                try {
+                    data = PlaylistRepository.loadFromUri(app, Uri.parse(lastUri))
+                    key = "file"
+                } catch (e: Exception) {
+                    // El archivo guardado ya no está disponible (se movió, se revocó el permiso, etc.): lista de ejemplo.
+                }
             }
-        }
-        try {
-            setPlaylist(PlaylistRepository.loadFromAssets(this, "sample_playlist.json"), "sample")
-        } catch (e: Exception) {
-            Toast.makeText(
-                this,
-                "No se pudo cargar la lista de ejemplo (${e.message}). Carga tu propio JSON.",
-                Toast.LENGTH_LONG
-            ).show()
-            setPlaylist(PlaylistData(emptyList()), "sample")
-        }
+            var error: String? = null
+            if (data == null) {
+                try {
+                    data = PlaylistRepository.loadFromAssets(app, "sample_playlist.json")
+                } catch (e: Exception) {
+                    error = e.message ?: ""
+                    data = PlaylistData(emptyList())
+                }
+            }
+            val result = data
+            val finalKey = key
+            runOnUiThread {
+                if (isFinishing || isDestroyed || gen != playlistGen) return@runOnUiThread
+                if (error != null) {
+                    Toast.makeText(
+                        this,
+                        "No se pudo cargar la lista de ejemplo ($error). Carga tu propio JSON.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                setPlaylist(result, finalKey)
+            }
+        }, "initial-list").start()
     }
 
     private fun loadFromUri(uri: Uri, announce: Boolean = true) {
@@ -550,6 +582,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setPlaylist(rawData: PlaylistData, listKey: String) {
+        playlistGen++
+        initialLoading = false
         rawPlaylist = rawData
         appliedOverridesVersion = ChannelOverrides.version
         val data = ChannelOverrides.apply(this, rawData)
@@ -573,13 +607,16 @@ class MainActivity : AppCompatActivity() {
         // Por si algún favorito cambió de logo/url desde la última vez, o se
         // marcó antes de que existiera esto (ver FavoritesStore); barato,
         // así que no pasa nada por hacerlo en cada carga de lista.
-        favoritesStore.refreshStoredStreams(allStreams)
+        val favStore = favoritesStore
+        bgExecutor.execute { try { favStore.refreshStoredStreams(allStreams) } catch (e: Exception) { } }
         refreshShortcuts()
     }
 
     /** Vuelve a publicar los accesos directos del icono de la app a partir de los favoritos actuales (ver ShortcutsHelper). */
     private fun refreshShortcuts() {
-        ShortcutsHelper.refresh(this, favoritesStore.getAllStreams())
+        val favs = favoritesStore.getAllStreams()
+        val app = applicationContext
+        bgExecutor.execute { try { ShortcutsHelper.refresh(app, favs) } catch (e: Exception) { } }
     }
 
     /**
