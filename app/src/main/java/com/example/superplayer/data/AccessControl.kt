@@ -26,6 +26,10 @@ import java.security.MessageDigest
  *     "pin_hash": "<sha256 en hex de salt+pin>",      // o "pin": "1234" (en claro)
  *     "locked": ["telegram","cine","web","remote","settings"],   // o ["all"]
  *     "block_all": false,                             // true: nadie entra en la app
+ *     "users": [                                      // más códigos, cada uno con su caducidad y apartados
+ *       {"name":"Ana","pin_hash":"…","expires":"2026-12-31"},
+ *       {"name":"Luis","pin_hash":"…","from":"2026-11-01","expires":"2026-11-30","sections":["tv","tdt"],"unlock_minutes":60}
+ *     ],
  *     "message": "Texto opcional para el aviso de bloqueo",
  *     "offline_days": 7,                              // días que vale la última copia sin conexión (0 = siempre)
  *     "unlock_minutes": 10                            // tiempo que sigue abierto tras meter el PIN
@@ -54,13 +58,12 @@ object AccessControl {
     private const val K_JSON = "json"
     private const val K_OK_AT = "ok_at"
     private const val K_UNL = "unlocked_until"
-    private const val K_MST = "master_until"
-    private const val K_FP = "unlock_fp"
+    private const val K_KEY = "unlocked_key"
     private const val MIN_REFRESH_MS = 2 * 60 * 1000L
 
     private val main = Handler(Looper.getMainLooper())
-    @Volatile private var unlockedUntil = 0L
-    @Volatile private var masterUntil = 0L
+    @Volatile private var activeUntil = 0L
+    @Volatile private var activeKey = ""
     @Volatile private var lastTry = 0L
     private var failures = 0
     private var lockedOutUntil = 0L
@@ -74,28 +77,71 @@ object AccessControl {
     fun url(c: Context): String = prefs(c).getString(K_URL, "").orEmpty().ifBlank { DEFAULT_URL }
     fun lastOkAt(c: Context): Long = prefs(c).getLong(K_OK_AT, 0L)
 
+    /** Un código de acceso: el maestro, el PIN general o uno de la lista "users". */
+    class Cred(
+        val key: String, val name: String, val level: Int, val hash: String, val plain: String,
+        val sections: Set<String>?, val fromAt: Long, val expiresAt: Long, val minutes: Int?
+    )
+
     class Config(
-        val enabled: Boolean, val salt: String, val pinHash: String, val pinPlain: String, val masterHash: String, val masterPlain: String,
+        val enabled: Boolean, val salt: String, val creds: List<Cred>,
         val locked: Set<String>, val blockAll: Boolean, val message: String, val offlineDays: Int, val unlockMinutes: Int
     )
+
+    private fun parseDay(text: String, endOfDay: Boolean): Long? {
+        if (text.isBlank()) return 0L
+        return try {
+            val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            f.isLenient = false
+            val d = f.parse(text.trim()) ?: return null
+            d.time + (if (endOfDay) 86_400_000L - 1 else 0L)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun keyOf(prefix: String, hash: String, plain: String) = prefix + sha256(hash + "|" + plain).take(12)
 
     private fun parse(text: String): Config? = try {
         val o = JSONObject(text.trim())
         val arr: JSONArray = o.optJSONArray("locked") ?: JSONArray()
         val set = HashSet<String>()
         for (i in 0 until arr.length()) set.add(arr.optString(i).trim().lowercase())
+        val creds = ArrayList<Cred>()
+        val mh = o.optString("master_hash", "").lowercase()
+        val mp = o.optString("master_pin", "")
+        if (mh.isNotEmpty() || mp.isNotEmpty()) creds.add(Cred("master", "master", 2, mh, mp, null, 0L, 0L, null))
+        val ph = o.optString("pin_hash", "").lowercase()
+        val pp = o.optString("pin", "")
+        if (ph.isNotEmpty() || pp.isNotEmpty()) creds.add(Cred("pin", "pin", 1, ph, pp, null, 0L, 0L, null))
+        val users = o.optJSONArray("users") ?: JSONArray()
+        for (i in 0 until users.length()) {
+            val u = users.optJSONObject(i) ?: continue
+            val uh = u.optString("pin_hash", "").lowercase()
+            val up = u.optString("pin", "")
+            if (uh.isEmpty() && up.isEmpty()) continue
+            // Una fecha mal escrita deja ese código sin efecto (mejor que dejarlo sin caducidad).
+            val from = parseDay(u.optString("from", ""), false) ?: continue
+            val exp = parseDay(u.optString("expires", ""), true) ?: continue
+            val secArr = u.optJSONArray("sections")
+            var sec: Set<String>? = null
+            if (secArr != null && secArr.length() > 0) {
+                val hs = HashSet<String>()
+                for (k in 0 until secArr.length()) hs.add(secArr.optString(k).trim().lowercase())
+                if ("all" !in hs) sec = hs
+            }
+            val mins = if (u.has("unlock_minutes")) u.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60 * 30) else null
+            creds.add(Cred(keyOf("u:", uh, up), u.optString("name", "").ifBlank { "Código ${i + 1}" }, 1, uh, up, sec, from, exp, mins))
+        }
         Config(
             enabled = o.optBoolean("enabled", true),
             salt = o.optString("salt", ""),
-            pinHash = o.optString("pin_hash", "").lowercase(),
-            pinPlain = o.optString("pin", ""),
-            masterHash = o.optString("master_hash", "").lowercase(),
-            masterPlain = o.optString("master_pin", ""),
+            creds = creds,
             locked = set,
             blockAll = o.optBoolean("block_all", false),
             message = o.optString("message", ""),
             offlineDays = o.optInt("offline_days", 7),
-            unlockMinutes = o.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60)
+            unlockMinutes = o.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60 * 30)
         )
     } catch (e: Exception) {
         null
@@ -103,26 +149,35 @@ object AccessControl {
 
     private var unlockLoaded = false
 
-    /** Huella del PIN/bloqueos actuales: un desbloqueo guardado solo vale mientras no cambie el archivo. */
-    private fun fingerprint(c: Context): String {
-        val cfg = config(c) ?: return ""
-        return sha256(cfg.salt + "|" + cfg.pinHash + "|" + cfg.pinPlain + "|" + cfg.masterHash + "|" + cfg.masterPlain)
-    }
-
-    /** El desbloqueo sobrevive a cerrar la app: se recupera de las preferencias si el PIN no ha cambiado. */
+    /** El desbloqueo sobrevive a cerrar la app: se recupera de las preferencias mientras ese código siga en el archivo. */
     private fun loadUnlock(c: Context) {
         if (unlockLoaded) return
         unlockLoaded = true
         val p = prefs(c)
-        val fp = fingerprint(c)
-        if (fp.isNotEmpty() && p.getString(K_FP, "") == fp) {
-            unlockedUntil = p.getLong(K_UNL, 0L)
-            masterUntil = p.getLong(K_MST, 0L)
-        }
+        activeKey = p.getString(K_KEY, "").orEmpty()
+        activeUntil = p.getLong(K_UNL, 0L)
     }
 
     private fun saveUnlock(c: Context) {
-        prefs(c).edit().putString(K_FP, fingerprint(c)).putLong(K_UNL, unlockedUntil).putLong(K_MST, masterUntil).apply()
+        prefs(c).edit().putString(K_KEY, activeKey).putLong(K_UNL, activeUntil).apply()
+    }
+
+    private fun clearUnlock(c: Context) {
+        activeKey = ""
+        activeUntil = 0L
+        unlockLoaded = true
+        prefs(c).edit().remove(K_KEY).remove(K_UNL).apply()
+    }
+
+    private fun credValidNow(cr: Cred, now: Long) = now >= cr.fromAt && (cr.expiresAt == 0L || now <= cr.expiresAt)
+
+    /** El código con el que se desbloqueó, si sigue en el archivo, no ha caducado y el desbloqueo no ha terminado. */
+    private fun activeCred(c: Context): Cred? {
+        loadUnlock(c)
+        val now = System.currentTimeMillis()
+        if (activeKey.isEmpty() || now >= activeUntil) return null
+        val cr = config(c)?.creds?.firstOrNull { it.key == activeKey } ?: return null
+        return if (credValidNow(cr, now)) cr else null
     }
 
     private fun config(c: Context): Config? = prefs(c).getString(K_JSON, null)?.let { parse(it) }
@@ -150,23 +205,30 @@ object AccessControl {
         if (blockReason(c) != null) return true
         val cfg = config(c) ?: return true
         if (!cfg.enabled) return false
-        loadUnlock(c)
-        if (System.currentTimeMillis() < unlockedUntil) return false
+        val ac = activeCred(c)
+        if (ac != null && (ac.sections == null || section in ac.sections)) return false
         return "all" in cfg.locked || section in cfg.locked
     }
 
-    private fun hasMaster(cfg: Config) = cfg.masterHash.isNotEmpty() || cfg.masterPlain.isNotEmpty()
+    private fun hasMaster(cfg: Config) = cfg.creds.any { it.level == 2 }
 
-    /** 0 = no vale, 1 = PIN de acceso a los apartados, 2 = PIN maestro (apartados + configuración del control de acceso). */
-    private fun verify(c: Context, pin: String): Int {
-        val cfg = config(c) ?: return 0
-        if (pin.isEmpty()) return 0
-        val master = if (cfg.masterHash.isNotEmpty()) sha256(cfg.salt + pin) == cfg.masterHash
-        else cfg.masterPlain.isNotEmpty() && cfg.masterPlain == pin
-        if (master) return 2
-        val user = if (cfg.pinHash.isNotEmpty()) sha256(cfg.salt + pin) == cfg.pinHash
-        else cfg.pinPlain.isNotEmpty() && cfg.pinPlain == pin
-        return if (user) 1 else 0
+    private fun credMatches(cfg: Config, cr: Cred, pin: String): Boolean =
+        if (cr.hash.isNotEmpty()) sha256(cfg.salt + pin) == cr.hash else cr.plain.isNotEmpty() && cr.plain == pin
+
+    // Resultado de comprobar un PIN.
+    private class Check(val cred: Cred?, val error: Int)
+
+    /** [needMaster]: solo vale el maestro. [section]: el código tiene que dar acceso a ese apartado (null = cualquiera). */
+    private fun check(c: Context, pin: String, needMaster: Boolean, section: String?): Check {
+        val cfg = config(c) ?: return Check(null, R.string.access_wrong)
+        if (pin.isEmpty()) return Check(null, R.string.access_wrong)
+        val cr = cfg.creds.firstOrNull { credMatches(cfg, it, pin) } ?: return Check(null, R.string.access_wrong)
+        val now = System.currentTimeMillis()
+        if (now < cr.fromAt) return Check(null, R.string.access_not_yet)
+        if (cr.expiresAt != 0L && now > cr.expiresAt) return Check(null, R.string.access_code_expired)
+        if (needMaster && cr.level < 2) return Check(null, R.string.access_wrong)
+        if (section != null && cr.sections != null && section !in cr.sections) return Check(null, R.string.access_not_allowed)
+        return Check(cr, 0)
     }
 
     // ---- Descarga ----
@@ -198,13 +260,38 @@ object AccessControl {
             conn.disconnect()
         }
         val cfg = parse(text) ?: return false
-        if (cfg.enabled && cfg.pinHash.isEmpty() && cfg.pinPlain.isEmpty() && !hasMaster(cfg)) return false
+        if (cfg.enabled && cfg.creds.isEmpty()) return false
         val p = prefs(c)
-        val old = p.getString(K_JSON, null)?.let { parse(it) }
-        // Si cambió el PIN o la lista de bloqueos, hay que volver a pedirlo.
-        if (old == null || old.pinHash != cfg.pinHash || old.pinPlain != cfg.pinPlain || old.masterHash != cfg.masterHash || old.masterPlain != cfg.masterPlain || old.locked != cfg.locked || old.salt != cfg.salt) { unlockedUntil = 0L; masterUntil = 0L; p.edit().remove(K_UNL).remove(K_MST).remove(K_FP).apply() }
         p.edit().putString(K_JSON, text).putLong(K_OK_AT, System.currentTimeMillis()).apply()
         return true
+    }
+
+    /** Texto del archivo de acceso que está guardado en este dispositivo (null si nunca se bajó). */
+    fun cachedText(c: Context): String? = prefs(c).getString(K_JSON, null)
+
+    /** Tras publicar cambios desde la pantalla de registro: este dispositivo usa ya el archivo nuevo, sin esperar a la caché de GitHub. */
+    fun storeLocal(c: Context, text: String) {
+        if (parse(text) == null) return
+        prefs(c).edit().putString(K_JSON, text).putLong(K_OK_AT, System.currentTimeMillis()).apply()
+    }
+
+    /** ¿Se ha desbloqueado ahora mismo con el PIN maestro? */
+    fun masterActive(c: Context): Boolean = (activeCred(c)?.level ?: 0) >= 2
+
+    /** Pide el PIN maestro (si no está ya desbloqueado) y luego ejecuta [action]. */
+    fun requireMaster(a: Activity, action: () -> Unit) {
+        refreshAsync(a)
+        val reason = blockReason(a)
+        if (reason != null) {
+            AlertDialog.Builder(a).setTitle(R.string.access_title).setMessage(reason).setPositiveButton(android.R.string.ok, null).show()
+            return
+        }
+        val cfg = config(a)
+        if (cfg == null || !hasMaster(cfg)) {
+            AlertDialog.Builder(a).setTitle(R.string.access_title).setMessage(R.string.access_log_nomaster).setPositiveButton(android.R.string.ok, null).show()
+            return
+        }
+        if (masterActive(a)) action() else pinDialog(a, onOk = action, onCancel = { }, master = true)
     }
 
     /** Guarda una URL nueva solo si el archivo se baja y es válido. [done] en hilo principal. */
@@ -219,15 +306,15 @@ object AccessControl {
 
     fun clear(c: Context) {
         prefs(c).edit().clear().apply()
-        unlockedUntil = 0L
-        masterUntil = 0L
+        activeUntil = 0L
+        activeKey = ""
     }
 
     // ---- Interfaz ----
 
     private fun dp(c: Context, v: Int) = (v * c.resources.displayMetrics.density).toInt()
 
-    private fun pinDialog(a: Activity, onOk: () -> Unit, onCancel: () -> Unit, master: Boolean = false) {
+    private fun pinDialog(a: Activity, onOk: () -> Unit, onCancel: () -> Unit, master: Boolean = false, section: String? = null) {
         val now = System.currentTimeMillis()
         if (now < lockedOutUntil) {
             Toast.makeText(a, a.getString(R.string.access_wait, ((lockedOutUntil - now) / 1000 + 1).toInt()), Toast.LENGTH_SHORT).show()
@@ -259,39 +346,40 @@ object AccessControl {
                 val fresh = System.currentTimeMillis() - lastTry > 15_000L
                 refreshAsync(a, force = fresh) {
                     okBtn.isEnabled = true
-                    if (!a.isFinishing && !a.isDestroyed && dialog.isShowing) attempt(a, dialog, input, master, onOk, onCancel)
+                    if (!a.isFinishing && !a.isDestroyed && dialog.isShowing) attempt(a, dialog, input, master, section, onOk, onCancel)
                 }
             }
         }
         dialog.show()
     }
 
-    private fun attempt(a: Activity, dialog: AlertDialog, input: EditText, master: Boolean, onOk: () -> Unit, onCancel: () -> Unit) {
-        run {
-            run {
-                val cfg = config(a)
-                val level = verify(a, input.text.toString().trim())
-                if (level >= (if (master) 2 else 1)) {
-                    failures = 0
-                    val until = System.currentTimeMillis() + (cfg?.unlockMinutes ?: 10) * 60_000L
-                    unlockedUntil = until
-                    if (level == 2) masterUntil = until
-                    saveUnlock(a)
-                    dialog.dismiss()
-                    onOk()
-                } else {
-                    failures++
-                    input.setText("")
-                    if (failures >= 5) {
-                        failures = 0
-                        lockedOutUntil = System.currentTimeMillis() + 30_000L
-                        dialog.dismiss()
-                        Toast.makeText(a, R.string.access_too_many, Toast.LENGTH_LONG).show()
-                        onCancel()
-                    } else {
-                        input.error = a.getString(R.string.access_wrong)
-                    }
-                }
+    private fun attempt(a: Activity, dialog: AlertDialog, input: EditText, master: Boolean, section: String?, onOk: () -> Unit, onCancel: () -> Unit) {
+        val cfg = config(a)
+        val r = check(a, input.text.toString().trim(), master, section)
+        val cr = r.cred
+        if (cr != null) {
+            failures = 0
+            val now = System.currentTimeMillis()
+            var until = now + (cr.minutes ?: cfg?.unlockMinutes ?: 10) * 60_000L
+            if (cr.expiresAt != 0L) until = minOf(until, cr.expiresAt)
+            activeKey = cr.key
+            activeUntil = until
+            unlockLoaded = true
+            saveUnlock(a)
+            dialog.dismiss()
+            onOk()
+        } else {
+            // Un código válido pero caducado o sin permiso para este apartado no cuenta como intento fallido.
+            if (r.error == R.string.access_wrong) failures++
+            input.setText("")
+            if (failures >= 5) {
+                failures = 0
+                lockedOutUntil = System.currentTimeMillis() + 30_000L
+                dialog.dismiss()
+                Toast.makeText(a, R.string.access_too_many, Toast.LENGTH_LONG).show()
+                onCancel()
+            } else {
+                input.error = a.getString(r.error)
             }
         }
     }
@@ -331,7 +419,7 @@ object AccessControl {
             val reason = blockReason(a)
             when {
                 reason != null -> blockedDialog(a, reason, { a.finish() }, { proceed() })
-                isLocked(a, section) -> pinDialog(a, onOk = { root.visibility = View.VISIBLE }, onCancel = { a.finish() })
+                isLocked(a, section) -> pinDialog(a, onOk = { root.visibility = View.VISIBLE }, onCancel = { a.finish() }, section = section)
                 else -> root.visibility = View.VISIBLE
             }
         }
@@ -348,7 +436,7 @@ object AccessControl {
                 .setPositiveButton(android.R.string.ok, null).show()
             return
         }
-        pinDialog(a, onOk = action, onCancel = { })
+        pinDialog(a, onOk = action, onCancel = { }, section = section)
     }
 
     /** Pantalla principal: si el administrador ha bloqueado toda la app (o caducó la copia), no se puede seguir. */
@@ -391,8 +479,7 @@ object AccessControl {
             makeFileDialog(a)
             return
         }
-        loadUnlock(a)
-        if (System.currentTimeMillis() < masterUntil) manageDialog(a)
+        if ((activeCred(a)?.level ?: 0) >= 2) manageDialog(a)
         else pinDialog(a, onOk = { manageDialog(a) }, onCancel = { }, master = true)
     }
 
@@ -404,6 +491,7 @@ object AccessControl {
             status.append(a.getString(R.string.access_status_url, url)).append('\n')
             val ok = lastOkAt(a)
             if (ok > 0) status.append(a.getString(R.string.access_status_checked, java.text.DateFormat.getDateTimeInstance().format(java.util.Date(ok)))).append('\n')
+            if (cfg != null) status.append(a.getString(R.string.access_status_codes, cfg.creds.count { it.level == 1 })).append('\n')
             if (cfg != null) status.append(a.getString(R.string.access_status_locked, if (cfg.enabled) cfg.locked.joinToString(", ").ifEmpty { "—" } else a.getString(R.string.access_disabled)))
         }
         val items = ArrayList<String>()
@@ -418,6 +506,7 @@ object AccessControl {
                 Toast.makeText(a, R.string.access_removed, Toast.LENGTH_SHORT).show()
             }
         }
+        items.add(a.getString(R.string.access_add_code)); acts.add { addCodeDialog(a) }
         items.add(a.getString(R.string.access_make_file)); acts.add { makeFileDialog(a) }
         status.append('\n').append(a.getString(R.string.access_names_help, ALL_SECTIONS.joinToString(", ")))
         // Con setMessage() Android no enseña la lista de opciones: el estado va en un título propio.
@@ -466,6 +555,65 @@ object AccessControl {
             .show()
     }
 
+    /**
+     * Genera la entrada de un código nuevo para la lista "users" del archivo (con su nombre, caducidad y apartados) y la copia
+     * al portapapeles. Solo se usa con el PIN maestro; el hash lleva la misma sal que el archivo actual.
+     */
+    private fun addCodeDialog(a: Activity) {
+        fun field(hint: String, number: Boolean) = EditText(a).apply {
+            this.hint = hint
+            inputType = if (number) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+        }
+        val name = field(a.getString(R.string.access_code_name), false)
+        val pin = field(a.getString(R.string.access_pin_hint), true)
+        val from = field(a.getString(R.string.access_code_from), false)
+        val exp = field(a.getString(R.string.access_code_expires), false)
+        val sec = field(a.getString(R.string.access_code_sections), false)
+        val box = android.widget.LinearLayout(a).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(a, 20), dp(a, 12), dp(a, 20), dp(a, 4))
+            for (v in listOf(name, pin, from, exp, sec)) addView(v)
+        }
+        AlertDialog.Builder(a)
+            .setTitle(R.string.access_add_code)
+            .setMessage(R.string.access_add_help)
+            .setView(box)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val code = pin.text.toString().trim()
+                if (code.length < 3) {
+                    Toast.makeText(a, R.string.access_pin_short, Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val f = from.text.toString().trim()
+                val e = exp.text.toString().trim()
+                if ((f.isNotEmpty() && parseDay(f, false) == null) || (e.isNotEmpty() && parseDay(e, true) == null)) {
+                    Toast.makeText(a, R.string.access_date_bad, Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                val salt = config(a)?.salt.orEmpty()
+                val o = JSONObject()
+                if (name.text.toString().isNotBlank()) o.put("name", name.text.toString().trim())
+                o.put("pin_hash", sha256(salt + code))
+                if (f.isNotEmpty()) o.put("from", f)
+                if (e.isNotEmpty()) o.put("expires", e)
+                val secs = sec.text.toString().split(',', ' ', ';').map { it.trim().lowercase() }.filter { it.isNotEmpty() && it != "all" }
+                if (secs.isNotEmpty()) o.put("sections", JSONArray(secs))
+                val json = o.toString(2)
+                try {
+                    (a.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                        .setPrimaryClip(ClipData.newPlainText("codigo", json))
+                } catch (ex: Exception) { }
+                AlertDialog.Builder(a)
+                    .setTitle(R.string.access_add_done)
+                    .setMessage(json + "\n\n" + a.getString(R.string.access_add_where))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     /** Genera el JSON del archivo (con hashes) a partir de los dos PIN, y lo copia al portapapeles para pegarlo en GitHub. */
     private fun makeFileDialog(a: Activity) {
         fun field(hintRes: Int) = EditText(a).apply {
@@ -503,6 +651,7 @@ object AccessControl {
                     .put("pin_hash", sha256(salt + pin))
                     .put("master_hash", sha256(salt + master))
                     .put("locked", JSONArray(listOf(S_TV, S_LIST2, S_CINE, S_TDT, S_RADIO, S_NOWLIVE, S_EPG, S_TELEGRAM, S_WEB, S_REMOTE, S_SETTINGS)))
+                    .put("users", JSONArray())
                     .put("block_all", false)
                     .put("message", "")
                     .put("offline_days", 7)

@@ -105,6 +105,11 @@
         android:title="@string/action_access"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_access_log"
+        android:title="@string/action_access_log"
+        app:showAsAction="never" />
+
     <!-- Elegir un archivo JSON/M3U del propio dispositivo (antes era un botón de la pantalla principal) -->
     <item
         android:id="@+id/action_load_file"

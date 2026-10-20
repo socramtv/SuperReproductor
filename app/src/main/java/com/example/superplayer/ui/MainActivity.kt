@@ -1146,6 +1146,10 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(this, WebActivity::class.java))
                 true
             }
+            R.id.action_access_log -> {
+                com.example.superplayer.data.AccessControl.requireMaster(this) { startActivity(Intent(this, AccessLogActivity::class.java)) }
+                true
+            }
             R.id.action_access -> {
                 com.example.superplayer.data.AccessControl.showManage(this)
                 true

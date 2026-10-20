@@ -719,4 +719,67 @@
     <string name="access_pin_master_hint">PIN maestro</string>
     <string name="access_pin_same">Los dos PIN deben ser distintos</string>
     <string name="access_names_help">Nombres para «locked»: %1$s (o «all»)</string>
+    <string name="access_not_yet">Este código todavía no está activo</string>
+    <string name="access_code_expired">Este código ha caducado</string>
+    <string name="access_not_allowed">Este código no da acceso a este apartado</string>
+    <string name="access_status_codes">Códigos de acceso: %1$d</string>
+    <string name="access_add_code">Añadir un código de acceso (caducidad, apartados)</string>
+    <string name="access_add_help">Se crea la entrada para la lista «users» de tu archivo y se copia al portapapeles. Fechas en formato AAAA-MM-DD (opcionales). Apartados separados por comas; vacío = todos.</string>
+    <string name="access_code_name">Nombre (para ti)</string>
+    <string name="access_code_from">Válido desde (AAAA-MM-DD, opcional)</string>
+    <string name="access_code_expires">Caduca el (AAAA-MM-DD, opcional)</string>
+    <string name="access_code_sections">Apartados (ej.: tv, tdt; vacío = todos)</string>
+    <string name="access_date_bad">Fecha no válida: usa AAAA-MM-DD</string>
+    <string name="access_add_done">Copiado: pégalo en «users»</string>
+    <string name="access_add_where">Pégalo dentro de la lista «users» de acceso.json (separado por una coma del anterior) y guarda el archivo.</string>
+    <string name="action_access_log">Registro de accesos (maestro)</string>
+    <string name="access_log_title">Registro de accesos</string>
+    <string name="access_log_nomaster">El archivo de acceso aún no tiene PIN maestro. Créalo desde «Control de acceso (PIN)».</string>
+    <string name="access_log_add">+ Añadir código</string>
+    <string name="access_log_edit">Editar código</string>
+    <string name="access_log_delete">Eliminar</string>
+    <string name="access_log_delete_ask">¿Eliminar el código «%1$s»? Dejará de valer al publicar.</string>
+    <string name="access_log_settings">Ajustes generales</string>
+    <string name="access_log_token">Token de GitHub</string>
+    <string name="access_log_token_help">Pega un token personal de GitHub (fine-grained, solo para el repositorio del archivo, permiso «Contents: Read and write»). Se guarda solo en este dispositivo.</string>
+    <string name="access_log_token_saved_dirty">Token guardado. Pulsa Recargar cuando hayas publicado o descartado los cambios.</string>
+    <string name="access_log_reload">Recargar</string>
+    <string name="access_log_publish">Publicar</string>
+    <string name="access_log_loading">Cargando…</string>
+    <string name="access_log_publishing">Publicando…</string>
+    <string name="access_log_published">Publicado. Otros dispositivos lo verán en unos minutos.</string>
+    <string name="access_log_nochanges">No hay cambios que publicar</string>
+    <string name="access_log_need_token">Para publicar hace falta el token de GitHub</string>
+    <string name="access_log_discard">Hay cambios sin publicar. ¿Descartarlos?</string>
+    <string name="access_log_status_online">Conectado a GitHub: los cambios se publican desde aquí (pulsa Publicar).</string>
+    <string name="access_log_status_readonly">Solo lectura: añade el token de GitHub para poder editar.</string>
+    <string name="access_log_err_token">El token no vale o no tiene permiso: %1$s</string>
+    <string name="access_log_err_404">No se encontró el archivo con ese token (¿el token cubre ese repositorio?)</string>
+    <string name="access_log_err_conflict">El archivo cambió en GitHub mientras editabas. Pulsa Recargar y repite los cambios.</string>
+    <string name="access_log_err_other">No se pudo completar: %1$s</string>
+    <string name="access_log_empty">Todavía no hay códigos. Pulsa «Añadir código».</string>
+    <string name="access_log_noname">Código %1$d</string>
+    <string name="access_log_all">todos</string>
+    <string name="access_log_minutes">%1$d min</string>
+    <string name="access_log_sections_line">Apartados: %1$s</string>
+    <string name="access_log_locked_line">Bloqueados: %1$s</string>
+    <string name="access_log_st_active">Activo, sin caducidad</string>
+    <string name="access_log_st_active_until">Activo hasta %1$s (%2$d días)</string>
+    <string name="access_log_st_expired">Caducado el %1$s</string>
+    <string name="access_log_st_future">Empieza el %1$s</string>
+    <string name="access_log_st_baddate">Fecha mal escrita (no vale)</string>
+    <string name="access_log_newpin">Nuevo PIN (vacío = no cambiar)</string>
+    <string name="access_log_mins_hint">Minutos abierto tras meterlo (vacío = general)</string>
+    <string name="access_log_plus7">+7 días</string>
+    <string name="access_log_plus30">+30 días</string>
+    <string name="access_log_noexp">Sin caducidad</string>
+    <string name="access_log_pick_sections_code">Apartados de este código (ninguno = todos)</string>
+    <string name="access_log_pick_sections_locked">Apartados con PIN</string>
+    <string name="access_log_enabled">Control de acceso activado</string>
+    <string name="access_log_blockall">Bloquear toda la app</string>
+    <string name="access_log_message">Mensaje de bloqueo</string>
+    <string name="access_log_unlock_default">Minutos abierto tras el PIN (general)</string>
+    <string name="access_log_offline">Días sin conexión permitidos (0 = sin límite)</string>
+    <string name="access_log_newmaster">Nuevo PIN maestro (vacío = no cambiar)</string>
+    <string name="access_log_newgeneral">Nuevo PIN general (vacío = no cambiar)</string>
 </resources>
