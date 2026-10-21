@@ -440,8 +440,8 @@
         <!-- Póster del programa actual (icon de la guía XMLTV); oculto si no hay. -->
         <ImageView
             android:id="@+id/videoNowPlayingPoster"
-            android:layout_width="56dp"
-            android:layout_height="84dp"
+            android:layout_width="90dp"
+            android:layout_height="135dp"
             android:layout_marginStart="12dp"
             android:layout_marginEnd="64dp"
             android:layout_gravity="top"

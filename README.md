@@ -1545,3 +1545,6 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 - Los cambios se acumulan y se suben con **Publicar** (API de contenidos de GitHub, `data/AccessAdmin.kt`). Hace falta un **token personal de GitHub** (fine-grained, solo el repo del archivo, permiso *Contents: Read and write*), que se escribe en el botón «Token de GitHub» y se guarda solo en el dispositivo del administrador (nunca en el repo). Sin token la pantalla es de solo lectura (usa la copia guardada).
 - Al publicar, ese dispositivo usa el archivo nuevo al instante; los demás lo recogen al abrir la app o al pedir un PIN (GitHub «raw» puede tardar unos minutos). Si el archivo cambió mientras editabas, avisa de conflicto y hay que recargar.
 - Los PIN no se pueden leer (solo se guarda su hash): para cambiar uno se escribe el nuevo.
+
+## Póster del programa más grande
+- El póster del programa en la barra del reproductor pasa de 56×84 dp a 90×135 dp (misma proporción 2:3, mismo margen a la derecha).
