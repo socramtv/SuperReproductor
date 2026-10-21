@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.example.superplayer.R
 import com.example.superplayer.data.AccessAdmin
 import com.example.superplayer.data.AccessControl
+import com.example.superplayer.data.AccessLog
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -69,13 +70,14 @@ class AccessLogActivity : AppCompatActivity() {
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, dp(12), dp(16)) }
         val btnAdd = mkButton(getString(R.string.access_log_add), true).apply { setOnClickListener { editCode(null) } }
         val btnSettings = mkButton(getString(R.string.access_log_settings)).apply { setOnClickListener { settingsDialog() } }
+        val btnHistory = mkButton(getString(R.string.access_log_history)).apply { setOnClickListener { historyDialog() } }
         val btnToken = mkButton(getString(R.string.access_log_token)).apply { setOnClickListener { tokenDialog() } }
         val btnReload = mkButton(getString(R.string.access_log_reload)).apply { setOnClickListener { if (dirty) confirmDiscard { load() } else load() } }
         btnPublish = mkButton(getString(R.string.access_log_publish), true).apply { setOnClickListener { publish() } }
         val bar1 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(12), dp(8), dp(12), dp(4))
-            for (b in listOf(btnAdd, btnSettings)) addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(4), 0, dp(4), 0) })
+            for (b in listOf(btnAdd, btnSettings, btnHistory)) addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(4), 0, dp(4), 0) })
         }
         val bar2 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -257,8 +259,10 @@ class AccessLogActivity : AppCompatActivity() {
                 setTextColor(Color.WHITE); textSize = 16f; typeface = Typeface.DEFAULT_BOLD
             })
             card.addView(TextView(this).apply { text = st; setTextColor(color); textSize = 13f })
+            val devs = o.optJSONArray("devices")
+            val devText = if (devs != null && devs.length() > 0) " · " + getString(R.string.access_log_devices_count, devs.length()) else ""
             card.addView(TextView(this).apply {
-                text = getString(R.string.access_log_sections_line, secText) + (if (mins != null) " · $mins" else "")
+                text = getString(R.string.access_log_sections_line, secText) + (if (mins != null) " · $mins" else "") + devText
                 setTextColor(0xFFB0B0B0.toInt()); textSize = 12f
             })
             list.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(0, dp(4), 0, dp(4)) })
@@ -305,6 +309,11 @@ class AccessLogActivity : AppCompatActivity() {
         val from = field(getString(R.string.access_code_from), false, old?.optString("from", "").orEmpty())
         val exp = field(getString(R.string.access_code_expires), false, old?.optString("expires", "").orEmpty())
         val mins = field(getString(R.string.access_log_mins_hint), true, if (old != null && old.has("unlock_minutes")) old.optInt("unlock_minutes").toString() else "")
+        val devices = JSONArray(old?.optJSONArray("devices")?.toString() ?: "[]")
+        val devBtn = mkButton("")
+        fun refreshDev() { devBtn.text = getString(R.string.access_log_devices_btn, devices.length()) }
+        refreshDev()
+        devBtn.setOnClickListener { devicesDialog(getString(R.string.access_log_devices_code), devices) { refreshDev() } }
         val secBtn = mkButton("").apply { }
         fun refreshSec() { secBtn.text = getString(R.string.access_log_sections_line, if (sections.isEmpty()) getString(R.string.access_log_all) else sections.joinToString(", ")) }
         refreshSec()
@@ -323,7 +332,7 @@ class AccessLogActivity : AppCompatActivity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(12), dp(20), dp(4))
-            for (v in listOf<android.view.View>(name, pin, from, exp, quick, mins, secBtn)) addView(v)
+            for (v in listOf<android.view.View>(name, pin, from, exp, quick, mins, secBtn, devBtn)) addView(v)
         }
         val b = AlertDialog.Builder(this)
             .setTitle(if (old == null) R.string.access_log_add else R.string.access_log_edit)
@@ -371,6 +380,7 @@ class AccessLogActivity : AppCompatActivity() {
                 val m = mins.text.toString().trim()
                 if (m.isEmpty()) o.remove("unlock_minutes") else o.put("unlock_minutes", m.toIntOrNull()?.coerceIn(1, 43200) ?: 10)
                 if (sections.isEmpty()) o.remove("sections") else o.put("sections", JSONArray(sections.sorted()))
+                if (devices.length() == 0) o.remove("devices") else o.put("devices", devices)
                 if (old == null) arr.put(o)
                 dirty = true
                 dialog.dismiss()
@@ -392,6 +402,12 @@ class AccessLogActivity : AppCompatActivity() {
         val offline = field(getString(R.string.access_log_offline), true, root.optInt("offline_days", 7).toString())
         val newMaster = field(getString(R.string.access_log_newmaster), true)
         val newPin = field(getString(R.string.access_log_newgeneral), true)
+        val gdevices = JSONArray(root.optJSONArray("devices")?.toString() ?: "[]")
+        val gdevBtn = mkButton("")
+        fun refreshGDev() { gdevBtn.text = getString(R.string.access_log_devices_global, gdevices.length()) }
+        refreshGDev()
+        gdevBtn.setOnClickListener { devicesDialog(getString(R.string.access_log_devices_all), gdevices) { refreshGDev() } }
+        val logUrl = field(getString(R.string.access_log_logurl), false, root.optString("log_url", ""))
         val lockedBtn = mkButton("")
         fun refreshLocked() { lockedBtn.text = getString(R.string.access_log_locked_line, if (locked.isEmpty()) "—" else locked.joinToString(", ")) }
         refreshLocked()
@@ -399,7 +415,7 @@ class AccessLogActivity : AppCompatActivity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(12), dp(20), dp(4))
-            for (v in listOf<android.view.View>(enabled, blockAll, message, unlock, offline, lockedBtn, newMaster, newPin)) addView(v)
+            for (v in listOf<android.view.View>(enabled, blockAll, message, unlock, offline, lockedBtn, gdevBtn, logUrl, newMaster, newPin)) addView(v)
         }
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.access_log_settings)
@@ -421,6 +437,9 @@ class AccessLogActivity : AppCompatActivity() {
                 root.put("unlock_minutes", unlock.text.toString().toIntOrNull()?.coerceIn(1, 43200) ?: 10)
                 root.put("offline_days", offline.text.toString().toIntOrNull()?.coerceIn(0, 3650) ?: 7)
                 root.put("locked", JSONArray(locked.sorted()))
+                if (gdevices.length() == 0) root.remove("devices") else root.put("devices", gdevices)
+                val lu = logUrl.text.toString().trim()
+                if (lu.isEmpty()) root.remove("log_url") else root.put("log_url", lu)
                 if (nm.isNotEmpty()) { root.put("master_hash", AccessControl.sha256(salt + nm)); root.remove("master_pin") }
                 if (np.isNotEmpty()) { root.put("pin_hash", AccessControl.sha256(salt + np)); root.remove("pin") }
                 dirty = true
@@ -429,6 +448,103 @@ class AccessLogActivity : AppCompatActivity() {
             }
         }
         dialog.show()
+    }
+
+    // ---- Dispositivos autorizados ----
+
+    /** Edita una lista de dispositivos [{"id","name"}…]: añadir con ID (y nombre) y quitar. Cambia [arr] directamente. */
+    private fun devicesDialog(title: String, arr: JSONArray, onDone: () -> Unit) {
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun idOf(i: Int): String { val v = arr.opt(i); return if (v is JSONObject) v.optString("id") else v?.toString().orEmpty() }
+        fun nameOf(i: Int): String { val v = arr.opt(i); return if (v is JSONObject) v.optString("name") else "" }
+        fun redraw() {
+            rows.removeAllViews()
+            if (arr.length() == 0) rows.addView(TextView(this).apply { setText(R.string.access_log_devices_empty); setPadding(0, dp(6), 0, dp(6)) })
+            for (i in 0 until arr.length()) {
+                val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                line.addView(TextView(this).apply {
+                    text = idOf(i) + (nameOf(i).let { if (it.isEmpty()) "" else " · $it" })
+                    textSize = 15f
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                line.addView(Button(this).apply { text = "✕"; setOnClickListener { arr.remove(i); redraw() } })
+                rows.addView(line)
+            }
+        }
+        redraw()
+        val id = field(getString(R.string.access_log_device_id_hint))
+        val nm = field(getString(R.string.access_log_device_name_hint))
+        val add = mkButton(getString(R.string.access_log_device_add)).apply {
+            setOnClickListener {
+                val v = id.text.toString().trim().uppercase()
+                if (v.length < 4) { Toast.makeText(this@AccessLogActivity, R.string.access_log_device_bad, Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+                for (i in 0 until arr.length()) if (idOf(i).equals(v, true)) { Toast.makeText(this@AccessLogActivity, R.string.access_log_device_dup, Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+                val o = JSONObject().put("id", v)
+                if (nm.text.toString().isNotBlank()) o.put("name", nm.text.toString().trim())
+                arr.put(o)
+                id.setText(""); nm.setText("")
+                redraw()
+            }
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(12), dp(20), dp(4))
+            addView(TextView(this@AccessLogActivity).apply { setText(R.string.access_log_devices_help); textSize = 12f; setPadding(0, 0, 0, dp(8)) })
+            addView(rows); addView(id); addView(nm); addView(add)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton(android.R.string.ok) { _, _ -> dirty = true; onDone(); render() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    // ---- Historial ----
+
+    private fun historyDialog() {
+        val timeFmt = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
+        val text = TextView(this).apply { textSize = 12f; setPadding(dp(4), dp(4), dp(4), dp(4)); typeface = Typeface.MONOSPACE; setTextIsSelectable(true) }
+        fun show(events: List<AccessLog.Event>) {
+            text.text = if (events.isEmpty()) getString(R.string.access_log_history_empty)
+            else events.take(150).joinToString("\n") { e ->
+                val res = when (e.result) {
+                    "ok" -> "OK"; "wrong" -> "PIN ✗"; "expired" -> "caducado"; "not_yet" -> "aún no"
+                    "section_denied" -> "sin permiso"; "device_denied" -> "disp. no autorizado"; "locked_out" -> "bloqueo 30 s"
+                    else -> e.result
+                }
+                "${timeFmt.format(Date(e.ts))} ${e.device} ${e.code.ifEmpty { "?" }} · ${e.section} · $res"
+            }
+        }
+        show(AccessLog.local(this))
+        val btnLocal = mkButton(getString(R.string.access_log_history_local)).apply { setOnClickListener { show(AccessLog.local(this@AccessLogActivity)) } }
+        val btnAll = mkButton(getString(R.string.access_log_history_all)).apply {
+            setOnClickListener {
+                val url = root.optString("log_url", "")
+                if (url.isEmpty()) { Toast.makeText(this@AccessLogActivity, R.string.access_log_history_nourl, Toast.LENGTH_LONG).show(); return@setOnClickListener }
+                text.text = getString(R.string.access_log_loading)
+                Thread({
+                    var events: List<AccessLog.Event>? = null
+                    try { events = AccessLog.fetchRemote(url) } catch (e: Exception) { }
+                    val ev = events
+                    runOnUiThread { if (ev == null) text.text = getString(R.string.access_log_history_fail) else show(ev) }
+                }, "access-history").start()
+            }
+        }
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            for (b in listOf(btnLocal, btnAll)) addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(2), 0, dp(2), 0) })
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(4))
+            addView(bar); addView(ScrollView(this@AccessLogActivity).apply { addView(text) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.access_log_history)
+            .setView(box)
+            .setPositiveButton(R.string.channel_check_close, null)
+            .setNeutralButton(R.string.access_log_history_clear) { _, _ -> AccessLog.clearLocal(this) }
+            .show()
     }
 
     // ---- Token de GitHub ----

@@ -1548,3 +1548,14 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 
 ## Póster del programa más grande
 - El póster del programa en la barra del reproductor pasa de 56×84 dp a 90×135 dp (misma proporción 2:3, mismo margen a la derecha).
+
+## Historial de accesos y dispositivos autorizados
+- **Historial** (`data/AccessLog.kt`): cada intento de PIN se anota con fecha, ID del dispositivo, nombre del código (si lo hubo), apartado y resultado (OK, PIN incorrecto, caducado, aún no, sin permiso, dispositivo no autorizado, bloqueo 30 s). **Nunca se guarda ni se envía el PIN escrito.** Se conservan las últimas 500 entradas en cada dispositivo; en Registro de accesos > **Historial** se ven las del dispositivo del administrador.
+- Para ver los de **todos** los dispositivos hace falta un sitio donde se reciban: pon su URL en `"log_url"` del `acceso.json` (o en Registro > Ajustes generales). Cada entrada se envía por POST (JSON en texto plano) y con GET a esa misma URL debe devolverse una lista JSON `[{"ts":…,"device":"…","model":"…","code":"…","section":"…","result":"…"}]`. Ejemplo gratuito con **Google Apps Script** (Hoja de cálculo > Extensiones > Apps Script, implementar como aplicación web con acceso «cualquiera»):
+  ```js
+  function doPost(e){var s=SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];var d=JSON.parse(e.postData.contents);s.appendRow([d.ts,d.device,d.model,d.code,d.section,d.result]);return ContentService.createTextOutput('ok');}
+  function doGet(){var s=SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];var v=s.getDataRange().getValues().slice(-300);return ContentService.createTextOutput(JSON.stringify(v.map(function(r){return{ts:r[0],device:r[1],model:r[2],code:r[3],section:r[4],result:r[5]};}))).setMimeType(ContentService.MimeType.JSON);}
+  ```
+  La URL de la aplicación web es secreta: quien la tenga puede leer el historial, no la compartas.
+- **Dispositivos autorizados**: cada instalación tiene un ID corto (8 caracteres) que se ve en el diálogo de PIN («Copiar mi ID») y en Control de acceso. En el archivo: `"devices":["A1B2C3D4",{"id":"E5F6A7B8","name":"Móvil de Ana"}]` en la raíz (vale para todos los códigos no maestros) y/o dentro de un código de `users` (esa lista manda sobre la general). Con lista, el código solo funciona en esos dispositivos; el límite de dispositivos de un código es el tamaño de su lista. El PIN maestro no tiene esta restricción. Si se quita un dispositivo, pierde el acceso en cuanto la app baje el archivo.
+- Al intentar un código desde un móvil no autorizado se avisa y su ID se copia al portapapeles para enviárselo al administrador, que lo añade en Registro de accesos (botón del código o Ajustes generales) y publica.

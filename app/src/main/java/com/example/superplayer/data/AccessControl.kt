@@ -80,12 +80,14 @@ object AccessControl {
     /** Un código de acceso: el maestro, el PIN general o uno de la lista "users". */
     class Cred(
         val key: String, val name: String, val level: Int, val hash: String, val plain: String,
-        val sections: Set<String>?, val fromAt: Long, val expiresAt: Long, val minutes: Int?
+        val sections: Set<String>?, val fromAt: Long, val expiresAt: Long, val minutes: Int?,
+        val devices: Set<String>? = null
     )
 
     class Config(
         val enabled: Boolean, val salt: String, val creds: List<Cred>,
-        val locked: Set<String>, val blockAll: Boolean, val message: String, val offlineDays: Int, val unlockMinutes: Int
+        val locked: Set<String>, val blockAll: Boolean, val message: String, val offlineDays: Int, val unlockMinutes: Int,
+        val logUrl: String = ""
     )
 
     private fun parseDay(text: String, endOfDay: Boolean): Long? {
@@ -98,6 +100,18 @@ object AccessControl {
         } catch (e: Exception) {
             null
         }
+    }
+
+    /** Lista de dispositivos: vale ["ID", ...] o [{"id":"ID","name":"…"}, ...]. Vacía = sin restricción (null). */
+    private fun parseDevices(arr: JSONArray?): Set<String>? {
+        if (arr == null || arr.length() == 0) return null
+        val out = HashSet<String>()
+        for (i in 0 until arr.length()) {
+            val v = arr.opt(i)
+            val id = if (v is JSONObject) v.optString("id") else v?.toString().orEmpty()
+            if (id.isNotBlank()) out.add(id.trim().uppercase())
+        }
+        return if (out.isEmpty()) null else out
     }
 
     private fun keyOf(prefix: String, hash: String, plain: String) = prefix + sha256(hash + "|" + plain).take(12)
@@ -113,7 +127,8 @@ object AccessControl {
         if (mh.isNotEmpty() || mp.isNotEmpty()) creds.add(Cred("master", "master", 2, mh, mp, null, 0L, 0L, null))
         val ph = o.optString("pin_hash", "").lowercase()
         val pp = o.optString("pin", "")
-        if (ph.isNotEmpty() || pp.isNotEmpty()) creds.add(Cred("pin", "pin", 1, ph, pp, null, 0L, 0L, null))
+        if (ph.isNotEmpty() || pp.isNotEmpty()) creds.add(Cred("pin", "pin", 1, ph, pp, null, 0L, 0L, null, globalDevices))
+        val globalDevices = parseDevices(o.optJSONArray("devices"))
         val users = o.optJSONArray("users") ?: JSONArray()
         for (i in 0 until users.length()) {
             val u = users.optJSONObject(i) ?: continue
@@ -131,7 +146,7 @@ object AccessControl {
                 if ("all" !in hs) sec = hs
             }
             val mins = if (u.has("unlock_minutes")) u.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60 * 30) else null
-            creds.add(Cred(keyOf("u:", uh, up), u.optString("name", "").ifBlank { "Código ${i + 1}" }, 1, uh, up, sec, from, exp, mins))
+            creds.add(Cred(keyOf("u:", uh, up), u.optString("name", "").ifBlank { "Código ${i + 1}" }, 1, uh, up, sec, from, exp, mins, parseDevices(u.optJSONArray("devices")) ?: globalDevices))
         }
         Config(
             enabled = o.optBoolean("enabled", true),
@@ -141,7 +156,8 @@ object AccessControl {
             blockAll = o.optBoolean("block_all", false),
             message = o.optString("message", ""),
             offlineDays = o.optInt("offline_days", 7),
-            unlockMinutes = o.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60 * 30)
+            unlockMinutes = o.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60 * 30),
+            logUrl = o.optString("log_url", "")
         )
     } catch (e: Exception) {
         null
@@ -177,7 +193,9 @@ object AccessControl {
         val now = System.currentTimeMillis()
         if (activeKey.isEmpty() || now >= activeUntil) return null
         val cr = config(c)?.creds?.firstOrNull { it.key == activeKey } ?: return null
-        return if (credValidNow(cr, now)) cr else null
+        if (!credValidNow(cr, now)) return null
+        if (cr.level < 2 && cr.devices != null && AccessLog.deviceId(c) !in cr.devices) return null
+        return cr
     }
 
     private fun config(c: Context): Config? = prefs(c).getString(K_JSON, null)?.let { parse(it) }
@@ -224,10 +242,11 @@ object AccessControl {
         if (pin.isEmpty()) return Check(null, R.string.access_wrong)
         val cr = cfg.creds.firstOrNull { credMatches(cfg, it, pin) } ?: return Check(null, R.string.access_wrong)
         val now = System.currentTimeMillis()
-        if (now < cr.fromAt) return Check(null, R.string.access_not_yet)
-        if (cr.expiresAt != 0L && now > cr.expiresAt) return Check(null, R.string.access_code_expired)
-        if (needMaster && cr.level < 2) return Check(null, R.string.access_wrong)
-        if (section != null && cr.sections != null && section !in cr.sections) return Check(null, R.string.access_not_allowed)
+        if (now < cr.fromAt) return Check(cr, R.string.access_not_yet)
+        if (cr.expiresAt != 0L && now > cr.expiresAt) return Check(cr, R.string.access_code_expired)
+        if (cr.level < 2 && cr.devices != null && AccessLog.deviceId(c) !in cr.devices) return Check(cr, R.string.access_device_denied)
+        if (needMaster && cr.level < 2) return Check(cr, R.string.access_wrong)
+        if (section != null && cr.sections != null && section !in cr.sections) return Check(cr, R.string.access_not_allowed)
         return Check(cr, 0)
     }
 
@@ -334,8 +353,11 @@ object AccessControl {
             .setCancelable(false)
             .setPositiveButton(android.R.string.ok, null)
             .setNegativeButton(android.R.string.cancel) { _, _ -> onCancel() }
+            .setNeutralButton(R.string.access_copy_id, null)
             .create()
         dialog.setOnShowListener {
+            // «Copiar mi ID»: para que el administrador autorice este dispositivo (sin cerrar el diálogo).
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { copyId(a) }
             input.requestFocus()
             dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
             val okBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
@@ -353,11 +375,22 @@ object AccessControl {
         dialog.show()
     }
 
+    private fun resultName(error: Int) = when (error) {
+        0 -> "ok"
+        R.string.access_not_yet -> "not_yet"
+        R.string.access_code_expired -> "expired"
+        R.string.access_not_allowed -> "section_denied"
+        R.string.access_device_denied -> "device_denied"
+        else -> "wrong"
+    }
+
     private fun attempt(a: Activity, dialog: AlertDialog, input: EditText, master: Boolean, section: String?, onOk: () -> Unit, onCancel: () -> Unit) {
         val cfg = config(a)
         val r = check(a, input.text.toString().trim(), master, section)
         val cr = r.cred
-        if (cr != null) {
+        // Se anota el resultado (nunca el PIN escrito).
+        AccessLog.record(a, cfg?.logUrl, cr?.name.orEmpty(), section ?: "gestion", resultName(r.error))
+        if (cr != null && r.error == 0) {
             failures = 0
             val now = System.currentTimeMillis()
             var until = now + (cr.minutes ?: cfg?.unlockMinutes ?: 10) * 60_000L
@@ -369,19 +402,31 @@ object AccessControl {
             dialog.dismiss()
             onOk()
         } else {
-            // Un código válido pero caducado o sin permiso para este apartado no cuenta como intento fallido.
+            // Un código válido pero caducado, sin permiso para este apartado o desde un dispositivo no autorizado no cuenta como intento fallido.
             if (r.error == R.string.access_wrong) failures++
             input.setText("")
             if (failures >= 5) {
                 failures = 0
                 lockedOutUntil = System.currentTimeMillis() + 30_000L
+                AccessLog.record(a, cfg?.logUrl, "", section ?: "gestion", "locked_out")
                 dialog.dismiss()
                 Toast.makeText(a, R.string.access_too_many, Toast.LENGTH_LONG).show()
                 onCancel()
+            } else if (r.error == R.string.access_device_denied) {
+                input.error = a.getString(r.error, AccessLog.deviceId(a))
+                copyId(a)
             } else {
                 input.error = a.getString(r.error)
             }
         }
+    }
+
+    private fun copyId(a: Activity) {
+        try {
+            (a.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                .setPrimaryClip(ClipData.newPlainText("id", AccessLog.deviceLabel(a)))
+            Toast.makeText(a, a.getString(R.string.access_id_copied, AccessLog.deviceLabel(a)), Toast.LENGTH_LONG).show()
+        } catch (e: Exception) { }
     }
 
     private fun blockedDialog(a: Activity, reason: String, onClose: () -> Unit, onUnblocked: () -> Unit) {
@@ -487,6 +532,7 @@ object AccessControl {
         val url = url(a)
         val cfg = config(a)
         val status = StringBuilder()
+        status.append(a.getString(R.string.access_status_device, AccessLog.deviceLabel(a))).append('\n')
         run {
             status.append(a.getString(R.string.access_status_url, url)).append('\n')
             val ok = lastOkAt(a)

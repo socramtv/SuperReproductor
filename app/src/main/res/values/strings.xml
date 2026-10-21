@@ -782,4 +782,28 @@
     <string name="access_log_offline">Días sin conexión permitidos (0 = sin límite)</string>
     <string name="access_log_newmaster">Nuevo PIN maestro (vacío = no cambiar)</string>
     <string name="access_log_newgeneral">Nuevo PIN general (vacío = no cambiar)</string>
+    <string name="access_device_denied">Este dispositivo no está autorizado para ese código. Tu ID (copiado): %1$s</string>
+    <string name="access_copy_id">Copiar mi ID</string>
+    <string name="access_id_copied">ID copiado: %1$s. Envíaselo al administrador.</string>
+    <string name="access_status_device">Este dispositivo: %1$s</string>
+    <string name="access_log_history">Historial</string>
+    <string name="access_log_history_local">Este dispositivo</string>
+    <string name="access_log_history_all">Todos (log_url)</string>
+    <string name="access_log_history_empty">Aún no hay accesos anotados.</string>
+    <string name="access_log_history_nourl">Para ver los de todos los dispositivos hay que poner la URL del registro (log_url) en Ajustes generales.</string>
+    <string name="access_log_history_fail">No se pudo leer el historial de esa URL.</string>
+    <string name="access_log_history_clear">Borrar el de este dispositivo</string>
+    <string name="access_log_logurl">URL del registro de todos los dispositivos (log_url, opcional)</string>
+    <string name="access_log_devices_count">%1$d dispositivos</string>
+    <string name="access_log_devices_btn">Dispositivos autorizados: %1$d (0 = cualquiera)</string>
+    <string name="access_log_devices_global">Dispositivos autorizados para todos: %1$d (0 = cualquiera)</string>
+    <string name="access_log_devices_code">Dispositivos de este código</string>
+    <string name="access_log_devices_all">Dispositivos autorizados (todos los códigos)</string>
+    <string name="access_log_devices_help">Solo los dispositivos de la lista podrán usar el código. El ID sale al intentarlo desde un móvil no autorizado (se copia solo) o en «Copiar mi ID». El PIN maestro no tiene esta limitación.</string>
+    <string name="access_log_devices_empty">Ninguno: vale cualquier dispositivo.</string>
+    <string name="access_log_device_id_hint">ID del dispositivo</string>
+    <string name="access_log_device_name_hint">Nombre (opcional)</string>
+    <string name="access_log_device_add">Añadir dispositivo</string>
+    <string name="access_log_device_bad">ID no válido</string>
+    <string name="access_log_device_dup">Ese dispositivo ya está en la lista</string>
 </resources>
