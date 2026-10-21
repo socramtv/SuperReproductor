@@ -122,13 +122,13 @@ object AccessControl {
         val set = HashSet<String>()
         for (i in 0 until arr.length()) set.add(arr.optString(i).trim().lowercase())
         val creds = ArrayList<Cred>()
+        val globalDevices = parseDevices(o.optJSONArray("devices"))
         val mh = o.optString("master_hash", "").lowercase()
         val mp = o.optString("master_pin", "")
         if (mh.isNotEmpty() || mp.isNotEmpty()) creds.add(Cred("master", "master", 2, mh, mp, null, 0L, 0L, null))
         val ph = o.optString("pin_hash", "").lowercase()
         val pp = o.optString("pin", "")
         if (ph.isNotEmpty() || pp.isNotEmpty()) creds.add(Cred("pin", "pin", 1, ph, pp, null, 0L, 0L, null, globalDevices))
-        val globalDevices = parseDevices(o.optJSONArray("devices"))
         val users = o.optJSONArray("users") ?: JSONArray()
         for (i in 0 until users.length()) {
             val u = users.optJSONObject(i) ?: continue
