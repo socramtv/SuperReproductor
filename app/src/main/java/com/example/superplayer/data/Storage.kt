@@ -398,6 +398,29 @@ object ContinueWatching {
         return added
     }
 
+    /** Sincronización: suma las entradas de otros dispositivos que sean más recientes que las locales. Devuelve cuántas cambiaron. */
+    fun importNewer(context: Context, incoming: List<Entry>): Int {
+        if (incoming.isEmpty()) return 0
+        val byId = LinkedHashMap<String, Entry>()
+        for (e in getAll(context)) byId[e.stream.id] = e
+        var changed = 0
+        for (e in incoming) {
+            if (isTelegram(e.stream)) continue
+            val existing = byId[e.stream.id]
+            if (existing == null || e.updatedAt > existing.updatedAt) { byId[e.stream.id] = e; changed++ }
+        }
+        if (changed > 0) write(context, byId.values.sortedByDescending { it.updatedAt }.take(MAX_ENTRIES))
+        return changed
+    }
+
+    /** Sincronización: quita la entrada si otro dispositivo la terminó después de lo último que se vio aquí. */
+    fun removeIfOlder(context: Context, streamId: String, at: Long): Boolean {
+        val e = getAll(context).firstOrNull { it.stream.id == streamId } ?: return false
+        if (e.updatedAt >= at) return false
+        write(context, getAll(context).filter { it.stream.id != streamId })
+        return true
+    }
+
     fun positionFor(context: Context, streamId: String): Long? =
         getAll(context).firstOrNull { it.stream.id == streamId }?.positionMs
 
@@ -406,12 +429,18 @@ object ContinueWatching {
         if (durationMs <= 0L || isTelegram(stream)) return
         val finished = durationMs - positionMs < FINISHED_MARGIN_MS
         if (positionMs < MIN_WATCHED_MS || finished) {
-            remove(context, stream.id)
+            // Visto casi entero: se quita aquí y en los demás dispositivos (solo si ya estaba en la lista).
+            if (getAll(context).any { it.stream.id == stream.id }) {
+                remove(context, stream.id)
+                ProgressSync.push(context, stream, positionMs, durationMs, System.currentTimeMillis(), removed = true)
+            }
             return
         }
         val entries = getAll(context).filter { it.stream.id != stream.id }.toMutableList()
-        entries.add(0, Entry(stream, positionMs, durationMs, System.currentTimeMillis()))
+        val at = System.currentTimeMillis()
+        entries.add(0, Entry(stream, positionMs, durationMs, at))
         write(context, entries.take(MAX_ENTRIES))
+        ProgressSync.push(context, stream, positionMs, durationMs, at, removed = false)
     }
 
     fun remove(context: Context, streamId: String) {

@@ -2,6 +2,13 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- Insignia premium: solo visible con un código de acceso desbloqueado (ver MainActivity.onPrepareOptionsMenu). -->
+    <item
+        android:id="@+id/action_premium"
+        android:title="@string/premium_tag"
+        android:visible="false"
+        app:showAsAction="never" />
+
     <item
         android:id="@+id/action_search"
         android:title="@string/action_search"

@@ -87,7 +87,7 @@ object AccessControl {
     class Config(
         val enabled: Boolean, val salt: String, val creds: List<Cred>,
         val locked: Set<String>, val blockAll: Boolean, val message: String, val offlineDays: Int, val unlockMinutes: Int,
-        val logUrl: String = ""
+        val logUrl: String = "", val syncUrl: String = ""
     )
 
     private fun parseDay(text: String, endOfDay: Boolean): Long? {
@@ -157,7 +157,8 @@ object AccessControl {
             message = o.optString("message", ""),
             offlineDays = o.optInt("offline_days", 7),
             unlockMinutes = o.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60 * 30),
-            logUrl = o.optString("log_url", "")
+            logUrl = o.optString("log_url", ""),
+            syncUrl = o.optString("sync_url", "")
         )
     } catch (e: Exception) {
         null
@@ -249,6 +250,34 @@ object AccessControl {
         if (section != null && cr.sections != null && section !in cr.sections) return Check(cr, R.string.access_not_allowed)
         return Check(cr, 0)
     }
+
+    /** Quién está desbloqueado ahora (para la insignia «premium»): nombre del código, caducidad y apartados. */
+    class Info(val name: String, val level: Int, val expiresAt: Long, val sections: Set<String>?)
+
+    fun activeInfo(c: Context): Info? {
+        if (!isConfigured(c)) return null
+        val cfg = config(c) ?: return null
+        if (!cfg.enabled || blockReason(c) != null) return null
+        val cr = activeCred(c) ?: return null
+        val name = when (cr.key) {
+            "master" -> c.getString(R.string.access_name_admin)
+            "pin" -> c.getString(R.string.access_name_general)
+            else -> cr.name
+        }
+        return Info(name, cr.level, cr.expiresAt, cr.sections)
+    }
+
+    /** Identificador (no reversible) de quién está desbloqueado, para sincronizar «Continuar viendo» entre dispositivos con el mismo código. */
+    fun syncIdentity(c: Context): String? = activeCred(c)?.let { sha256("sync|" + it.key).take(24) }
+
+    /** URL del servicio de sincronización (sync_url, o la del registro log_url) o null. */
+    fun syncUrl(c: Context): String? {
+        val cfg = config(c) ?: return null
+        return cfg.syncUrl.ifBlank { cfg.logUrl }.ifBlank { null }
+    }
+
+    /** Se llama (en el hilo principal) justo después de meter un PIN correcto: la pantalla principal actualiza la insignia. */
+    @Volatile var onUnlocked: (() -> Unit)? = null
 
     // ---- Descarga ----
 
@@ -401,6 +430,7 @@ object AccessControl {
             saveUnlock(a)
             dialog.dismiss()
             onOk()
+            try { onUnlocked?.invoke() } catch (e: Exception) { }
         } else {
             // Un código válido pero caducado, sin permiso para este apartado o desde un dispositivo no autorizado no cuenta como intento fallido.
             if (r.error == R.string.access_wrong) failures++

@@ -793,7 +793,7 @@
     <string name="access_log_history_nourl">Para ver los de todos los dispositivos hay que poner la URL del registro (log_url) en Ajustes generales.</string>
     <string name="access_log_history_fail">No se pudo leer el historial de esa URL.</string>
     <string name="access_log_history_clear">Borrar el de este dispositivo</string>
-    <string name="access_log_logurl">URL del registro de todos los dispositivos (log_url, opcional)</string>
+    <string name="access_log_logurl">URL del registro y la sincronización (log_url, opcional)</string>
     <string name="access_log_devices_count">%1$d dispositivos</string>
     <string name="access_log_devices_btn">Dispositivos autorizados: %1$d (0 = cualquiera)</string>
     <string name="access_log_devices_global">Dispositivos autorizados para todos: %1$d (0 = cualquiera)</string>
@@ -806,4 +806,10 @@
     <string name="access_log_device_add">Añadir dispositivo</string>
     <string name="access_log_device_bad">ID no válido</string>
     <string name="access_log_device_dup">Ese dispositivo ya está en la lista</string>
+    <string name="premium_tag">PREMIUM</string>
+    <string name="premium_tag_crown">👑  P R E M I U M  👑</string>
+    <string name="premium_until">Válido hasta el %1$s</string>
+    <string name="premium_no_expiry">Sin fecha de caducidad</string>
+    <string name="access_name_admin">Administrador</string>
+    <string name="access_name_general">Acceso</string>
 </resources>

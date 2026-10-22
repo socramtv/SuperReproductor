@@ -37,6 +37,36 @@
         android:minHeight="?attr/actionBarSize"
         android:background="@color/surface_dark" />
 
+    <!-- Insignia «premium» con el nombre del código con el que se entró (ver MainActivity.updatePremiumBanner). -->
+    <LinearLayout
+        android:id="@+id/premiumBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_premium_banner"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/premiumTag"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:letterSpacing="0.35"
+            android:text="@string/premium_tag"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/premiumName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textSize="22sp" />
+    </LinearLayout>
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

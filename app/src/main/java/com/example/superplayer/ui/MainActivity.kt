@@ -13,7 +13,9 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.superplayer.R
+import com.example.superplayer.data.AccessControl
 import com.example.superplayer.data.AppPrefs
+import com.example.superplayer.data.ProgressSync
 import com.example.superplayer.data.BackupManager
 import com.example.superplayer.data.ChannelOverrides
 import com.example.superplayer.data.EpgRepository
@@ -138,6 +140,89 @@ class MainActivity : AppCompatActivity() {
         handleMatchIntent(intent)
         updateSlotButtonLabels()
         autoRefreshLists()
+    }
+
+    // ---- Insignia premium ----
+
+    private val premiumTick = object : Runnable {
+        override fun run() {
+            binding.root.removeCallbacks(this)
+            updatePremiumBanner()
+            binding.root.postDelayed(this, 20_000L)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        binding.root.removeCallbacks(premiumTick)
+        AccessControl.onUnlocked = null
+    }
+
+    /** Pinta una cadena con degradado dorado (se aplica cuando el texto ya tiene tamaño). */
+    private fun goldText(tv: android.widget.TextView) {
+        tv.post {
+            val w = maxOf(tv.paint.measureText(tv.text.toString()), 1f)
+            tv.paint.shader = android.graphics.LinearGradient(
+                0f, 0f, w, 0f,
+                intArrayOf(0xFFFFE9A0.toInt(), 0xFFD4AF37.toInt(), 0xFFFFF6C8.toInt(), 0xFFB8860B.toInt(), 0xFFFFE08A.toInt()),
+                null, android.graphics.Shader.TileMode.CLAMP
+            )
+            tv.invalidate()
+        }
+    }
+
+    /** «👑 PREMIUM» y el nombre del código, en dorado, arriba del todo, cuando hay un código desbloqueado. */
+    private fun updatePremiumBanner() {
+        val info = AccessControl.activeInfo(this)
+        val banner = binding.premiumBanner
+        if (info == null) {
+            banner.visibility = View.GONE
+            invalidateOptionsMenu()
+            return
+        }
+        val serif = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD_ITALIC)
+        binding.premiumTag.apply {
+            text = getString(R.string.premium_tag_crown)
+            typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD)
+            setShadowLayer(6f, 0f, 2f, 0xAA000000.toInt())
+        }
+        binding.premiumName.apply {
+            text = info.name
+            typeface = serif
+            setShadowLayer(8f, 0f, 2f, 0xCC000000.toInt())
+        }
+        goldText(binding.premiumTag)
+        goldText(binding.premiumName)
+        banner.visibility = View.VISIBLE
+        invalidateOptionsMenu()
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        val item = menu.findItem(R.id.action_premium)
+        val info = AccessControl.activeInfo(this)
+        if (item != null) {
+            item.isVisible = info != null
+            if (info != null) {
+                val s = android.text.SpannableString("👑 " + getString(R.string.premium_tag) + " · " + info.name)
+                s.setSpan(android.text.style.ForegroundColorSpan(0xFFB8860B.toInt()), 0, s.length, 0)
+                s.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD_ITALIC), 0, s.length, 0)
+                s.setSpan(android.text.style.TypefaceSpan("serif"), 0, s.length, 0)
+                item.title = s
+            }
+        }
+        return super.onPrepareOptionsMenu(menu)
+    }
+
+    private fun showPremiumInfo() {
+        val info = AccessControl.activeInfo(this) ?: return
+        val until = if (info.expiresAt != 0L) getString(R.string.premium_until, java.text.DateFormat.getDateInstance().format(java.util.Date(info.expiresAt)))
+        else getString(R.string.premium_no_expiry)
+        val secs = info.sections?.joinToString(", ") ?: getString(R.string.access_log_all)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("👑 " + getString(R.string.premium_tag) + " · " + info.name)
+            .setMessage(until + "\n" + getString(R.string.access_log_sections_line, secs))
+            .setPositiveButton(R.string.channel_check_close, null)
+            .show()
     }
 
     /** La portada de bienvenida sale siempre al abrir la app (no al girar la pantalla ni al cambiar de modo). */
@@ -464,6 +549,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Insignia premium y sincronización de «Continuar viendo» con otros dispositivos del mismo código.
+        AccessControl.onUnlocked = {
+            updatePremiumBanner()
+            ProgressSync.pull(this, force = true) { refreshCategories() }
+        }
+        updatePremiumBanner()
+        premiumTick.run()
+        ProgressSync.pull(this) { if (playlist.categories.isNotEmpty()) refreshCategories() }
         com.example.superplayer.data.AccessControl.guardMain(this)
         refreshVpnState()
         // Lista recibida por Telegram (ver TelegramImport): se carga como lista principal.
@@ -1144,6 +1237,10 @@ class MainActivity : AppCompatActivity() {
             }
             R.id.action_web -> {
                 startActivity(Intent(this, WebActivity::class.java))
+                true
+            }
+            R.id.action_premium -> {
+                showPremiumInfo()
                 true
             }
             R.id.action_access_log -> {

@@ -1559,3 +1559,46 @@ El póster del programa va arriba a la derecha de la barra de información (junt
   La URL de la aplicación web es secreta: quien la tenga puede leer el historial, no la compartas.
 - **Dispositivos autorizados**: cada instalación tiene un ID corto (8 caracteres) que se ve en el diálogo de PIN («Copiar mi ID») y en Control de acceso. En el archivo: `"devices":["A1B2C3D4",{"id":"E5F6A7B8","name":"Móvil de Ana"}]` en la raíz (vale para todos los códigos no maestros) y/o dentro de un código de `users` (esa lista manda sobre la general). Con lista, el código solo funciona en esos dispositivos; el límite de dispositivos de un código es el tamaño de su lista. El PIN maestro no tiene esta restricción. Si se quita un dispositivo, pierde el acceso en cuanto la app baje el archivo.
 - Al intentar un código desde un móvil no autorizado se avisa y su ID se copia al portapapeles para enviárselo al administrador, que lo añade en Registro de accesos (botón del código o Ajustes generales) y publica.
+
+## Insignia premium y «Sigo viendo en otro dispositivo»
+- **Insignia premium**: al desbloquear con un código, arriba del todo de la pantalla principal sale una banda negra con borde dorado con «👑 P R E M I U M 👑» y el **nombre que pusiste a ese código**, en letras doradas con degradado y tipografía serif negrita cursiva. También aparece como primer elemento del menú ⋮ (toca para ver validez y apartados). Desaparece al caducar el desbloqueo. El PIN maestro se muestra como «Administrador» y el general como «Acceso». Código: `MainActivity.updatePremiumBanner`, `AccessControl.activeInfo`, `res/drawable/bg_premium_banner.xml`.
+- **Sigo viendo en otro dispositivo** (`data/ProgressSync.kt`): «Continuar viendo» (películas/vídeos, no Telegram ni directos) se sincroniza entre los dispositivos desbloqueados con el **mismo código** (los datos van bajo un identificador derivado del código, no reversible). Al salir del reproductor se sube la posición; al abrir la app (y al meter el código) se baja lo de los demás (gana lo más reciente; lo terminado en otro dispositivo se quita). Usa `sync_url` del archivo de acceso o, si no está, `log_url`.
+- Hace falta la **versión nueva del script de Google Apps Script** (misma hoja y misma URL: edita el script y crea una *nueva implementación*, actualizando la URL en la app si cambia):
+  ```js
+  function ok() { return ContentService.createTextOutput('ok'); }
+  function sheet(name) { var ss = SpreadsheetApp.getActiveSpreadsheet(); return ss.getSheetByName(name) || ss.insertSheet(name); }
+
+  function doPost(e) {
+    var d = JSON.parse(e.postData.contents);
+    if (d.type === 'progress') {
+      var p = sheet('progreso');
+      var v = p.getDataRange().getValues();
+      var row = [d.key, d.id, d.at, d.removed ? 1 : 0, d.entry || ''];
+      for (var i = 0; i < v.length; i++) {
+        if (v[i][0] === d.key && v[i][1] === d.id) { p.getRange(i + 1, 1, 1, 5).setValues([row]); return ok(); }
+      }
+      p.appendRow(row);
+      return ok();
+    }
+    var s = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+    s.appendRow([d.ts, d.device, d.model, d.code, d.section, d.result]);
+    return ok();
+  }
+
+  function doGet(e) {
+    var out = [];
+    if (e && e.parameter && e.parameter.type === 'progress') {
+      var v = sheet('progreso').getDataRange().getValues();
+      for (var i = 0; i < v.length; i++) {
+        if (v[i][0] === e.parameter.key) out.push({id: v[i][1], at: v[i][2], removed: v[i][3], entry: v[i][4]});
+      }
+    } else {
+      var h = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0].getDataRange().getValues().slice(-300);
+      for (var j = 0; j < h.length; j++) {
+        var r = h[j];
+        out.push({ts: r[0], device: r[1], model: r[2], code: r[3], section: r[4], result: r[5]});
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+  }
+  ```
