@@ -173,27 +173,7 @@ class MainActivity : AppCompatActivity() {
 
     /** «👑 PREMIUM» y el nombre del código, en dorado, arriba del todo, cuando hay un código desbloqueado. */
     private fun updatePremiumBanner() {
-        val info = AccessControl.activeInfo(this)
-        val banner = binding.premiumBanner
-        if (info == null) {
-            banner.visibility = View.GONE
-            invalidateOptionsMenu()
-            return
-        }
-        val serif = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD_ITALIC)
-        binding.premiumTag.apply {
-            text = getString(R.string.premium_tag_crown)
-            typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD)
-            setShadowLayer(6f, 0f, 2f, 0xAA000000.toInt())
-        }
-        binding.premiumName.apply {
-            text = info.name
-            typeface = serif
-            setShadowLayer(8f, 0f, 2f, 0xCC000000.toInt())
-        }
-        goldText(binding.premiumTag)
-        goldText(binding.premiumName)
-        banner.visibility = View.VISIBLE
+        binding.premiumBanner.visibility = View.GONE
         invalidateOptionsMenu()
     }
 
