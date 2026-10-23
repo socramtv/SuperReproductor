@@ -812,4 +812,17 @@
     <string name="premium_no_expiry">Sin fecha de caducidad</string>
     <string name="access_name_admin">Administrador</string>
     <string name="access_name_general">Acceso</string>
+    <string name="tglib_tab">📚 Biblioteca</string>
+    <string name="tglib_scan">Actualizar biblioteca</string>
+    <string name="tglib_sources">Fuentes de la biblioteca…</string>
+    <string name="tglib_filter">Filtrar: series / películas…</string>
+    <string name="tglib_sources_title">Canales y grupos de la biblioteca</string>
+    <string name="tglib_sources_none">No hay canales ni grupos en tu cuenta todavía.</string>
+    <string name="tglib_scanning">Biblioteca · leyendo %1$d de %2$d…</string>
+    <string name="tglib_done">Biblioteca actualizada: %1$d títulos</string>
+    <string name="tglib_empty">La biblioteca está vacía.\nMenú ⋮ → «Fuentes de la biblioteca» para elegir los canales con tus series y películas.</string>
+    <string name="tglib_f_all">Todo</string>
+    <string name="tglib_f_series">Series</string>
+    <string name="tglib_f_movies">Películas</string>
+    <string name="tglib_eps">%1$d cap.</string>
 </resources>

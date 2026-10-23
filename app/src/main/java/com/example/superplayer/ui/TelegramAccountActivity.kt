@@ -49,6 +49,7 @@ import com.example.superplayer.telegram.RarVideo
 import com.example.superplayer.telegram.RarVolumes
 import com.example.superplayer.telegram.TgChat
 import com.example.superplayer.telegram.TgFolder
+import com.example.superplayer.telegram.TgLibrary
 import com.example.superplayer.telegram.TgLinkSpan
 import com.example.superplayer.telegram.TgMessage
 import com.example.superplayer.telegram.TgTopic
@@ -162,6 +163,12 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var chatFilter = 1
     private val VIDEO_TAB = 7
     private val FOLDER_TAB = 8
+    private val LIB_TAB = 9
+    /** Biblioteca: índice en memoria (mensaje + miniatura), filtro (0 todo, 1 series, 2 películas) y estado de la lectura. */
+    private var libEntries: List<Pair<TgMessage, Int>>? = null
+    private var libFilter = 0
+    private var libScanning = false
+    private var libAutoTried = false
     /** Pestaña Carpetas: carpetas de chats de Telegram; null = la lista de carpetas, otra = sus chats. */
     private var tgFolders: List<TgFolder> = emptyList()
     private var openFolder: TgFolder? = null
@@ -584,6 +591,10 @@ class TelegramAccountActivity : AppCompatActivity() {
             it.isVisible = inChat && !showingTopics
             it.title = getString(if (mediaMode) R.string.tgacc_view_all else R.string.tgacc_view_media)
         }
+        val onLib = chat == null && !searching && chatFilter == LIB_TAB && state == TgAuthState.READY
+        menu.findItem(R.id.action_tglib_scan)?.isVisible = onLib
+        menu.findItem(R.id.action_tglib_sources)?.isVisible = onLib
+        menu.findItem(R.id.action_tglib_filter)?.isVisible = onLib
         menu.findItem(R.id.action_tgacc_fav)?.isVisible = inChat
         menu.findItem(R.id.action_tgacc_select)?.isVisible = inChat && !showingTopics && selectionMode == null
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
@@ -600,6 +611,24 @@ class TelegramAccountActivity : AppCompatActivity() {
         when (item.itemId) {
             android.R.id.home -> {
                 goBack()
+                return true
+            }
+            R.id.action_tglib_scan -> {
+                libScan()
+                return true
+            }
+            R.id.action_tglib_sources -> {
+                showLibSources()
+                return true
+            }
+            R.id.action_tglib_filter -> {
+                val opts = arrayOf(getString(R.string.tglib_f_all), getString(R.string.tglib_f_series), getString(R.string.tglib_f_movies))
+                AlertDialog.Builder(this).setTitle(R.string.tglib_filter)
+                    .setSingleChoiceItems(opts, libFilter) { d, i ->
+                        libFilter = i
+                        d.dismiss()
+                        if (chatFilter == LIB_TAB && currentChat == null && !searching) renderLibrary()
+                    }.setNegativeButton(android.R.string.cancel, null).show()
                 return true
             }
             R.id.action_tgacc_select -> {
@@ -787,7 +816,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val labels = listOf(
             R.string.tgacc_tab_fav, R.string.tgacc_tab_all, R.string.tgacc_tab_channels,
             R.string.tgacc_tab_groups, R.string.tgacc_tab_forums, R.string.tgacc_tab_bots, R.string.tgacc_tab_people,
-            R.string.tgvid_tab, R.string.tgacc_tab_folders
+            R.string.tgvid_tab, R.string.tgacc_tab_folders, R.string.tglib_tab
         )
         if (TelegramAccountPrefs.favoriteChats(this).isNotEmpty()) chatFilter = 0
         for ((i, res) in labels.withIndex()) {
@@ -816,7 +845,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun renderChats() {
-        if (chatFilter != VIDEO_TAB) useList()
+        if (chatFilter != VIDEO_TAB && chatFilter != LIB_TAB) useList()
         title = rootTitle()
         searchResults = null
         binding.inputBar.visibility = View.GONE
@@ -826,6 +855,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         invalidateOptionsMenu()
         if (chatFilter == VIDEO_TAB) {
             renderVideoFavs()
+            return
+        }
+        if (chatFilter == LIB_TAB) {
+            renderLibrary()
             return
         }
         if (chatFilter == FOLDER_TAB && openFolder == null) {
@@ -2211,6 +2244,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         Toast.makeText(this, if (!wasFav) R.string.tgvid_fav_added else R.string.tgvid_fav_removed, Toast.LENGTH_SHORT).show()
         com.example.superplayer.widget.HomeWidgetProvider.refreshAll(this)
         if (currentChat == null && chatFilter == VIDEO_TAB && !searching) renderVideoFavs()
+        else if (currentChat == null && chatFilter == LIB_TAB && !searching) renderLibrary()
         else if (mediaMode && currentChat != null && !searching) renderMedia(auto = false)
     }
 
@@ -2276,6 +2310,148 @@ class TelegramAccountActivity : AppCompatActivity() {
         binding.emptyView.text = getString(R.string.tgvid_empty)
         binding.emptyView.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
         focusItemIfTv()
+    }
+
+    /** Título legible de un vídeo para la biblioteca: sin extensión, puntos/guiones bajos ni etiquetas de calidad (1080p, WEB-DL…). */
+    private fun libTitle(m: TgMessage): String {
+        val raw = cleanName(titleOf(m)).replace('_', ' ').replace('.', ' ')
+        return raw.replace(reRarNoise, " ").replace(Regex("\\s+"), " ").trim(' ', '-')
+    }
+
+    /**
+     * Pestaña Biblioteca: los vídeos de las fuentes elegidas, de todos los canales juntos. Las series se agrupan
+     * por nombre (todos sus capítulos en una sola miniatura, con temporadas y capítulos en su ficha) y las
+     * películas por título (las versiones del mismo título también se juntan). La carátula sale de TMDb.
+     */
+    private fun renderLibrary() {
+        useGrid()
+        val entries = libEntries ?: TgLibrary.load(this).also { libEntries = it }
+        val groups = LinkedHashMap<String, MutableList<Pair<TgMessage, Int>>>()
+        val names = HashMap<String, String>()
+        for (e in entries.sortedByDescending { it.first.date }) {
+            val m = e.first
+            if (!isVideoMsg(m) || !isMovieFile(m)) continue
+            val ep = parseEpisode(titleOf(m))
+            val key: String
+            if (ep != null) {
+                key = "s:" + nameKey(ep.series)
+                names.putIfAbsent(key, ep.series)
+            } else {
+                val t = libTitle(m)
+                val nk = nameKey(t)
+                key = if (nk.length >= 2) "m:$nk" else "id${m.chatId}:${m.messageId}"
+                names.putIfAbsent(key, t)
+            }
+            groups.getOrPut(key) { ArrayList() }.add(e)
+        }
+        val items = ArrayList<MediaItem>()
+        for ((k, list) in groups) {
+            val isSeries = k.startsWith("s:")
+            if ((libFilter == 1 && !isSeries) || (libFilter == 2 && isSeries)) continue
+            val q = names[k].orEmpty().takeIf { it.length >= 2 }.orEmpty()
+            val msgs = list.map { it.first }
+            val options = if (isSeries) {
+                msgs.sortedWith(compareBy({ parseEpisode(titleOf(it))?.season ?: 0 }, { parseEpisode(titleOf(it))?.episode ?: 0 }, { it.messageId }))
+            } else msgs.sortedBy { it.messageId }
+            val th = list.firstOrNull { it.second != 0 }?.second ?: 0
+            val lead = list[0].first
+            val fav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
+            val episodes = options.distinctBy { val e = parseEpisode(titleOf(it)); if (e != null) "${e.season}x${e.episode}" else "${it.chatId}:${it.messageId}" }.size
+            val badge = (if (isSeries) "📺 " + getString(R.string.tglib_eps, episodes) else if (options.size > 1) "▶ ×${options.size}" else "▶") + (if (fav) " ★" else "")
+            val chatNames = list.map { it.first.chatTitle }.filter { it.isNotEmpty() }.distinct()
+            val meta = chatNames.firstOrNull().orEmpty() + (if (chatNames.size > 1) " +${chatNames.size - 1}" else "")
+            items.add(MediaItem(key = "lib:$k", select = options, caption = q.ifEmpty { titleOf(lead) }, meta = meta, thumbFileId = th,
+                badge = badge, messageId = lead.messageId, query = q, options = options, pairedImage = false,
+                onLong = { toggleVideoFav(options, q, th) }) { onVideoClick(options, q, th) })
+        }
+        mediaAdapter.submit(items)
+        binding.emptyView.text = getString(R.string.tglib_empty)
+        binding.emptyView.visibility = if (items.isEmpty() && !libScanning) View.VISIBLE else View.GONE
+        focusItemIfTv()
+        if (!libAutoTried && !libScanning && TgLibrary.sources(this).isNotEmpty() && TgLibrary.isStale(this)) {
+            libAutoTried = true
+            libScan()
+        }
+    }
+
+    /** Elegir de qué canales y grupos se alimenta la biblioteca. */
+    private fun showLibSources() {
+        val list = chats.filter { it.kind == "channel" || it.kind == "group" || it.kind == "forum" }.sortedBy { normalize(it.title) }
+        if (list.isEmpty()) {
+            Toast.makeText(this, R.string.tglib_sources_none, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val sel = TgLibrary.sources(this).toMutableSet()
+        val checked = BooleanArray(list.size) { list[it].id in sel }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tglib_sources_title)
+            .setMultiChoiceItems(list.map { it.title }.toTypedArray(), checked) { _, i, on ->
+                if (on) sel.add(list[i].id) else sel.remove(list[i].id)
+            }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                TgLibrary.setSources(this, sel)
+                libAutoTried = true
+                libScan()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Lee los últimos mensajes de cada fuente, uno tras otro, y reconstruye el índice de la biblioteca. */
+    private fun libScan() {
+        val b = backend ?: return
+        if (libScanning) return
+        val ids = TgLibrary.sources(this).toList()
+        if (ids.isEmpty()) {
+            showLibSources()
+            return
+        }
+        libScanning = true
+        val titles = chats.associate { it.id to it.title }
+        val found = ArrayList<TgMessage>()
+        var idx = 0
+        fun onLibTab() = chatFilter == LIB_TAB && currentChat == null && !searching
+        fun finish() {
+            val entries = found.distinctBy { it.chatId to it.messageId }.map { it to it.thumbId }
+            TgLibrary.save(applicationContext, entries)
+            runOnUiThread {
+                libScanning = false
+                libEntries = entries
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (onLibTab()) {
+                    title = rootTitle()
+                    renderLibrary()
+                }
+                Toast.makeText(this, getString(R.string.tglib_done, entries.size), Toast.LENGTH_SHORT).show()
+            }
+        }
+        fun nextChat() {
+            if (isFinishing || isDestroyed) {
+                libScanning = false
+                return
+            }
+            if (idx >= ids.size) {
+                finish()
+                return
+            }
+            val id = ids[idx]
+            val n = idx + 1
+            runOnUiThread { if (onLibTab()) title = getString(R.string.tglib_scanning, n, ids.size) }
+            var pages = 0
+            fun page(from: Long) {
+                b.loadHistory(id, titles[id].orEmpty(), from, 0) { list ->
+                    synchronized(found) { found.addAll(list.filter { isVideoMsg(it) && isMovieFile(it) }) }
+                    pages++
+                    if (list.size >= 20 && pages < TgLibrary.PAGES) page(list.minOf { it.messageId })
+                    else {
+                        idx++
+                        nextChat()
+                    }
+                }
+            }
+            page(0L)
+        }
+        nextChat()
     }
 
     private fun removeFromFolder(folder: String, options: List<TgMessage>, query: String, thumbId: Int) {

@@ -1,0 +1,56 @@
+package com.example.superplayer.telegram
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+
+/**
+ * Biblioteca de Telegram: los vídeos de los canales/grupos que el usuario elige como «fuentes»,
+ * guardados en un índice local (un archivo JSON) para abrir la pestaña al instante.
+ * Cada entrada es el mensaje en JSON (TgMessage.toJson) + «th» (miniatura del chat).
+ */
+object TgLibrary {
+    private const val PREFS = "tg_library"
+    private const val FILE = "tg_library.json"
+    /** Páginas de 50 mensajes que se leen de cada fuente al actualizar (las más recientes). */
+    const val PAGES = 8
+    /** Pasadas estas horas desde la última lectura, al abrir la pestaña se actualiza sola. */
+    const val AUTO_HOURS = 6
+
+    private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun sources(c: Context): Set<Long> =
+        (prefs(c).getStringSet("sources", emptySet()) ?: emptySet()).mapNotNull { it.toLongOrNull() }.toSet()
+
+    fun setSources(c: Context, ids: Set<Long>) {
+        prefs(c).edit().putStringSet("sources", ids.map { it.toString() }.toSet()).apply()
+    }
+
+    fun lastScan(c: Context): Long = prefs(c).getLong("last_scan", 0L)
+
+    fun isStale(c: Context): Boolean = System.currentTimeMillis() - lastScan(c) > AUTO_HOURS * 3600_000L
+
+    fun load(c: Context): List<Pair<TgMessage, Int>> = try {
+        val f = File(c.applicationContext.filesDir, FILE)
+        if (!f.exists()) emptyList() else {
+            val arr = JSONArray(f.readText())
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                TgMessage.fromJson(o) to o.optInt("th", 0)
+            }
+        }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    fun save(c: Context, entries: List<Pair<TgMessage, Int>>) {
+        try {
+            val arr = JSONArray()
+            for ((m, th) in entries) arr.put(m.toJson().put("th", th))
+            File(c.applicationContext.filesDir, FILE).writeText(arr.toString())
+            prefs(c).edit().putLong("last_scan", System.currentTimeMillis()).apply()
+        } catch (e: Exception) {
+        }
+    }
+}

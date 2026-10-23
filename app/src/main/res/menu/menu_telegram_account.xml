@@ -6,6 +6,18 @@
         android:title="@string/tgacc_view_all"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_tglib_scan"
+        android:title="@string/tglib_scan"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_tglib_sources"
+        android:title="@string/tglib_sources"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_tglib_filter"
+        android:title="@string/tglib_filter"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tgacc_select"
         android:title="@string/tgsel_start"
         app:showAsAction="never" />

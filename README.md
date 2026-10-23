@@ -1608,3 +1608,8 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 
 ## Favoritos: solo el canal pulsado
 - Un favorito ya no se identifica solo por la URL sino por **URL + categoría** (`FavoritesStore.keyOf`), así que marcar un canal no marca los demás que repitan URL en otras categorías. Los favoritos antiguos (solo URL) se migran al cargar la lista y pasan a marcar únicamente el primer canal con esa URL. El orden manual y las copias de seguridad usan la nueva clave.
+
+## Telegram: pestaña Biblioteca
+- Nueva pestaña **📚 Biblioteca** en Telegram. Menú ⋮ → **Fuentes de la biblioteca** para elegir qué canales/grupos alimentan la biblioteca; lee los últimos ~400 mensajes de cada uno (`TgLibrary.PAGES`) y guarda un índice local (`tg_library.json`) para abrirla al instante. Se actualiza sola pasadas 6 h al abrir la pestaña, o a mano con **Actualizar biblioteca**.
+- Todos los vídeos de todas las fuentes en una sola cuadrícula: las **series** se agrupan por nombre (S01E02, 1x02, T1 E02…) en una miniatura con «📺 N cap.»; las **películas** por título, juntando versiones (1080p/4K/…). La **carátula, sinopsis y datos** salen de TMDb (la misma ficha que ya usaba cada chat: temporadas y capítulos, versiones, ver). Pulsación larga = favorito. Menú ⋮ → **Filtrar** para ver solo series o solo películas.
+- Código: `telegram/TgLibrary.kt` (índice y fuentes), `TelegramAccountActivity.renderLibrary / libScan / showLibSources`.
