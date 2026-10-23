@@ -51,12 +51,12 @@ class StreamListActivity : AppCompatActivity() {
 
         adapter = StreamAdapter(
             items = allStreams,
-            isFavorite = { favoritesStore.isFavorite(it.id) },
+            isFavorite = { favoritesStore.isFavorite(it) },
             onClick = { openPlayer(it) },
             onToggleFavorite = { toggleFavorite(it) },
             onLongClick = { stream ->
                 showChannelOptionsDialog(
-                    this, stream, favoritesStore.isFavorite(stream.id),
+                    this, stream, favoritesStore.isFavorite(stream),
                     onToggleFavorite = { toggleFavorite(stream) },
                     onChanged = { reloadAfterChannelChange() }
                 )
@@ -116,11 +116,11 @@ class StreamListActivity : AppCompatActivity() {
 
     /** "Ordenar favoritos": el orden manual se guarda y vale para la categoría Favoritos y para los accesos directos. */
     private fun showOrderFavoritesDialog() {
-        val byId = allStreams.associateBy { it.id }
+        val byId = allStreams.associateBy { FavoritesStore.keyOf(it) }
         showReorderDialog(
             activity = this,
             titleRes = R.string.favorites_order_title,
-            items = allStreams.map { it.id },
+            items = allStreams.map { FavoritesStore.keyOf(it) },
             labelOf = { byId[it]?.name ?: it },
             onSave = { newIds ->
                 // Los favoritos de otras listas (no visibles aquí) conservan su sitio, detrás de estos.

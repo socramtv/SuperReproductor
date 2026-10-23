@@ -345,8 +345,8 @@ class EpgGridActivity : AppCompatActivity() {
     /** Los canales sobre los que actúa la búsqueda: todos los que tienen guía, o solo los favoritos si el corazón está activo. */
     private fun baseChannels(): List<Stream> {
         if (!onlyFavorites) return allChannels
-        val favorites = FavoritesStore(this).getAll()
-        return allChannels.filter { it.id in favorites }
+        val store = FavoritesStore(this)
+        return allChannels.filter { store.isFavorite(it) }
     }
 
     /** Botón del corazón: alterna entre ver todos los canales con guía o solo los favoritos (combinado con la búsqueda). */

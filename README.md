@@ -1602,3 +1602,9 @@ El póster del programa va arriba a la derecha de la barra de información (junt
     return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
   }
   ```
+
+## Favoritos sin repetidos
+- La categoría «Favoritos» muestra cada canal una sola vez aunque esté repetido en varias categorías de la lista (`distinctBy { it.id }` en `MainActivity.buildCategoryListWithFavorites`).
+
+## Favoritos: solo el canal pulsado
+- Un favorito ya no se identifica solo por la URL sino por **URL + categoría** (`FavoritesStore.keyOf`), así que marcar un canal no marca los demás que repitan URL en otras categorías. Los favoritos antiguos (solo URL) se migran al cargar la lista y pasan a marcar únicamente el primer canal con esa URL. El orden manual y las copias de seguridad usan la nueva clave.

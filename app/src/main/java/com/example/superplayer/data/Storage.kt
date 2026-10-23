@@ -26,25 +26,26 @@ class FavoritesStore(context: Context) {
     private val prefs: android.content.SharedPreferences
         get() = Profiles.prefs(appContext, "favorites")
 
-    fun isFavorite(streamId: String): Boolean =
-        prefs.getStringSet(KEY_IDS, emptySet())?.contains(streamId) == true
+    fun isFavorite(stream: Stream): Boolean =
+        prefs.getStringSet(KEY_IDS, emptySet())?.contains(keyOf(stream)) == true
 
     /** Cambia el estado de favorito y devuelve el nuevo valor (true = ahora es favorito). */
     fun toggle(stream: Stream): Boolean {
         val current = HashSet(prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet())
         val editor = prefs.edit()
         val order = ArrayList(getOrder())
-        val nowFavorite = if (current.contains(stream.id)) {
-            current.remove(stream.id)
-            order.remove(stream.id)
-            editor.remove(jsonKey(stream.id))
+        val key = keyOf(stream)
+        val nowFavorite = if (current.contains(key)) {
+            current.remove(key)
+            order.remove(key)
+            editor.remove(jsonKey(key))
             false
         } else {
-            current.add(stream.id)
+            current.add(key)
             // Un favorito nuevo se pone al final del orden manual.
-            order.remove(stream.id)
-            order.add(stream.id)
-            editor.putString(jsonKey(stream.id), stream.toJson())
+            order.remove(key)
+            order.add(key)
+            editor.putString(jsonKey(key), stream.toJson())
             true
         }
         editor.putStringSet(KEY_IDS, current).putString(KEY_ORDER, JSONArray(order).toString()).apply()
@@ -70,8 +71,10 @@ class FavoritesStore(context: Context) {
     fun sortByOrder(streams: List<Stream>): List<Stream> {
         val position = HashMap<String, Int>()
         getOrder().forEachIndexed { i, id -> position.putIfAbsent(id, i) }
-        return streams.sortedBy { position[it.id] ?: Int.MAX_VALUE }
+        return streams.sortedBy { position[keyOf(it)] ?: Int.MAX_VALUE }
     }
+
+    fun contains(stream: Stream): Boolean = isFavorite(stream)
 
     fun getAll(): Set<String> = prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet()
 
@@ -93,15 +96,30 @@ class FavoritesStore(context: Context) {
     fun refreshStoredStreams(streams: List<Stream>) {
         val ids = prefs.getStringSet(KEY_IDS, emptySet()) ?: emptySet()
         if (ids.isEmpty()) return
-        val byId = streams.associateBy { it.id }
+        val byKey = HashMap<String, Stream>()
+        val byUrl = HashMap<String, Stream>()
+        for (s in streams) { byKey.putIfAbsent(keyOf(s), s); byUrl.putIfAbsent(s.url, s) }
         val editor = prefs.edit()
+        val newIds = HashSet(ids)
+        val order = ArrayList(getOrder())
         var changed = false
         for (id in ids) {
-            val stream = byId[id] ?: continue
-            editor.putString(jsonKey(id), stream.toJson())
-            changed = true
+            if (id.contains(SEP)) {
+                val stream = byKey[id] ?: continue
+                editor.putString(jsonKey(id), stream.toJson())
+                changed = true
+            } else {
+                // Favorito antiguo (solo URL): pasa a marcar únicamente el primer canal con esa URL.
+                val stream = byUrl[id] ?: continue
+                val key = keyOf(stream)
+                newIds.remove(id); newIds.add(key)
+                val i = order.indexOf(id)
+                if (i >= 0) order[i] = key else order.add(key)
+                editor.remove(jsonKey(id)).putString(jsonKey(key), stream.toJson())
+                changed = true
+            }
         }
-        if (changed) editor.apply()
+        if (changed) editor.putStringSet(KEY_IDS, newIds).putString(KEY_ORDER, JSONArray(order).toString()).apply()
     }
 
     /**
@@ -115,11 +133,12 @@ class FavoritesStore(context: Context) {
         val order = ArrayList(getOrder())
         var added = 0
         for (stream in streams) {
-            if (current.add(stream.id)) {
+            val key = keyOf(stream)
+            if (current.add(key)) {
                 added++
-                if (stream.id !in order) order.add(stream.id)
+                if (key !in order) order.add(key)
             }
-            editor.putString(jsonKey(stream.id), stream.toJson())
+            editor.putString(jsonKey(key), stream.toJson())
         }
         editor.putStringSet(KEY_IDS, current).putString(KEY_ORDER, JSONArray(order).toString()).apply()
         return added
@@ -128,6 +147,9 @@ class FavoritesStore(context: Context) {
     private fun jsonKey(streamId: String) = "fav_json_$streamId"
 
     companion object {
+        private const val SEP = "\u0001"
+        /** Clave de favorito: URL + categoría, para marcar solo el canal pulsado y no todos los que repitan URL en otras categorías. */
+        fun keyOf(stream: Stream): String = stream.url + SEP + stream.category
         private const val KEY_IDS = "favorite_ids"
         private const val KEY_ORDER = "favorite_order"
     }

@@ -328,7 +328,7 @@ class CineActivity : AppCompatActivity() {
                 startActivity(Intent(this, PlayerActivity::class.java))
             }
             .setNeutralButton(
-                if (favorites.isFavorite(stream.id)) R.string.channel_opt_unfavorite else R.string.channel_opt_favorite
+                if (favorites.isFavorite(stream)) R.string.channel_opt_unfavorite else R.string.channel_opt_favorite
             ) { _, _ -> favorites.toggle(stream) }
             .setNegativeButton(R.string.channel_check_close, null)
             .show()

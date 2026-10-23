@@ -116,12 +116,12 @@ class MainActivity : AppCompatActivity() {
         categoryAdapter = CategoryAdapter(emptyList()) { category -> openCategory(category) }
         streamAdapter = StreamAdapter(
             items = emptyList(),
-            isFavorite = { favoritesStore.isFavorite(it.id) },
+            isFavorite = { favoritesStore.isFavorite(it) },
             onClick = { openPlayer(it) },
             onToggleFavorite = { toggleFavorite(it) },
             onLongClick = { stream ->
                 showChannelOptionsDialog(
-                    this, stream, favoritesStore.isFavorite(stream.id),
+                    this, stream, favoritesStore.isFavorite(stream),
                     onToggleFavorite = { toggleFavorite(stream) },
                     onChanged = { refreshAfterChannelChange() }
                 )
@@ -687,7 +687,7 @@ class MainActivity : AppCompatActivity() {
         // marcó antes de que existiera esto (ver FavoritesStore); barato,
         // así que no pasa nada por hacerlo en cada carga de lista.
         val favStore = favoritesStore
-        bgExecutor.execute { try { favStore.refreshStoredStreams(allStreams) } catch (e: Exception) { } }
+        try { favStore.refreshStoredStreams(allStreams) } catch (e: Exception) { }
         refreshShortcuts()
     }
 
@@ -865,9 +865,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildCategoryListWithFavorites(): List<Category> {
-        val favIds = favoritesStore.getAll()
         val favStreams = favoritesStore.sortByOrder(
-            playlist.categories.flatMap { it.streams }.filter { favIds.contains(it.id) }
+            playlist.categories.flatMap { it.streams }.filter { favoritesStore.isFavorite(it) }.distinctBy { FavoritesStore.keyOf(it) }
         )
         val result = mutableListOf<Category>()
         // "Continuar viendo": películas/vídeos empezados (de cualquier lista), los más recientes primero.
