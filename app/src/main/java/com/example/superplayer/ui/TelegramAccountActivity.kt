@@ -1242,8 +1242,16 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** "253-Peli (2025-mkv" y "Peli (2025-" -> "Peli (2025)": el mismo nombre para el vídeo y su imagen. */
     private val reEmoji = Regex("[\\p{So}\\p{Sk}\\u200D\\uFE0F\\u20E3]")
 
+    private val reSizeParen = Regex("(?i)\\(\\s*\\d+(?:[.,]\\d+)?\\s*(?:[KMGT]i?B|bytes?)\\s*\\)")
+    private val reExtAny = Regex("(?i)\\.(mkv|mp4|avi|mov|m4v|webm|ts|mpe?g|wmv|flv)\\b")
+    private val reHyphenYear = Regex("(?<=\\p{L})[-_.]((?:19|20)\\d{2})\\b")
+
     private fun cleanName(raw: String): String {
-        var t = raw.replace(reEmoji, " ").replace(Regex("\\s+"), " ").trim().replace(reNumPrefix, "")
+        var t = raw.replace(reEmoji, " ").replace(reSizeParen, " ").replace(reExtAny, " ")
+            .replace(Regex("\\s+"), " ").trim()
+        // «Sabrina_y_sus_amores-1995»: sin espacios es un nombre de archivo, no un título.
+        if (!t.contains(' ')) t = t.replace('_', ' ').replace('.', ' ')
+        t = t.replace(reHyphenYear, " ($1)").replace(reNumPrefix, "")
         t = t.replace(reUrlSuffix, "")
         t = t.replace(reExtSuffix, "")
         t = t.replace(reYearOpen) { "(" + it.groupValues[1] + ")" }
@@ -1929,9 +1937,18 @@ class TelegramAccountActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     mediaAdapter.infoLoaded(query)
+                    chatAdapter.infoLoaded(query)
                 }
             }
         }
+    }
+
+    /** Título para buscar la ficha de un vídeo dentro de la conversación: el nombre de la serie o el título limpio de la película ("" si no es un vídeo). */
+    private fun bubbleQuery(m: TgMessage): String {
+        if (m.kind != "video" && !(m.kind == "document" && looksLikeMedia(m))) return ""
+        if (!isVideoMsg(m) || !isMovieFile(m)) return ""
+        val q = parseEpisode(titleOf(m))?.series ?: libTitle(m)
+        return q.takeIf { it.length >= 2 }.orEmpty()
     }
 
     private fun infoMeta(info: MovieInfo.Info): String = listOfNotNull(
@@ -2295,6 +2312,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                                 runOnUiThread {
                                     if (isFinishing || isDestroyed) return@runOnUiThread
                                     mediaAdapter.infoLoaded(query)
+                                    chatAdapter.infoLoaded(query)
                                     Toast.makeText(this, R.string.tgcover_done, Toast.LENGTH_SHORT).show()
                                     dialog?.dismiss()
                                 }
@@ -2313,6 +2331,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     mediaAdapter.infoLoaded(query)
+                    chatAdapter.infoLoaded(query)
                     Toast.makeText(this, R.string.tgcover_reset_done, Toast.LENGTH_SHORT).show()
                     dialog?.dismiss()
                 }
@@ -4403,6 +4422,10 @@ class TelegramAccountActivity : AppCompatActivity() {
             items.forEachIndexed { i, m -> if (m != null && m.thumbId == id) notifyItemChanged(i) }
         }
 
+        fun infoLoaded(query: String) {
+            items.forEachIndexed { i, m -> if (m != null && bubbleQuery(m) == query) notifyItemChanged(i) }
+        }
+
         fun refreshSel() { if (itemCount > 0) notifyItemRangeChanged(0, itemCount) }
 
         override fun getItemViewType(position: Int) = if (items[position] == null) 0 else 1
@@ -4436,8 +4459,18 @@ class TelegramAccountActivity : AppCompatActivity() {
             val showSender = !out && m.sender.isNotEmpty() && (kind == "group" || kind == "forum")
             b.tgbSender.visibility = if (showSender) View.VISIBLE else View.GONE
             b.tgbSender.text = m.sender
-            // Imagen / miniatura
-            if (m.thumbId != 0) {
+            // Imagen / miniatura. Un vídeo reconocido (película o serie) enseña su carátula de TMDb en vez del fotograma negro.
+            val bq = bubbleQuery(m)
+            val binfo = if (bq.isNotEmpty()) MovieInfo.peek(this@TelegramAccountActivity, bq) else null
+            val poster = binfo?.posterUrl
+            if (bq.isNotEmpty() && binfo == null) requestInfo(bq)
+            if (poster != null) {
+                b.tgbImageFrame.visibility = View.VISIBLE
+                b.tgbImage.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                b.tgbImage.load(poster)
+                b.tgbPlay.visibility = View.VISIBLE
+            } else if (m.thumbId != 0) {
+                b.tgbImage.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
                 b.tgbImageFrame.visibility = View.VISIBLE
                 val path = thumbPaths[m.thumbId]
                 if (path != null) b.tgbImage.load(File(path)) else {
@@ -4452,7 +4485,12 @@ class TelegramAccountActivity : AppCompatActivity() {
             // Archivo
             val isImage = m.kind == "photo" || (m.mime ?: "").startsWith("image/")
             if (m.fileId != null && !(isImage && m.thumbId != 0) && m.kind != "other") {
-                val name = m.fileName ?: when (m.kind) { "audio" -> "Audio"; "voice" -> "Nota de voz"; "video" -> "Vídeo"; else -> "Archivo" }
+                var name = m.fileName ?: when (m.kind) { "audio" -> "Audio"; "voice" -> "Nota de voz"; "video" -> "Vídeo"; else -> "Archivo" }
+                // Vídeo reconocido: título limpio (el oficial de TMDb si ya está) en vez del nombre del archivo.
+                if (bq.isNotEmpty()) {
+                    val epTag = parseEpisode(titleOf(m))?.let { String.format(java.util.Locale.US, " · T%d E%02d", it.season, it.episode) }.orEmpty()
+                    name = (binfo?.let { it.title + (it.year?.let { y -> " ($y)" } ?: "") } ?: bq) + epTag
+                }
                 val size = if (m.size > 0) String.format(java.util.Locale.US, "  (%.1f MB)", m.size / 1048576.0) else ""
                 b.tgbFile.text = kindIcon(m) + " " + name + size
                 b.tgbFile.visibility = View.VISIBLE

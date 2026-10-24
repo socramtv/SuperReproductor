@@ -72,6 +72,10 @@ object MovieInfo {
     private val RE_YEAR_END = Regex("\\s((?:19|20)\\d{2})\\s*$")
     /** Emojis y símbolos sueltos delante o dentro del título («📺 Serie 1x01»): no forman parte del nombre. */
     private val RE_EMOJI = Regex("[\\p{So}\\p{Sk}\\u200D\\uFE0F\\u20E3]")
+    /** Restos de nombre de archivo en el título: «(783.9 MB)», «.mp4» y el año pegado con guion («Peli-1995»). */
+    private val RE_SIZE = Regex("(?i)\\(\\s*\\d+(?:[.,]\\d+)?\\s*(?:[KMGT]i?B|bytes?)\\s*\\)")
+    private val RE_EXT_ANY = Regex("(?i)\\.(mkv|mp4|avi|mov|m4v|webm|ts|mpe?g|wmv|flv)\\b")
+    private val RE_HYPHEN_YEAR = Regex("(?<=\\p{L})[-_.]((?:19|20)\\d{2})\\b")
     private val RE_DOTS = Regex("[._]+")
     private val RE_SPACES = Regex("\\s+")
     private val RE_MARKS = Regex("\\p{M}+")
@@ -87,7 +91,7 @@ object MovieInfo {
     }
 
     private fun cleanTitleUncached(raw: String): Pair<String, String?> {
-        var text = raw.replace(RE_EMOJI, " ").trim()
+        var text = raw.replace(RE_EMOJI, " ").replace(RE_SIZE, " ").replace(RE_EXT_ANY, " ").replace(RE_HYPHEN_YEAR, " ($1)").trim()
         var year: String? = null
         RE_YEAR_BRACKET.find(text)?.let { year = it.groupValues[1] }
         text = text.replace(RE_SQUARE, " ").replace(RE_ROUND, " ")
