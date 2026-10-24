@@ -17,6 +17,7 @@ object TgLibrary {
     const val PAGES = 8
     /** Pasadas estas horas desde la última lectura, al abrir la pestaña se actualiza sola. */
     const val AUTO_HOURS = 6
+    const val MAX_ENTRIES = 8000
 
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -68,7 +69,11 @@ object TgLibrary {
     fun save(c: Context, entries: List<Pair<TgMessage, Int>>) {
         try {
             val arr = JSONArray()
-            for ((m, th) in entries) arr.put(m.toJson().put("th", th))
+            // Solo lo necesario: el texto se recorta (el título está en su primera línea) y se guardan como máximo los 8000 más recientes.
+            for ((m, th) in entries.sortedByDescending { it.first.date }.take(MAX_ENTRIES)) {
+                val slim = m.copy(text = m.text.lineSequence().filter { it.isNotBlank() }.take(3).joinToString("\n").take(300))
+                arr.put(slim.toJson().put("th", th))
+            }
             File(c.applicationContext.filesDir, FILE).writeText(arr.toString())
             prefs(c).edit().putLong("last_scan", System.currentTimeMillis()).apply()
         } catch (e: Exception) {

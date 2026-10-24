@@ -1240,6 +1240,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private val reYearOpen = Regex("\\(((?:19|20)\\d{2})[^)]*$")
 
     /** "253-Peli (2025-mkv" y "Peli (2025-" -> "Peli (2025)": el mismo nombre para el vídeo y su imagen. */
+    private val reSpaces = Regex("\\s+")
     private val reEmoji = Regex("[\\p{So}\\p{Sk}\\u200D\\uFE0F\\u20E3]")
 
     private val reSizeParen = Regex("(?i)\\(\\s*\\d+(?:[.,]\\d+)?\\s*(?:[KMGT]i?B|bytes?)\\s*\\)")
@@ -1248,7 +1249,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun cleanName(raw: String): String {
         var t = MovieInfo.stripGenres(raw.replace(reEmoji, " ").replace(reSizeParen, " ").replace(reExtAny, " "))
-            .replace(Regex("\\s+"), " ").trim()
+            .replace(reSpaces, " ").trim()
         // «Sabrina_y_sus_amores-1995»: sin espacios es un nombre de archivo, no un título.
         if (!t.contains(' ')) t = t.replace('_', ' ').replace('.', ' ')
         t = t.replace(reHyphenYear, " ($1)").replace(reNumPrefix, "")
@@ -2467,7 +2468,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** Título legible de un vídeo para la biblioteca: sin extensión, puntos/guiones bajos ni etiquetas de calidad (1080p, WEB-DL…). */
     private fun libTitle(m: TgMessage): String {
         val raw = cleanName(titleOf(m)).replace('_', ' ').replace('.', ' ')
-        return raw.replace(reRarNoise, " ").replace(Regex("\\s+"), " ").trim(' ', '-')
+        return raw.replace(reRarNoise, " ").replace(reSpaces, " ").trim(' ', '-')
     }
 
     /**
@@ -2475,62 +2476,116 @@ class TelegramAccountActivity : AppCompatActivity() {
      * por nombre (todos sus capítulos en una sola miniatura, con temporadas y capítulos en su ficha) y las
      * películas por título (las versiones del mismo título también se juntan). La carátula sale de TMDb.
      */
+    private var libRenderSeq = 0
+
+    /** Una entrada de la biblioteca con lo que cuesta calcular (episodio, título, clave de visto) hecho una sola vez. */
+    private class LibRow(val m: TgMessage, val th: Int, val ep: EpInfo?, val name: String, val key: String, val seenKey: String)
+
+    private class LibResult(val items: List<MediaItem>, val pool: List<String>)
+
+    /**
+     * Pestaña Biblioteca: los vídeos de las fuentes elegidas, de todos los canales juntos. Las series se agrupan
+     * por nombre y las películas por título (versiones juntas); la carátula sale de TMDb. Con miles de vídeos el
+     * trabajo (leer el índice, agrupar, filtrar) se hace en segundo plano y la pantalla solo recibe el resultado.
+     */
     private fun renderLibrary() {
         useGrid()
-        val entries = libEntries ?: TgLibrary.load(this).also { libEntries = it }
         title = rootTitle() + (if (filtersActive()) " · " + getString(R.string.tglib_f_active) else "")
+        val seq = ++libRenderSeq
+        if (libEntries == null) {
+            binding.emptyView.text = getString(R.string.tgacc_loading)
+            binding.emptyView.visibility = View.VISIBLE
+        }
+        val type = libFilter
+        Thread {
+            var result: LibResult? = null
+            try {
+                result = buildLibrary(type)
+            } catch (e: Exception) {
+                // se deja la pantalla como estaba
+            } catch (e: OutOfMemoryError) {
+                libEntries = null
+            }
+            val res = result
+            runOnUiThread {
+                if (isFinishing || isDestroyed || seq != libRenderSeq) return@runOnUiThread
+                if (!(currentChat == null && chatFilter == LIB_TAB && !searching)) return@runOnUiThread
+                if (res == null) {
+                    binding.emptyView.text = getString(R.string.tglib_empty)
+                    binding.emptyView.visibility = View.VISIBLE
+                    return@runOnUiThread
+                }
+                filterPool = res.pool
+                prefetchInfo(res.pool.take(200))
+                mediaAdapter.submit(res.items)
+                binding.emptyView.text = getString(R.string.tglib_empty)
+                binding.emptyView.visibility = if (res.items.isEmpty() && !libScanning) View.VISIBLE else View.GONE
+                updateFilterRow()
+                focusItemIfTv()
+                if (!libAutoTried && !libScanning && TgLibrary.sources(this).isNotEmpty() && TgLibrary.isStale(this)) {
+                    libAutoTried = true
+                    libScan()
+                }
+            }
+        }.start()
+    }
+
+    private fun buildLibrary(type: Int): LibResult {
+        val entries = libEntries ?: TgLibrary.load(this).also { libEntries = it }
         val hidden = TgLibrary.hidden(this)
-        val groups = LinkedHashMap<String, MutableList<Pair<TgMessage, Int>>>()
-        val names = HashMap<String, String>()
+        val favKeys = HashSet<Pair<Long, Long>>()
+        for (o in TelegramAccountPrefs.videoFavorites(this)) favKeys.add(o.optLong("c") to o.optLong("m"))
+        val seenSet = HashSet<String>()
+        val rows = ArrayList<LibRow>(entries.size)
         for (e in entries.sortedByDescending { it.first.date }) {
             val m = e.first
             if (!isVideoMsg(m) || !isMovieFile(m) || TgLibrary.keyOf(m) in hidden) continue
             val ep = parseEpisode(titleOf(m))
             val key: String
+            val name: String
+            val seenKey: String
             if (ep != null) {
-                key = "s:" + nameKey(ep.series)
-                names.putIfAbsent(key, ep.series)
+                val nk = nameKey(ep.series)
+                key = "s:$nk"
+                name = ep.series
+                seenKey = "s:$nk:${ep.season}x${ep.episode}"
             } else {
                 val t = libTitle(m)
                 val nk = nameKey(t)
                 key = if (nk.length >= 2) "m:$nk" else "id${m.chatId}:${m.messageId}"
-                names.putIfAbsent(key, t)
+                name = t
+                seenKey = "m:" + nk.ifEmpty { "${m.chatId}:${m.messageId}" }
             }
-            groups.getOrPut(key) { ArrayList() }.add(e)
+            if (TgWatched.isWatched(this, seenKey)) seenSet.add(seenKey)
+            rows.add(LibRow(m, e.second, ep, name, key, seenKey))
         }
+        val groups = LinkedHashMap<String, MutableList<LibRow>>()
+        for (r in rows) groups.getOrPut(r.key) { ArrayList() }.add(r)
+        val pool = ArrayList<String>(groups.size)
+        for ((_, list) in groups) list[0].name.takeIf { it.length >= 2 }?.let { pool.add(it) }
         val items = ArrayList<MediaItem>()
-        filterPool = groups.keys.mapNotNull { names[it]?.takeIf { n -> n.length >= 2 } }
-        prefetchInfo(filterPool)
         for ((k, list) in groups) {
             val isSeries = k.startsWith("s:")
-            if ((libFilter == 1 && !isSeries) || (libFilter == 2 && isSeries)) continue
-            val q = names[k].orEmpty().takeIf { it.length >= 2 }.orEmpty()
-            if (!passesFilters(q, list[0].first.date)) continue
-            val msgs = list.map { it.first }
-            val options = if (isSeries) {
-                msgs.sortedWith(compareBy({ parseEpisode(titleOf(it))?.season ?: 0 }, { parseEpisode(titleOf(it))?.episode ?: 0 }, { it.messageId }))
-            } else msgs.sortedBy { it.messageId }
-            val th = list.firstOrNull { it.second != 0 }?.second ?: 0
-            val lead = list[0].first
-            val fav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
-            val episodes = options.distinctBy { val e = parseEpisode(titleOf(it)); if (e != null) "${e.season}x${e.episode}" else "${it.chatId}:${it.messageId}" }.size
+            if ((type == 1 && !isSeries) || (type == 2 && isSeries)) continue
+            val q = list[0].name.takeIf { it.length >= 2 }.orEmpty()
+            if (!passesFilters(q, list[0].m.date)) continue
+            val sorted = if (isSeries) list.sortedWith(compareBy({ it.ep?.season ?: 0 }, { it.ep?.episode ?: 0 }, { it.m.messageId }))
+            else list.sortedBy { it.m.messageId }
+            val options = sorted.map { it.m }
+            val th = list.firstOrNull { it.th != 0 }?.th ?: 0
+            val lead = list[0].m
+            val fav = options.any { (it.chatId to it.messageId) in favKeys }
+            val episodes = list.distinctBy { it.seenKey }.size
+            val allSeen = list.all { it.seenKey in seenSet }
             val badge = (if (isSeries) "📺 " + getString(R.string.tglib_eps, episodes) else if (options.size > 1) "▶ ×${options.size}" else "▶") +
-                (if (fav) " ★" else "") + (if (options.all { isSeen(it) }) " ✓" else "")
-            val chatNames = list.map { it.first.chatTitle }.filter { it.isNotEmpty() }.distinct()
+                (if (fav) " ★" else "") + (if (allSeen) " ✓" else "")
+            val chatNames = list.map { it.m.chatTitle }.filter { it.isNotEmpty() }.distinct()
             val meta = chatNames.firstOrNull().orEmpty() + (if (chatNames.size > 1) " +${chatNames.size - 1}" else "")
             items.add(MediaItem(key = "lib:$k", select = options, caption = q.ifEmpty { titleOf(lead) }, meta = meta, thumbFileId = th,
                 badge = badge, messageId = lead.messageId, query = q, options = options, pairedImage = false,
                 onLong = { toggleVideoFav(options, q, th) }) { onVideoClick(options, q, th) })
         }
-        mediaAdapter.submit(items)
-        binding.emptyView.text = getString(R.string.tglib_empty)
-        binding.emptyView.visibility = if (items.isEmpty() && !libScanning) View.VISIBLE else View.GONE
-        updateFilterRow()
-        focusItemIfTv()
-        if (!libAutoTried && !libScanning && TgLibrary.sources(this).isNotEmpty() && TgLibrary.isStale(this)) {
-            libAutoTried = true
-            libScan()
-        }
+        return LibResult(items, pool)
     }
 
     /** Elegir de qué canales y grupos se alimenta la biblioteca: con buscador y un botón para ver solo los favoritos. */
@@ -2689,7 +2744,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         chip("🆕 " + getString(R.string.tglib_n_week), filterNov == 2) { filterNov = if (filterNov == 2) 0 else 2; rerenderFiltered() }
         chip("🆕 " + getString(R.string.tglib_n_month), filterNov == 3) { filterNov = if (filterNov == 3) 0 else 3; rerenderFiltered() }
         val count = HashMap<String, Int>()
-        for (t in filterPool) MovieInfo.peek(this, t)?.genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()
+        for (t in filterPool.take(600)) MovieInfo.peek(this, t)?.genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()
             ?.forEach { count[it] = (count[it] ?: 0) + 1 }
         if (filterGenre.isNotEmpty()) count.putIfAbsent(filterGenre, 0)
         for (g in count.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { normalize(it.key) }).map { it.key }) {

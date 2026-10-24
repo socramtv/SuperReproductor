@@ -1639,3 +1639,7 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 - Se limpian los restos de nombre de archivo al reconocer el título: tamaño entre paréntesis, extensión en medio, año pegado con guion («Peli-1995» → «Peli (1995)») y nombres con guiones bajos/puntos. Vale para agrupar, buscar la ficha en TMDb (`MovieInfo.cleanTitle`) y para la clave de «visto».
 - **En la conversación** (burbujas), los vídeos reconocidos enseñan la **carátula de TMDb** en vez del fotograma negro y su título limpio (el oficial + año; en series, «· T1 E02») en vez del nombre del archivo. Sin ficha, queda el fotograma de siempre.
 - **Géneros pegados al título** («RÍO. (2011) ANIMACIÓN - AVENTURAS - COMEDIA - INFANTIL», «ESCUADRÓN SUICIDA. (2021) ACCIÓN - FANTÁSTICO - THRILLER.»): si justo tras el año empieza una palabra de género, se corta todo lo que sigue y queda «RÍO. (2011)» (`MovieInfo.stripGenres`, usada al buscar la ficha y al agrupar).
+
+## Biblioteca con muchos vídeos (rendimiento)
+- La pestaña Biblioteca ya no trabaja en el hilo principal: leer el índice (`tg_library.json`), agrupar series/películas y filtrar se hace en segundo plano (`buildLibrary`) y la pantalla solo recibe el resultado (antes, con miles de vídeos, podía congelarse y cerrarse Telegram).
+- Se calcula una sola vez por vídeo lo costoso (episodio, título, clave de visto) y los favoritos se leen una vez, no por cada vídeo. El índice guarda como máximo los 8000 más recientes, con el texto recortado. Las fichas que se piden a TMDb para los géneros se limitan a 200 por pantalla.
