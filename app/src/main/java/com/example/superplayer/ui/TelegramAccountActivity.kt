@@ -44,6 +44,7 @@ import com.example.superplayer.telegram.TelegramAccountPrefs
 import com.example.superplayer.telegram.TgAccountBackend
 import com.example.superplayer.telegram.TgAuthState
 import com.example.superplayer.telegram.TgStreamServer
+import com.example.superplayer.telegram.TgWatched
 import com.example.superplayer.telegram.MusicArchive
 import com.example.superplayer.telegram.RarVideo
 import com.example.superplayer.telegram.RarVolumes
@@ -1146,6 +1147,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         // Tras un rato sin usar Telegram la conexión de TDLib puede haberse quedado dormida: se despierta.
         backend?.refreshConnection(true)
         refreshLive()
+        // Al volver del reproductor: repinta las marcas de «visto» si cambiaron.
+        if (TgWatched.version != seenVersion) {
+            seenVersion = TgWatched.version
+            if (state == TgAuthState.READY && !searching) {
+                if (currentChat == null && chatFilter == LIB_TAB) renderLibrary()
+                else if (currentChat != null && mediaMode && !showingTopics) renderMedia(auto = false)
+            }
+        }
     }
 
     override fun onStop() {
@@ -1433,7 +1442,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val thumb = img?.thumbId?.takeIf { it != 0 } ?: m.thumbId
                 val q = if (options.any { isMovieFile(it) }) (k?.let { groupName[it] } ?: cleanName(titleOf(m))).takeIf { it.length >= 2 }.orEmpty() else ""
                 val fav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
-                val badge = (if (options.size > 1) "▶ ×${options.size}" else "▶") + (if (fav) " ★" else "")
+                val badge = (if (options.size > 1) "▶ ×${options.size}" else "▶") + (if (fav) " ★" else "") + (if (options.all { isSeen(it) }) " ✓" else "")
                 items.add(MediaItem(key = "${m.messageId}:vid", select = options, caption = (if (q.isNotEmpty()) q else caption.ifEmpty { m.fileName.orEmpty() }), meta = date, thumbFileId = thumb,
                     badge = badge, messageId = m.messageId, query = q, options = options, pairedImage = img != null,
                     onLong = { toggleVideoFav(options, q, thumb) }) { onVideoClick(options, q, thumb) })
@@ -2042,6 +2051,29 @@ class TelegramAccountActivity : AppCompatActivity() {
             // Capítulos por temporada: T1, T2…; cada número es un botón.
             val eps = options.mapNotNull { m -> parseEpisode(titleOf(m))?.let { Triple(it.season, it.episode, m) } }
             val others = options.filter { parseEpisode(titleOf(it)) == null }
+            val ordered = eps.sortedWith(compareBy({ it.first }, { it.second }))
+            val nextUnseen = ordered.firstOrNull { !isSeen(it.third) }
+            val seenCount = ordered.map { watchKey(it.third) }.distinct().count { TgWatched.isWatched(this, it) }
+            val totalCount = ordered.map { watchKey(it.third) }.distinct().size
+            fun wideButton(text: String, top: Int, onClick: () -> Unit) = android.widget.Button(this).apply {
+                this.text = text
+                isAllCaps = false
+                setOnClickListener { onClick() }
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(dp(16), dp(top), dp(16), 0) }
+            }
+            if (nextUnseen != null) {
+                col.addView(wideButton(getString(R.string.tgw_next_unseen, nextUnseen.first, nextUnseen.second), 12) { play(nextUnseen.third) })
+            }
+            col.addView(wideButton(
+                if (seenCount >= totalCount) getString(R.string.tgw_clear_all) else getString(R.string.tgw_mark_all, seenCount, totalCount), 6
+            ) {
+                TgWatched.setAll(this, ordered.map { watchKey(it.third) }, seenCount < totalCount)
+                dialog?.dismiss()
+                showMovieInfo(options, query, thumbId)
+                if (!isFinishing) rerenderMarks()
+            })
             for ((season, list) in eps.groupBy { it.first }.toSortedMap()) {
                 col.addView(TextView(this).apply {
                     text = getString(R.string.tgvid_season, season)
@@ -2055,14 +2087,26 @@ class TelegramAccountActivity : AppCompatActivity() {
                     setPadding(dp(12), 0, dp(12), 0)
                 }
                 for ((_, ep, m) in list.sortedBy { it.second }) {
+                    val seen = isSeen(m)
                     val btn = android.widget.Button(this).apply {
-                        text = String.format(java.util.Locale.US, "%02d", ep)
+                        text = String.format(java.util.Locale.US, "%02d", ep) + (if (seen) " ✓" else "")
+                        alpha = if (seen) 0.55f else 1f
                         isAllCaps = false
                         textSize = 13f
                         minWidth = 0
                         minimumWidth = 0
                         setPadding(0, 0, 0, 0)
                         setOnClickListener { play(m) }
+                        // Pulsación larga: marca o quita «visto» a mano.
+                        setOnLongClickListener {
+                            val now = !isSeen(m)
+                            TgWatched.set(this@TelegramAccountActivity, watchKey(m), now)
+                            Toast.makeText(this@TelegramAccountActivity, if (now) R.string.tgw_marked else R.string.tgw_unmarked, Toast.LENGTH_SHORT).show()
+                            dialog?.dismiss()
+                            showMovieInfo(options, query, thumbId)
+                            rerenderMarks()
+                            true
+                        }
                     }
                     val lp = android.widget.GridLayout.LayoutParams(
                         android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
@@ -2078,6 +2122,20 @@ class TelegramAccountActivity : AppCompatActivity() {
             for ((i, m) in others.withIndex()) col.addView(optionButton(m, i + 1, others.size > 1) { play(m) })
         } else {
             for ((i, m) in options.withIndex()) col.addView(optionButton(m, i + 1, options.size > 1) { play(m) })
+            val allSeen = options.all { isSeen(it) }
+            col.addView(android.widget.Button(this).apply {
+                text = getString(if (allSeen) R.string.tgw_unmark_movie else R.string.tgw_mark_movie)
+                isAllCaps = false
+                setOnClickListener {
+                    TgWatched.setAll(this@TelegramAccountActivity, options.map { watchKey(it) }, !allSeen)
+                    dialog?.dismiss()
+                    showMovieInfo(options, query, thumbId)
+                    rerenderMarks()
+                }
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(dp(16), dp(10), dp(16), 0) }
+            })
         }
         if (query.isNotEmpty()) col.addView(android.widget.Button(this).apply {
             text = getString(R.string.tgcover_btn)
@@ -2376,6 +2434,17 @@ class TelegramAccountActivity : AppCompatActivity() {
         focusItemIfTv()
     }
 
+    /** Clave de «visto»: el capítulo (serie + temporada + número) o la película, igual para todas sus copias y versiones. */
+    private fun watchKey(m: TgMessage): String {
+        val ep = parseEpisode(titleOf(m))
+        return if (ep != null) "s:${nameKey(ep.series)}:${ep.season}x${ep.episode}"
+        else "m:" + nameKey(libTitle(m)).ifEmpty { "${m.chatId}:${m.messageId}" }
+    }
+
+    private fun isSeen(m: TgMessage) = TgWatched.isWatched(this, watchKey(m))
+
+    private var seenVersion = TgWatched.version
+
     /** Título legible de un vídeo para la biblioteca: sin extensión, puntos/guiones bajos ni etiquetas de calidad (1080p, WEB-DL…). */
     private fun libTitle(m: TgMessage): String {
         val raw = cleanName(titleOf(m)).replace('_', ' ').replace('.', ' ')
@@ -2426,7 +2495,8 @@ class TelegramAccountActivity : AppCompatActivity() {
             val lead = list[0].first
             val fav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
             val episodes = options.distinctBy { val e = parseEpisode(titleOf(it)); if (e != null) "${e.season}x${e.episode}" else "${it.chatId}:${it.messageId}" }.size
-            val badge = (if (isSeries) "📺 " + getString(R.string.tglib_eps, episodes) else if (options.size > 1) "▶ ×${options.size}" else "▶") + (if (fav) " ★" else "")
+            val badge = (if (isSeries) "📺 " + getString(R.string.tglib_eps, episodes) else if (options.size > 1) "▶ ×${options.size}" else "▶") +
+                (if (fav) " ★" else "") + (if (options.all { isSeen(it) }) " ✓" else "")
             val chatNames = list.map { it.first.chatTitle }.filter { it.isNotEmpty() }.distinct()
             val meta = chatNames.firstOrNull().orEmpty() + (if (chatNames.size > 1) " +${chatNames.size - 1}" else "")
             items.add(MediaItem(key = "lib:$k", select = options, caption = q.ifEmpty { titleOf(lead) }, meta = meta, thumbFileId = th,
@@ -2608,6 +2678,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         binding.tgGenreScroll.visibility = View.VISIBLE
         box.post { binding.tgGenreScroll.scrollTo(keepX, 0) }
+    }
+
+    /** Repinta la galería/biblioteca (sin tocar filtros) para que se vean las marcas de «visto» nuevas. */
+    private fun rerenderMarks() {
+        seenVersion = TgWatched.version
+        if (searching || state != TgAuthState.READY) return
+        if (currentChat == null && chatFilter == LIB_TAB) renderLibrary()
+        else if (currentChat != null && mediaMode && !showingTopics) renderMedia(auto = false)
     }
 
     private fun rerenderFiltered() {
@@ -2980,6 +3058,19 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun onMessageLong(m: TgMessage) {
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
+        // Listas: las opciones de siempre (cargar como lista principal / elegir un canal suelto).
+        if (m.fileId != null && looksLikePlaylist(m) && !isImageMsg(m)) {
+            labels.add(getString(R.string.tg_load_as_main))
+            actions.add { loadPlaylistFile(m) { data -> TelegramImport.openInMain(this, data) } }
+            labels.add(getString(R.string.tg_open_playlist))
+            actions.add { openPlaylist(m) }
+        }
+        for (link in m.links) {
+            if (!isTgLink(link) && TelegramImport.looksLikeListUrl(link)) {
+                labels.add(getString(R.string.tg_link_as_list, link.removePrefix("https://").removePrefix("http://").take(40)))
+                actions.add { loadPlaylistUrl(link) }
+            }
+        }
         labels.add(getString(R.string.tgsel_start))
         actions.add { startSelection(listOf(m)) }
         if (isElsewhere(m)) {
@@ -3717,6 +3808,11 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun isElsewhere(m: TgMessage) = m.chatId != 0L && currentChat?.id != m.chatId
 
     private fun onMessageClick(m: TgMessage, withButtons: Boolean = true) {
+        // Una lista (archivo .m3u/.w3u/.json…): se abre directa en su ventana; las opciones de siempre, con pulsación larga.
+        if (m.fileId != null && looksLikePlaylist(m) && !isImageMsg(m)) {
+            openListViewer(m)
+            return
+        }
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
         if (isElsewhere(m)) {
@@ -3768,8 +3864,8 @@ class TelegramAccountActivity : AppCompatActivity() {
                 continue
             }
             if (TelegramImport.looksLikeListUrl(link)) {
-                labels.add(getString(R.string.tg_link_as_list, link.removePrefix("https://").removePrefix("http://").take(40)))
-                actions.add { loadPlaylistUrl(link) }
+                labels.add(getString(R.string.tgview_open, link.removePrefix("https://").removePrefix("http://").take(40)))
+                actions.add { openListViewerUrl(link) }
             }
             val short = link.removePrefix("https://").removePrefix("http://").take(60)
             if (isDirectMedia(link)) {
@@ -3947,6 +4043,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val audio = m.kind == "audio" || m.kind == "voice" || (m.mime ?: "").startsWith("audio/")
         val mime = m.mime ?: if (audio) "audio/mpeg" else "video/mp4"
         val url = TgStreamServer.urlFor(b, fileId, m.size, mime)
+        if (!audio) TgWatched.register(url, watchKey(m))
         return Stream(name = name, type = if (audio) "MP3" else "MP4", url = url, icon = null, category = "Telegram")
     }
 
@@ -4110,6 +4207,40 @@ class TelegramAccountActivity : AppCompatActivity() {
                 }
             }.start()
         }
+    }
+
+    /** Abre una lista de Telegram (archivo) en su propia ventana: grupos a la izquierda, canales a la derecha. */
+    private fun openListViewer(m: TgMessage) {
+        val name = (m.fileName ?: titleOf(m)).substringBeforeLast('.').replace('_', ' ').trim()
+        loadPlaylistFile(m) { data -> showListViewer(data, name) }
+    }
+
+    private fun showListViewer(data: com.example.superplayer.model.PlaylistData, title: String) {
+        TelegramListActivity.pending = data
+        TelegramListActivity.pendingTitle = title
+        startActivity(Intent(this, TelegramListActivity::class.java))
+    }
+
+    /** Lo mismo con una lista a la que apunta un enlace. */
+    private fun openListViewerUrl(url: String) {
+        Toast.makeText(this, R.string.tg_loading, Toast.LENGTH_SHORT).show()
+        Thread {
+            var data: com.example.superplayer.model.PlaylistData? = null
+            try {
+                data = PlaylistRepository.loadFromUrl(url)
+            } catch (e: Exception) {
+                // se avisa abajo
+            }
+            val found = data
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (found == null || found.categories.sumOf { it.streams.size } == 0) {
+                    Toast.makeText(this, getString(R.string.tg_file_error, getString(R.string.tg_playlist_error)), Toast.LENGTH_LONG).show()
+                } else {
+                    showListViewer(found, url.substringBefore('?').substringAfterLast('/').substringBeforeLast('.'))
+                }
+            }
+        }.start()
     }
 
     /** Una lista a la que apunta un enlace del chat: se descarga y se carga como lista principal. */

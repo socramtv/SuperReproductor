@@ -579,7 +579,10 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_ENDED) startNextEpisodeCountdown() else cancelNextEpisode()
+            if (playbackState == Player.STATE_ENDED) {
+                currentStream?.let { com.example.superplayer.telegram.TgWatched.onEnded(this@PlayerActivity, it.url) }
+                startNextEpisodeCountdown()
+            } else cancelNextEpisode()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -1985,6 +1988,7 @@ class PlayerActivity : AppCompatActivity() {
         if (ctrl.isCurrentMediaItemDynamic || ctrl.isCurrentMediaItemLive) return
         val duration = ctrl.duration
         if (duration == C.TIME_UNSET || duration < MIN_VOD_DURATION_MS) return
+        com.example.superplayer.telegram.TgWatched.onProgress(this, stream.url, ctrl.currentPosition, duration)
         ContinueWatching.save(this, stream, ctrl.currentPosition, duration)
     }
 

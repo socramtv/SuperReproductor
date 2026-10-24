@@ -87,6 +87,12 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- Visor de listas de Telegram (ver TelegramListActivity) -->
+        <activity
+            android:name=".ui.TelegramListActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <!-- Ahora en directo: mosaico de favoritos con vista previa (ver NowLiveActivity) -->
         <activity
             android:name=".ui.NowLiveActivity"
