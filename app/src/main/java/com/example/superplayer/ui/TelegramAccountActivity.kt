@@ -174,7 +174,9 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var filterNov = 0
     /** Títulos (para buscar su ficha) de lo que hay en pantalla antes de filtrar: de ahí salen los géneros del diálogo. */
     private var filterPool: List<String> = emptyList()
-    private val filterRerun = Runnable { if (!isFinishing && !isDestroyed && filterGenre.isNotEmpty()) rerenderFiltered() }
+    private val filterRerun = Runnable {
+        if (!isFinishing && !isDestroyed) { if (filterGenre.isNotEmpty()) rerenderFiltered() else updateFilterRow() }
+    }
     /** Pestaña Carpetas: carpetas de chats de Telegram; null = la lista de carpetas, otra = sus chats. */
     private var tgFolders: List<TgFolder> = emptyList()
     private var openFolder: TgFolder? = null
@@ -404,6 +406,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun showMessage(text: String) {
         useList()
+        binding.tgGenreScroll.visibility = View.GONE
         adapter.submit(emptyList())
         binding.emptyView.text = text
         binding.emptyView.visibility = View.VISIBLE
@@ -856,7 +859,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun renderChats() {
-        if (chatFilter != VIDEO_TAB && chatFilter != LIB_TAB) useList()
+        if (chatFilter != VIDEO_TAB && chatFilter != LIB_TAB) { useList(); binding.tgGenreScroll.visibility = View.GONE }
         title = rootTitle()
         searchResults = null
         binding.inputBar.visibility = View.GONE
@@ -865,6 +868,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         updateBack()
         invalidateOptionsMenu()
         if (chatFilter == VIDEO_TAB) {
+            binding.tgGenreScroll.visibility = View.GONE
             renderVideoFavs()
             return
         }
@@ -1196,6 +1200,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             return
         }
         useChat()
+        updateFilterRow()
         // Como en Telegram: lo más antiguo arriba y lo más nuevo abajo.
         val ordered = messages.reversed()
         keepFocus { chatAdapter.submit(ordered, lastBatchFull) }
@@ -1226,8 +1231,10 @@ class TelegramAccountActivity : AppCompatActivity() {
     private val reYearOpen = Regex("\\(((?:19|20)\\d{2})[^)]*$")
 
     /** "253-Peli (2025-mkv" y "Peli (2025-" -> "Peli (2025)": el mismo nombre para el vídeo y su imagen. */
+    private val reEmoji = Regex("[\\p{So}\\p{Sk}\\u200D\\uFE0F\\u20E3]")
+
     private fun cleanName(raw: String): String {
-        var t = raw.trim().replace(reNumPrefix, "")
+        var t = raw.replace(reEmoji, " ").replace(Regex("\\s+"), " ").trim().replace(reNumPrefix, "")
         t = t.replace(reUrlSuffix, "")
         t = t.replace(reExtSuffix, "")
         t = t.replace(reYearOpen) { "(" + it.groupValues[1] + ")" }
@@ -1456,14 +1463,15 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
         }
         filterPool = items.map { it.query }.filter { it.length >= 2 }.distinct()
+        prefetchInfo(filterPool)
         if (filtersActive()) {
-            if (filterGenre.isNotEmpty()) prefetchInfo(filterPool)
             val dateById = source.associate { it.messageId to it.date }
             items.retainAll { passesFilters(it.query, dateById[it.messageId] ?: 0L) }
         }
         val real = items.size
         if (lastBatchFull) items.add(MediaItem(key = "more", caption = getString(R.string.tgacc_load_more), loadMore = true) { loadMore() })
         mediaAdapter.submit(items)
+        updateFilterRow()
         binding.emptyView.text = getString(R.string.tgacc_media_empty)
         binding.emptyView.visibility = if (real == 0 && !lastBatchFull) View.VISIBLE else View.GONE
         val jump = jumpTarget
@@ -1863,6 +1871,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             rows.add(Row(messageTitle(m), prefix + messageSubtitle(m, df), null, null, { onMessageLong(m) }, m.thumbId, msg = m) { onMessageClick(m) })
         }
         adapter.submit(rows)
+        updateFilterRow()
         binding.emptyView.text = getString(R.string.tgacc_search_none)
         binding.emptyView.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
     }
@@ -2168,6 +2177,11 @@ class TelegramAccountActivity : AppCompatActivity() {
             setPadding(0, dp(8), 0, dp(4))
         }
         val results = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+        val resetBtn = android.widget.Button(this).apply {
+            text = getString(R.string.tgcover_reset)
+            isAllCaps = false
+        }
+        col.addView(resetBtn)
         col.addView(nameEt)
         col.addView(yearEt)
         col.addView(searchBtn)
@@ -2234,6 +2248,18 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
         }
         searchBtn.setOnClickListener { search() }
+        resetBtn.setOnClickListener {
+            resetBtn.isEnabled = false
+            infoRequested.remove(query)
+            MovieInfo.reset(this, query) {
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    mediaAdapter.infoLoaded(query)
+                    Toast.makeText(this, R.string.tgcover_reset_done, Toast.LENGTH_SHORT).show()
+                    dialog?.dismiss()
+                }
+            }
+        }
         nameEt.setOnEditorActionListener { _, _, _ -> search(); true }
         dialog = AlertDialog.Builder(this)
             .setTitle(R.string.tgcover_title)
@@ -2386,7 +2412,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         val items = ArrayList<MediaItem>()
         filterPool = groups.keys.mapNotNull { names[it]?.takeIf { n -> n.length >= 2 } }
-        if (filterGenre.isNotEmpty()) prefetchInfo(filterPool)
+        prefetchInfo(filterPool)
         for ((k, list) in groups) {
             val isSeries = k.startsWith("s:")
             if ((libFilter == 1 && !isSeries) || (libFilter == 2 && isSeries)) continue
@@ -2410,6 +2436,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         mediaAdapter.submit(items)
         binding.emptyView.text = getString(R.string.tglib_empty)
         binding.emptyView.visibility = if (items.isEmpty() && !libScanning) View.VISIBLE else View.GONE
+        updateFilterRow()
         focusItemIfTv()
         if (!libAutoTried && !libScanning && TgLibrary.sources(this).isNotEmpty() && TgLibrary.isStale(this)) {
             libAutoTried = true
@@ -2540,6 +2567,47 @@ class TelegramAccountActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun filterRowVisible(): Boolean = state == TgAuthState.READY && (
+        (currentChat == null && !searching && chatFilter == LIB_TAB) ||
+            (currentChat != null && mediaMode && !showingTopics && !searching) ||
+            (searching && searchResults.orEmpty().any { isVideoMsg(it) && isMovieFile(it) })
+        )
+
+    /** Fila de botones bajo las pestañas: tipo (solo en la biblioteca), novedades y géneros; un toque activa o quita el filtro. */
+    private fun updateFilterRow() {
+        if (!filterRowVisible()) {
+            binding.tgGenreScroll.visibility = View.GONE
+            return
+        }
+        val inLib = currentChat == null && !searching
+        val box = binding.tgGenreChips
+        val keepX = binding.tgGenreScroll.scrollX
+        box.removeAllViews()
+        fun chip(label: String, sel: Boolean, onClick: () -> Unit) = box.addView(makeChip(label, sel, onClick))
+        if (filtersActive()) chip(getString(R.string.tglib_f_clear_chip), false) {
+            libFilter = 0
+            filterGenre = ""
+            filterNov = 0
+            rerenderFiltered()
+        }
+        if (inLib) {
+            chip("📺 " + getString(R.string.tglib_f_series), libFilter == 1) { libFilter = if (libFilter == 1) 0 else 1; rerenderFiltered() }
+            chip("🎬 " + getString(R.string.tglib_f_movies), libFilter == 2) { libFilter = if (libFilter == 2) 0 else 2; rerenderFiltered() }
+        }
+        chip("🆕 " + getString(R.string.tglib_n_day), filterNov == 1) { filterNov = if (filterNov == 1) 0 else 1; rerenderFiltered() }
+        chip("🆕 " + getString(R.string.tglib_n_week), filterNov == 2) { filterNov = if (filterNov == 2) 0 else 2; rerenderFiltered() }
+        chip("🆕 " + getString(R.string.tglib_n_month), filterNov == 3) { filterNov = if (filterNov == 3) 0 else 3; rerenderFiltered() }
+        val count = HashMap<String, Int>()
+        for (t in filterPool) MovieInfo.peek(this, t)?.genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()
+            ?.forEach { count[it] = (count[it] ?: 0) + 1 }
+        if (filterGenre.isNotEmpty()) count.putIfAbsent(filterGenre, 0)
+        for (g in count.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { normalize(it.key) }).map { it.key }) {
+            chip(g, filterGenre.equals(g, ignoreCase = true)) { filterGenre = if (filterGenre.equals(g, ignoreCase = true)) "" else g; rerenderFiltered() }
+        }
+        binding.tgGenreScroll.visibility = View.VISIBLE
+        box.post { binding.tgGenreScroll.scrollTo(keepX, 0) }
     }
 
     private fun rerenderFiltered() {

@@ -1621,3 +1621,8 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 - **Ver tráiler** en la ficha de película/serie (si TMDb tiene tráiler), se abre en YouTube.
 - **Lista de deseos** (⋮ en Biblioteca): títulos que quieres ver; tras cada actualización de la biblioteca avisa de los que ya han aparecido y los quita de la lista.
 - **Reproductor**: en películas/vídeos (no directos), derecha/izquierda del mando y las teclas avance/retroceso mueven **10 s** por pulsación; manteniendo pulsado acelera poco a poco (10 s → 20 → 30 → 60 s cada 0,25 s). La barra de progreso con el mando también va de 10 en 10 s (antes 1/20 de la duración). Código: `PlayerActivity.handleVodSeekKey`.
+
+## Emojis en títulos, restaurar carátula y fila de filtros
+- Los emojis y símbolos sueltos en los nombres de vídeos (p. ej. «📺 Serie 1x01») se ignoran al detectar el título, agrupar series y buscar la ficha (`cleanName` en TelegramAccountActivity y `MovieInfo.cleanTitle`).
+- «Cambiar carátula y datos» tiene el botón **↩ Restaurar carátula y datos por defecto** (`MovieInfo.reset`): borra lo guardado/elegido a mano para ese título y lo vuelve a buscar solo.
+- **Fila de botones de filtro** bajo las pestañas (Biblioteca), y bajo la barra al entrar en la galería de un canal o en resultados del buscador con vídeos: ✕ quitar filtros, 📺 Series / 🎬 Películas (solo Biblioteca), 🆕 Hoy / Semana / Mes y los géneros (más frecuentes primero). Un toque activa el filtro y otro lo quita (`updateFilterRow`). El menú ⋮ → Filtrar sigue disponible.

@@ -858,4 +858,7 @@
     <string name="tglib_src_search">Buscar canal o grupo…</string>
     <string name="tglib_src_favs">★ Favoritos</string>
     <string name="tglib_src_count">%1$d elegidos</string>
+    <string name="tgcover_reset">↩ Restaurar carátula y datos por defecto</string>
+    <string name="tgcover_reset_done">Restaurado: datos buscados de nuevo automáticamente</string>
+    <string name="tglib_f_clear_chip">✕ Quitar filtros</string>
 </resources>

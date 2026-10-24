@@ -70,6 +70,8 @@ object MovieInfo {
     private val RE_ROUND = Regex("\\([^)]*\\)")
     private val RE_LANG_PREFIX = Regex("^\\s*\\|?[A-Za-z]{2,3}\\|?\\s*[-:|]\\s+")
     private val RE_YEAR_END = Regex("\\s((?:19|20)\\d{2})\\s*$")
+    /** Emojis y símbolos sueltos delante o dentro del título («📺 Serie 1x01»): no forman parte del nombre. */
+    private val RE_EMOJI = Regex("[\\p{So}\\p{Sk}\\u200D\\uFE0F\\u20E3]")
     private val RE_DOTS = Regex("[._]+")
     private val RE_SPACES = Regex("\\s+")
     private val RE_MARKS = Regex("\\p{M}+")
@@ -85,7 +87,7 @@ object MovieInfo {
     }
 
     private fun cleanTitleUncached(raw: String): Pair<String, String?> {
-        var text = raw.trim()
+        var text = raw.replace(RE_EMOJI, " ").trim()
         var year: String? = null
         RE_YEAR_BRACKET.find(text)?.let { year = it.groupValues[1] }
         text = text.replace(RE_SQUARE, " ").replace(RE_ROUND, " ")
@@ -612,6 +614,16 @@ object MovieInfo {
      * miniatura y la ficha usan esta carátula, nombre y año. Pide la ficha completa si viene de TMDb.
      * [onDone] se llama desde un hilo de fondo.
      */
+    /** Quita la carátula/datos elegidos a mano (o guardados) de este título y los vuelve a buscar solos, como la primera vez. */
+    fun reset(context: Context, rawQuery: String, onDone: (Info?) -> Unit) {
+        val appContext = context.applicationContext
+        val (title, year) = cleanTitle(rawQuery)
+        val key = keyOf(title, year)
+        synchronized(memory) { memory.remove(key) }
+        prefs(appContext).edit().remove(key).apply()
+        request(appContext, rawQuery, onDone)
+    }
+
     fun applyChoice(context: Context, rawQuery: String, choice: Candidate, onDone: () -> Unit) {
         val appContext = context.applicationContext
         val (title, year) = cleanTitle(rawQuery)
