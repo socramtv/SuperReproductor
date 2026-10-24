@@ -1626,3 +1626,6 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 - Los emojis y símbolos sueltos en los nombres de vídeos (p. ej. «📺 Serie 1x01») se ignoran al detectar el título, agrupar series y buscar la ficha (`cleanName` en TelegramAccountActivity y `MovieInfo.cleanTitle`).
 - «Cambiar carátula y datos» tiene el botón **↩ Restaurar carátula y datos por defecto** (`MovieInfo.reset`): borra lo guardado/elegido a mano para ese título y lo vuelve a buscar solo.
 - **Fila de botones de filtro** bajo las pestañas (Biblioteca), y bajo la barra al entrar en la galería de un canal o en resultados del buscador con vídeos: ✕ quitar filtros, 📺 Series / 🎬 Películas (solo Biblioteca), 🆕 Hoy / Semana / Mes y los géneros (más frecuentes primero). Un toque activa el filtro y otro lo quita (`updateFilterRow`). El menú ⋮ → Filtrar sigue disponible.
+
+## Listas .w3u
+- Se leen archivos y enlaces `.w3u` (formato Wiseplay, JSON con `groups` → `stations`): en Telegram (archivos y enlaces, como las .m3u), en «Cargar archivo» y por URL. Soporta grupos anidados («Padre › Hijo»), `stations` sueltas en la raíz, `referer`/`userAgent`/`origin` y las estaciones `isHost` (enlace a otra lista: se abre y se mezcla; máx. 2 niveles y 10 enlaces, lo roto se salta). Se ignora el BOM. Código: `PlaylistRepository.parseGroupsStationsJson`, `TelegramImport`.

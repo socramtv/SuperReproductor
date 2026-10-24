@@ -5,7 +5,7 @@ import android.content.Intent
 import com.example.superplayer.model.PlaylistData
 
 /**
- * Listas (m3u, m3u8, json, txt) que llegan por Telegram y se cargan como lista principal:
+ * Listas (m3u, m3u8, json, w3u, txt) que llegan por Telegram y se cargan como lista principal:
  * la pantalla de Telegram deja aquí la lista ya leída y abre MainActivity, que la recoge en onResume.
  */
 object TelegramImport {
@@ -14,7 +14,7 @@ object TelegramImport {
 
     fun looksLikeListName(name: String?): Boolean {
         val n = (name ?: "").lowercase()
-        return n.endsWith(".m3u") || n.endsWith(".m3u8") || n.endsWith(".json") || n.endsWith(".txt")
+        return n.endsWith(".m3u") || n.endsWith(".m3u8") || n.endsWith(".json") || n.endsWith(".txt") || n.endsWith(".w3u")
     }
 
     fun looksLikeListMime(mime: String?): Boolean {
@@ -26,7 +26,7 @@ object TelegramImport {
     fun looksLikeListUrl(url: String): Boolean {
         val lower = url.lowercase()
         val path = lower.substringBefore('?').substringBefore('#')
-        return path.endsWith(".m3u") || path.endsWith(".json") || path.endsWith(".txt") ||
+        return path.endsWith(".m3u") || path.endsWith(".json") || path.endsWith(".txt") || path.endsWith(".w3u") ||
             lower.contains("get.php") || lower.contains("type=m3u") || lower.contains("output=m3u")
     }
 

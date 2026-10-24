@@ -51,18 +51,21 @@ object PlaylistRepository {
         }
     }
 
-    fun parse(text: String): PlaylistData {
-        val trimmed = text.trim()
+    fun parse(text: String): PlaylistData = parseDepth(text, 0)
+
+    /** [depth]: cuántas listas «anfitrión» (enlaces a otras listas dentro de una .w3u) se han abierto ya para llegar aquí. */
+    private fun parseDepth(text: String, depth: Int): PlaylistData {
+        val trimmed = text.removePrefix("\uFEFF").trim()
         return if (trimmed.startsWith("#EXTM3U", ignoreCase = true)) {
             parseM3u(trimmed)
         } else {
-            parseJson(trimmed)
+            parseJson(trimmed, depth)
         }
     }
 
     // ---------- JSON ----------
 
-    private fun parseJson(trimmed: String): PlaylistData {
+    private fun parseJson(trimmed: String, depth: Int = 0): PlaylistData {
         val isArrayRoot = trimmed.startsWith("[")
         val rootObject: JSONObject? = if (isArrayRoot) null else JSONObject(trimmed)
 
@@ -77,8 +80,8 @@ object PlaylistRepository {
         // distinto, con sus propios nombres de campo): esquema propio,
         // función dedicada (ver parseGroupsStationsJson).
         val groupsJson = rootObject?.optJSONArray("groups")
-        if (rootObject != null && groupsJson != null) {
-            return parseGroupsStationsJson(groupsJson)
+        if (rootObject != null && (groupsJson != null || rootObject.optJSONArray("stations") != null)) {
+            return parseGroupsStationsJson(rootObject, depth)
         }
 
         val categoriesJson: JSONArray = if (isArrayRoot) {
@@ -260,39 +263,73 @@ object PlaylistRepository {
      * directos (DASH/HLS/progresivo): esos canales se cargan igual en la
      * lista, pero no arrancarán al tocarlos.
      */
-    private fun parseGroupsStationsJson(groupsJson: JSONArray): PlaylistData {
-        val categories = ArrayList<Category>(groupsJson.length())
+    private fun parseGroupsStationsJson(root: JSONObject, depth: Int = 0): PlaylistData {
+        // Formato .w3u (Wiseplay): "groups" (que pueden anidar más "groups") con sus "stations", y también
+        // "stations" sueltas en la raíz. Una estación con "isHost": true no es un canal sino el enlace a otra lista:
+        // se abre y se mezcla (hasta 2 niveles y 10 enlaces, para no engancharse con listas que se enlazan en círculo).
+        val byName = LinkedHashMap<String, MutableList<Stream>>()
+        var hostsOpened = 0
 
-        for (i in 0 until groupsJson.length()) {
-            val groupObj = groupsJson.optJSONObject(i) ?: continue
-            val categoryName = groupObj.optString("name").ifBlank { "Sin categoría" }
-            val stationsJson = groupObj.optJSONArray("stations") ?: JSONArray()
+        fun add(categoryName: String, st: Stream) {
+            byName.getOrPut(categoryName) { ArrayList() }.add(st)
+        }
 
-            val streams = ArrayList<Stream>(stationsJson.length())
+        fun addStations(stationsJson: JSONArray?, categoryName: String) {
+            if (stationsJson == null) return
             for (j in 0 until stationsJson.length()) {
                 val stObj = stationsJson.optJSONObject(j) ?: continue
                 val url = stObj.optStringOrNull("url") ?: continue
+                val isHost = stObj.optBoolean("isHost", false) ||
+                    url.substringBefore('?').lowercase().let { it.endsWith(".w3u") || it.endsWith(".json") }
+                if (isHost) {
+                    if (depth < 2 && hostsOpened < 10 && (url.startsWith("http://", true) || url.startsWith("https://", true))) {
+                        hostsOpened++
+                        try {
+                            val sub = parseDepth(downloadRaw(url), depth + 1)
+                            for (c in sub.categories) for (x in c.streams) add(c.name, x)
+                        } catch (e: Exception) {
+                            // enlace roto o lento: se salta sin romper el resto de la lista
+                        }
+                    }
+                    continue
+                }
 
                 val headers = LinkedHashMap<String, String>()
                 stObj.optStringOrNull("referer")?.let { headers["Referer"] = it }
                 stObj.optStringOrNull("userAgent")?.let { headers["User-Agent"] = it }
+                stObj.optStringOrNull("origin")?.let { headers["Origin"] = it }
 
-                streams.add(
+                add(
+                    categoryName,
                     Stream(
                         name = stObj.optString("name").ifBlank { "Sin nombre" },
-                        type = guessTypeFromUrl(url),
+                        type = stObj.optStringOrNull("type")?.uppercase()?.takeIf { it == "HLS" || it == "DASH" || it == "PROGRESSIVE" }
+                            ?: guessTypeFromUrl(url),
                         url = url,
-                        icon = stObj.optStringOrNull("image"),
+                        icon = stObj.optStringOrNull("image") ?: stObj.optStringOrNull("logo"),
                         category = categoryName,
-                        headers = headers
+                        headers = headers,
+                        drm = buildDrmInfo(stObj)
                     )
                 )
             }
-            if (streams.isNotEmpty()) {
-                categories.add(Category(categoryName, streams))
-            }
         }
-        return PlaylistData(categories, epgUrl = null)
+
+        fun walk(groupObj: JSONObject, parent: String) {
+            val name = groupObj.optString("name").ifBlank { "Sin categoría" }
+            val full = if (parent.isEmpty()) name else "$parent › $name"
+            addStations(groupObj.optJSONArray("stations"), full)
+            val sub = groupObj.optJSONArray("groups")
+            if (sub != null) for (i in 0 until sub.length()) sub.optJSONObject(i)?.let { walk(it, full) }
+        }
+
+        addStations(root.optJSONArray("stations"), root.optString("name").ifBlank { "Sin categoría" })
+        val groupsJson = root.optJSONArray("groups")
+        if (groupsJson != null) for (i in 0 until groupsJson.length()) groupsJson.optJSONObject(i)?.let { walk(it, "") }
+
+        val categories = byName.filter { it.value.isNotEmpty() }.map { Category(it.key, it.value) }
+        val epgUrl = root.optStringOrNull("epgUrl") ?: root.optStringOrNull("epg_url") ?: (root.opt("epg") as? String)?.takeIf { it.startsWith("http") }
+        return PlaylistData(categories, epgUrl = epgUrl)
     }
 
     /** Sin campo "type"/"extension" explícito, se adivina de la URL (igual que en M3U). */

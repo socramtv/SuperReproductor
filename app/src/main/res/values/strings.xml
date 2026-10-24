@@ -23,7 +23,7 @@
     <string name="epg_next_detail">Después · %1$s  %2$s</string>
     <string name="home_start_hint">Para empezar, pulsa uno de los botones de arriba y pega la dirección de tu lista (mantenlo pulsado para cambiarla), o abre Telegram.</string>
     <string name="home_t1">📺 Tus listas IPTV</string>
-    <string name="home_d1">Carga hasta cinco listas por dirección (TV, Acestream+, Cine, TDT y Radio) o un archivo M3U/JSON. Se actualizan solas y puedes filtrar, ordenar, ocultar y renombrar categorías y canales.</string>
+    <string name="home_d1">Carga hasta cinco listas por dirección (TV, Lista 2, Cine, TDT y Radio) o un archivo M3U/JSON. Se actualizan solas y puedes filtrar, ordenar, ocultar y renombrar categorías y canales.</string>
     <string name="home_t2">▶ Reproductor completo</string>
     <string name="home_d2">Emisiones HLS, DASH y MP4. Chromecast, imagen en imagen, audio en segundo plano, pausa y retroceso del directo, multivista, reconexión automática, formato de pantalla y temporizador de apagado.</string>
     <string name="home_t3">⭐ Favoritos y «Continuar viendo»</string>
@@ -84,7 +84,7 @@
     <string name="stream_count">%1$d canales</string>
     <string name="search_hint">Buscar canal…</string>
     <string name="list_slot_1">TV 📺</string>
-    <string name="list_slot_2">Acestream+</string>
+    <string name="list_slot_2">Lista 2</string>
     <string name="list_slot_3">Cine 🍿</string>
     <string name="list_slot_4">TDT 📡</string>
     <string name="list_slot_5">Radio 📻</string>
