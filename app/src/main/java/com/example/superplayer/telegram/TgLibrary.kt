@@ -27,6 +27,27 @@ object TgLibrary {
         prefs(c).edit().putStringSet("sources", ids.map { it.toString() }.toSet()).apply()
     }
 
+    /** Copias repetidas que el usuario ha ocultado de la biblioteca («chatId:mensaje»); no se borra nada de Telegram. */
+    fun hidden(c: Context): Set<String> = prefs(c).getStringSet("hidden", emptySet()) ?: emptySet()
+
+    fun setHidden(c: Context, keys: Set<String>) {
+        prefs(c).edit().putStringSet("hidden", keys).apply()
+    }
+
+    fun keyOf(m: TgMessage) = "${m.chatId}:${m.messageId}"
+
+    /** Lista de deseos: títulos de películas o series que aún no se tienen. */
+    fun wishlist(c: Context): List<String> = try {
+        val arr = JSONArray(prefs(c).getString("wishlist", "[]"))
+        (0 until arr.length()).map { arr.getString(it) }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    fun setWishlist(c: Context, list: List<String>) {
+        prefs(c).edit().putString("wishlist", JSONArray(list).toString()).apply()
+    }
+
     fun lastScan(c: Context): Long = prefs(c).getLong("last_scan", 0L)
 
     fun isStale(c: Context): Boolean = System.currentTimeMillis() - lastScan(c) > AUTO_HOURS * 3600_000L

@@ -18,6 +18,14 @@
         android:title="@string/tglib_filter"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_tglib_dups"
+        android:title="@string/tglib_dups"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_tglib_wish"
+        android:title="@string/tglib_wish"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tgacc_select"
         android:title="@string/tgsel_start"
         app:showAsAction="never" />

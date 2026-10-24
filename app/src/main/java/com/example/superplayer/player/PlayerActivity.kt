@@ -911,6 +911,49 @@ class PlayerActivity : AppCompatActivity() {
     // de siempre en Media3.
     // -----------------------------------------------------------------
 
+    private var vodSeekLastAt = 0L
+    private var vodSeekHoldStart = 0L
+
+    private fun isVodSeekable(): Boolean {
+        val c = controller ?: return false
+        return !timeShiftActive && c.isCurrentMediaItemSeekable && !c.isCurrentMediaItemLive && c.duration > 0
+    }
+
+    /**
+     * Avance/retroceso en películas y vídeos: una pulsación = 10 s; si se mantiene, salta cada 0,25 s con pasos
+     * que crecen poco a poco (10 s, luego 20, 30 y 60). Devuelve false si no aplica (directo, sin duración…).
+     */
+    private fun handleVodSeekKey(event: KeyEvent): Boolean {
+        val dir = when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> -1
+            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> 1
+            else -> return false
+        }
+        if (!isVodSeekable()) return false
+        val ctrl = controller ?: return false
+        if (event.action != KeyEvent.ACTION_DOWN) return true
+        val now = SystemClock.elapsedRealtime()
+        val step: Long
+        if (event.repeatCount == 0) {
+            vodSeekHoldStart = now
+            vodSeekLastAt = now
+            step = 10_000L
+        } else {
+            if (now - vodSeekLastAt < 250L) return true
+            vodSeekLastAt = now
+            val held = now - vodSeekHoldStart
+            step = when {
+                held < 1500L -> 10_000L
+                held < 3500L -> 20_000L
+                held < 6000L -> 30_000L
+                else -> 60_000L
+            }
+        }
+        ctrl.seekTo((ctrl.currentPosition + dir * step).coerceIn(0L, ctrl.duration))
+        binding.playerView.showController()
+        return true
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) lastUserInputAt = SystemClock.elapsedRealtime()
         // Tecla GUÍA del mando, o MENÚ (el botón de las tres rayas del mando
@@ -934,6 +977,14 @@ class PlayerActivity : AppCompatActivity() {
                 timeShiftSeek(30_000L)
                 return true
             }
+        }
+        // Películas/vídeos (no directos): avanzar/retroceder de 10 en 10 s; manteniendo pulsado, cada vez más deprisa.
+        val dpadLR = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        val mediaFfRew = event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD || event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
+        val ctrlVisible = binding.playerView.isControllerFullyVisible
+        val onTimeBar = ctrlVisible && currentFocus?.id == androidx.media3.ui.R.id.exo_progress
+        if (mediaFfRew || (dpadLR && (onTimeBar || (!ctrlVisible && channelList.size <= 1)))) {
+            if (handleVodSeekKey(event)) return true
         }
         val isDpadLeftRight = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
             event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
@@ -967,6 +1018,9 @@ class PlayerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Barra de progreso con el mando: 10 s por pulsación (antes, 1/20 de la duración = minutos en una película).
+        (binding.playerView.findViewById<View>(androidx.media3.ui.R.id.exo_progress) as? androidx.media3.ui.DefaultTimeBar)
+            ?.setKeyTimeIncrement(10_000L)
 
         val stream = pendingStream ?: readStreamFromShortcutIntent()
         if (stream == null) {

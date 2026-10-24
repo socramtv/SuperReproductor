@@ -169,6 +169,12 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var libFilter = 0
     private var libScanning = false
     private var libAutoTried = false
+    /** Filtros de género (vacío = todos) y novedades (0 todo, 1 hoy, 2 semana, 3 mes); valen en biblioteca, galería de chat y buscador. */
+    private var filterGenre = ""
+    private var filterNov = 0
+    /** Títulos (para buscar su ficha) de lo que hay en pantalla antes de filtrar: de ahí salen los géneros del diálogo. */
+    private var filterPool: List<String> = emptyList()
+    private val filterRerun = Runnable { if (!isFinishing && !isDestroyed && filterGenre.isNotEmpty()) rerenderFiltered() }
     /** Pestaña Carpetas: carpetas de chats de Telegram; null = la lista de carpetas, otra = sus chats. */
     private var tgFolders: List<TgFolder> = emptyList()
     private var openFolder: TgFolder? = null
@@ -594,7 +600,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         val onLib = chat == null && !searching && chatFilter == LIB_TAB && state == TgAuthState.READY
         menu.findItem(R.id.action_tglib_scan)?.isVisible = onLib
         menu.findItem(R.id.action_tglib_sources)?.isVisible = onLib
-        menu.findItem(R.id.action_tglib_filter)?.isVisible = onLib
+        menu.findItem(R.id.action_tglib_filter)?.isVisible = state == TgAuthState.READY &&
+            (onLib || (inChat && mediaMode && !showingTopics) || searching)
+        menu.findItem(R.id.action_tglib_dups)?.isVisible = onLib
+        menu.findItem(R.id.action_tglib_wish)?.isVisible = onLib
         menu.findItem(R.id.action_tgacc_fav)?.isVisible = inChat
         menu.findItem(R.id.action_tgacc_select)?.isVisible = inChat && !showingTopics && selectionMode == null
         menu.findItem(R.id.action_tgacc_cmds)?.isVisible = inChat && chat?.kind == "bot"
@@ -622,13 +631,15 @@ class TelegramAccountActivity : AppCompatActivity() {
                 return true
             }
             R.id.action_tglib_filter -> {
-                val opts = arrayOf(getString(R.string.tglib_f_all), getString(R.string.tglib_f_series), getString(R.string.tglib_f_movies))
-                AlertDialog.Builder(this).setTitle(R.string.tglib_filter)
-                    .setSingleChoiceItems(opts, libFilter) { d, i ->
-                        libFilter = i
-                        d.dismiss()
-                        if (chatFilter == LIB_TAB && currentChat == null && !searching) renderLibrary()
-                    }.setNegativeButton(android.R.string.cancel, null).show()
+                showFilterDialog()
+                return true
+            }
+            R.id.action_tglib_dups -> {
+                showDuplicates()
+                return true
+            }
+            R.id.action_tglib_wish -> {
+                showWishlist()
                 return true
             }
             R.id.action_tgacc_select -> {
@@ -1444,6 +1455,12 @@ class TelegramAccountActivity : AppCompatActivity() {
                 }
             }
         }
+        filterPool = items.map { it.query }.filter { it.length >= 2 }.distinct()
+        if (filtersActive()) {
+            if (filterGenre.isNotEmpty()) prefetchInfo(filterPool)
+            val dateById = source.associate { it.messageId to it.date }
+            items.retainAll { passesFilters(it.query, dateById[it.messageId] ?: 0L) }
+        }
         val real = items.size
         if (lastBatchFull) items.add(MediaItem(key = "more", caption = getString(R.string.tgacc_load_more), loadMore = true) { loadMore() })
         mediaAdapter.submit(items)
@@ -1827,7 +1844,12 @@ class TelegramAccountActivity : AppCompatActivity() {
         val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
         val favs = TelegramAccountPrefs.favoriteChats(this)
         val rows = ArrayList<Row>()
-        searchChatResults.forEach { chat ->
+        val filtering = filtersActive()
+        if (filtering) {
+            filterPool = searchResults.orEmpty().filter { isVideoMsg(it) && isMovieFile(it) }.map { searchTitle(it) }.filter { it.length >= 2 }.distinct()
+            if (filterGenre.isNotEmpty()) prefetchInfo(filterPool)
+        }
+        (if (filtering) emptyList() else searchChatResults).forEach { chat ->
             val sub = kindLabel(chat.kind) + (if (chat.unread > 0) " · " + getString(R.string.tgacc_unread, chat.unread) else "")
             rows.add(Row(chat.title, sub, chat.id in favs, {
                 TelegramAccountPrefs.toggleFavorite(this, chat.id, chat)
@@ -1836,6 +1858,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         val global = currentChat == null
         searchResults?.forEach { m ->
+            if (filtering && !(isVideoMsg(m) && isMovieFile(m) && passesFilters(searchTitle(m), m.date))) return@forEach
             val prefix = if (global && m.chatTitle.isNotEmpty()) m.chatTitle + " · " else ""
             rows.add(Row(messageTitle(m), prefix + messageSubtitle(m, df), null, null, { onMessageLong(m) }, m.thumbId, msg = m) { onMessageClick(m) })
         }
@@ -1979,6 +2002,21 @@ class TelegramAccountActivity : AppCompatActivity() {
             tv.text = sb.toString()
             col.addView(tv)
         }
+        val trailerKey = info?.trailerKey
+        if (!trailerKey.isNullOrBlank()) col.addView(android.widget.Button(this).apply {
+            text = getString(R.string.cine_trailer)
+            isAllCaps = false
+            setOnClickListener {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$trailerKey")))
+                } catch (e: Exception) {
+                    Toast.makeText(this@TelegramAccountActivity, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show()
+                }
+            }
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(16), 0, dp(16), dp(4)) }
+        })
         // Capítulos en orden (una versión por capítulo; la elegida si hay varias): para el "siguiente capítulo" automático.
         fun queueFor(m: TgMessage): List<TgMessage> {
             if (!series) return emptyList()
@@ -2326,11 +2364,13 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun renderLibrary() {
         useGrid()
         val entries = libEntries ?: TgLibrary.load(this).also { libEntries = it }
+        title = rootTitle() + (if (filtersActive()) " · " + getString(R.string.tglib_f_active) else "")
+        val hidden = TgLibrary.hidden(this)
         val groups = LinkedHashMap<String, MutableList<Pair<TgMessage, Int>>>()
         val names = HashMap<String, String>()
         for (e in entries.sortedByDescending { it.first.date }) {
             val m = e.first
-            if (!isVideoMsg(m) || !isMovieFile(m)) continue
+            if (!isVideoMsg(m) || !isMovieFile(m) || TgLibrary.keyOf(m) in hidden) continue
             val ep = parseEpisode(titleOf(m))
             val key: String
             if (ep != null) {
@@ -2345,10 +2385,13 @@ class TelegramAccountActivity : AppCompatActivity() {
             groups.getOrPut(key) { ArrayList() }.add(e)
         }
         val items = ArrayList<MediaItem>()
+        filterPool = groups.keys.mapNotNull { names[it]?.takeIf { n -> n.length >= 2 } }
+        if (filterGenre.isNotEmpty()) prefetchInfo(filterPool)
         for ((k, list) in groups) {
             val isSeries = k.startsWith("s:")
             if ((libFilter == 1 && !isSeries) || (libFilter == 2 && isSeries)) continue
             val q = names[k].orEmpty().takeIf { it.length >= 2 }.orEmpty()
+            if (!passesFilters(q, list[0].first.date)) continue
             val msgs = list.map { it.first }
             val options = if (isSeries) {
                 msgs.sortedWith(compareBy({ parseEpisode(titleOf(it))?.season ?: 0 }, { parseEpisode(titleOf(it))?.episode ?: 0 }, { it.messageId }))
@@ -2374,26 +2417,328 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
-    /** Elegir de qué canales y grupos se alimenta la biblioteca. */
+    /** Elegir de qué canales y grupos se alimenta la biblioteca: con buscador y un botón para ver solo los favoritos. */
     private fun showLibSources() {
-        val list = chats.filter { it.kind == "channel" || it.kind == "group" || it.kind == "forum" }.sortedBy { normalize(it.title) }
-        if (list.isEmpty()) {
+        val all = chats.filter { it.kind == "channel" || it.kind == "group" || it.kind == "forum" }.sortedBy { normalize(it.title) }
+        if (all.isEmpty()) {
             Toast.makeText(this, R.string.tglib_sources_none, Toast.LENGTH_SHORT).show()
             return
         }
         val sel = TgLibrary.sources(this).toMutableSet()
-        val checked = BooleanArray(list.size) { list[it].id in sel }
+        val favs = TelegramAccountPrefs.favoriteChats(this)
+        var onlyFavs = false
+        var shown: List<TgChat> = all
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+        val search = android.widget.EditText(this).apply {
+            hint = getString(R.string.tglib_src_search)
+            isSingleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val favBtn = android.widget.Button(this).apply {
+            text = getString(R.string.tglib_src_favs)
+            isAllCaps = false
+        }
+        val count = TextView(this).apply {
+            setPadding(dp(4), dp(2), dp(4), dp(2))
+            textSize = 12f
+        }
+        val list = android.widget.ListView(this).apply {
+            choiceMode = android.widget.ListView.CHOICE_MODE_MULTIPLE
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, dp(360)
+            )
+        }
+        fun rebuild() {
+            val q = normalize(search.text.toString().trim())
+            shown = all.filter { (!onlyFavs || it.id in favs) && (q.isEmpty() || normalize(it.title).contains(q)) }
+            list.adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_list_item_multiple_choice, shown.map { it.title })
+            shown.forEachIndexed { i, c -> list.setItemChecked(i, c.id in sel) }
+            count.text = getString(R.string.tglib_src_count, sel.size)
+            favBtn.alpha = if (onlyFavs) 1f else 0.6f
+        }
+        list.setOnItemClickListener { _, _, pos, _ ->
+            val c = shown.getOrNull(pos) ?: return@setOnItemClickListener
+            if (list.isItemChecked(pos)) sel.add(c.id) else sel.remove(c.id)
+            count.text = getString(R.string.tglib_src_count, sel.size)
+        }
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(e: android.text.Editable?) { rebuild() }
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+        })
+        favBtn.setOnClickListener {
+            if (!onlyFavs && favs.isEmpty()) {
+                Toast.makeText(this, R.string.tgacc_no_favs, Toast.LENGTH_SHORT).show()
+            } else {
+                onlyFavs = !onlyFavs
+                rebuild()
+            }
+        }
+        val top = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            addView(search)
+            addView(favBtn)
+        }
+        val col = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), 0)
+            addView(top)
+            addView(count)
+            addView(list)
+        }
+        rebuild()
         AlertDialog.Builder(this)
             .setTitle(R.string.tglib_sources_title)
-            .setMultiChoiceItems(list.map { it.title }.toTypedArray(), checked) { _, i, on ->
-                if (on) sel.add(list[i].id) else sel.remove(list[i].id)
-            }
+            .setView(col)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 TgLibrary.setSources(this, sel)
                 libAutoTried = true
                 libScan()
             }
             .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    // ---- Filtros (género y novedades), comunes a la biblioteca, la galería de un chat y el buscador ----
+
+    private fun filtersActive() = filterGenre.isNotEmpty() || filterNov != 0
+
+    /** Título para buscar la ficha de un vídeo del buscador: nombre de la serie o título limpio de la película. */
+    private fun searchTitle(m: TgMessage): String = parseEpisode(titleOf(m))?.series ?: libTitle(m)
+
+    /** ¿Encaja este título (con la fecha de su mensaje más reciente, en segundos) con los filtros activos? */
+    private fun passesFilters(title: String, dateSec: Long): Boolean {
+        if (filterNov != 0 && dateSec > 0) {
+            val limit = when (filterNov) { 1 -> 86_400L; 2 -> 7 * 86_400L; else -> 30 * 86_400L }
+            if (System.currentTimeMillis() / 1000 - dateSec > limit) return false
+        }
+        if (filterGenre.isNotEmpty()) {
+            if (title.isEmpty()) return false
+            val g = MovieInfo.peek(this, title)?.genre ?: return false
+            if (g.split(",").none { it.trim().equals(filterGenre, ignoreCase = true) }) return false
+        }
+        return true
+    }
+
+    /** Pide las fichas (con su género) de estos títulos en segundo plano y repinta, sin saltos, según llegan. */
+    private fun prefetchInfo(titles: List<String>) {
+        var n = 0
+        for (t in titles) {
+            if (n >= 200) break
+            if (t.isEmpty() || !infoRequested.add(t)) continue
+            if (!MovieInfo.needsFetch(this, t)) continue
+            n++
+            MovieInfo.request(this, t) { found ->
+                if (found != null) runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    mediaAdapter.infoLoaded(t)
+                    binding.root.removeCallbacks(filterRerun)
+                    binding.root.postDelayed(filterRerun, 700)
+                }
+            }
+        }
+    }
+
+    private fun rerenderFiltered() {
+        when {
+            searching -> renderSearch()
+            currentChat == null && chatFilter == LIB_TAB -> renderLibrary()
+            currentChat != null && mediaMode && !showingTopics -> renderMedia(auto = false)
+        }
+    }
+
+    private fun showFilterDialog() {
+        val inLib = currentChat == null && !searching
+        prefetchInfo(filterPool)
+        val genres = HashSet<String>()
+        for (t in filterPool) MovieInfo.peek(this, t)?.genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.let { genres.addAll(it) }
+        if (filterGenre.isNotEmpty()) genres.add(filterGenre)
+        val genreOpts = listOf(getString(R.string.tglib_g_any)) + genres.sortedBy { normalize(it) }
+        val novOpts = listOf(R.string.tglib_n_all, R.string.tglib_n_day, R.string.tglib_n_week, R.string.tglib_n_month).map { getString(it) }
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+        fun spinner(opts: List<String>, sel: Int) = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(this@TelegramAccountActivity, android.R.layout.simple_spinner_dropdown_item, opts)
+            setSelection(sel.coerceAtLeast(0))
+        }
+        val col = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun label(res: Int) = TextView(this).apply {
+            text = getString(res)
+            textSize = 13f
+            setPadding(0, dp(12), 0, dp(2))
+        }
+        var typeSp: android.widget.Spinner? = null
+        if (inLib) {
+            col.addView(label(R.string.tglib_f_type))
+            typeSp = spinner(listOf(R.string.tglib_f_all, R.string.tglib_f_series, R.string.tglib_f_movies).map { getString(it) }, libFilter)
+            col.addView(typeSp)
+        }
+        col.addView(label(R.string.tglib_f_genre))
+        val genreSp = spinner(genreOpts, genreOpts.indexOf(filterGenre))
+        col.addView(genreSp)
+        col.addView(label(R.string.tglib_f_new))
+        val novSp = spinner(novOpts, filterNov)
+        col.addView(novSp)
+        col.addView(TextView(this).apply {
+            text = getString(R.string.tglib_f_hint)
+            textSize = 11f
+            setPadding(0, dp(14), 0, dp(4))
+        })
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tglib_filter_title)
+            .setView(android.widget.ScrollView(this).apply { addView(col) })
+            .setPositiveButton(R.string.tglib_f_apply) { _, _ ->
+                typeSp?.let { libFilter = it.selectedItemPosition }
+                filterGenre = if (genreSp.selectedItemPosition <= 0) "" else genreOpts[genreSp.selectedItemPosition]
+                filterNov = novSp.selectedItemPosition
+                rerenderFiltered()
+            }
+            .setNeutralButton(R.string.tglib_f_clear) { _, _ ->
+                libFilter = 0
+                filterGenre = ""
+                filterNov = 0
+                rerenderFiltered()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    // ---- Detector de duplicados ----
+
+    private class Dup(val title: String, val msgs: List<TgMessage>)
+
+    private fun libraryMessages(): List<TgMessage> =
+        (libEntries ?: TgLibrary.load(this).also { libEntries = it }).map { it.first }.filter { isVideoMsg(it) && isMovieFile(it) }
+
+    /** Mismo capítulo o misma película repetidos (en el mismo canal o en varios): la copia más grande, primero. */
+    private fun findDuplicates(): List<Dup> {
+        val hidden = TgLibrary.hidden(this)
+        val map = LinkedHashMap<String, MutableList<TgMessage>>()
+        val titles = HashMap<String, String>()
+        for (m in libraryMessages()) {
+            if (TgLibrary.keyOf(m) in hidden) continue
+            val ep = parseEpisode(titleOf(m))
+            val k: String
+            if (ep != null) {
+                k = "s:" + nameKey(ep.series) + ":${ep.season}x${ep.episode}"
+                titles[k] = ep.series + String.format(java.util.Locale.US, " %dx%02d", ep.season, ep.episode)
+            } else {
+                val t = libTitle(m)
+                val nk = nameKey(t)
+                if (nk.length < 2) continue
+                k = "m:$nk"
+                titles.putIfAbsent(k, t)
+            }
+            map.getOrPut(k) { ArrayList() }.add(m)
+        }
+        return map.filter { e -> e.value.distinctBy { TgLibrary.keyOf(it) }.size >= 2 }
+            .map { Dup(titles[it.key].orEmpty(), it.value.distinctBy { m -> TgLibrary.keyOf(m) }.sortedByDescending { m -> m.size }) }
+            .sortedBy { normalize(it.title) }
+    }
+
+    private fun hideCopies(keep: List<Pair<TgMessage, List<TgMessage>>>) {
+        val hidden = HashSet(TgLibrary.hidden(this))
+        var n = 0
+        for ((best, all) in keep) for (m in all) if (m.messageId != best.messageId || m.chatId != best.chatId) { if (hidden.add(TgLibrary.keyOf(m))) n++ }
+        TgLibrary.setHidden(this, hidden)
+        Toast.makeText(this, getString(R.string.tglib_dups_done, n), Toast.LENGTH_SHORT).show()
+        if (chatFilter == LIB_TAB && currentChat == null && !searching) renderLibrary()
+    }
+
+    private fun showDuplicates() {
+        val dups = findDuplicates()
+        val hasHidden = TgLibrary.hidden(this).isNotEmpty()
+        val b = AlertDialog.Builder(this).setTitle(R.string.tglib_dups_title)
+        if (dups.isEmpty()) b.setMessage(R.string.tglib_dups_none)
+        else {
+            b.setItems(dups.map { it.title + " · " + getString(R.string.tglib_dups_copies, it.msgs.size) }.toTypedArray()) { _, i -> chooseDuplicate(dups[i]) }
+            b.setPositiveButton(R.string.tglib_dups_best) { _, _ -> hideCopies(dups.map { it.msgs[0] to it.msgs }) }
+        }
+        if (hasHidden) b.setNeutralButton(R.string.tglib_dups_restore) { _, _ ->
+            TgLibrary.setHidden(this, emptySet())
+            Toast.makeText(this, R.string.tglib_dups_restored, Toast.LENGTH_SHORT).show()
+            if (chatFilter == LIB_TAB && currentChat == null && !searching) renderLibrary()
+        }
+        b.setNegativeButton(R.string.channel_check_close, null).show()
+    }
+
+    private fun chooseDuplicate(d: Dup) {
+        val labels = d.msgs.map { m -> listOf(optionInfo(m), m.chatTitle).filter { it.isNotEmpty() }.joinToString(" · ") }.toTypedArray()
+        var pick = 0
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.tglib_dups_keep) + " " + d.title)
+            .setSingleChoiceItems(labels, 0) { _, i -> pick = i }
+            .setPositiveButton(android.R.string.ok) { _, _ -> hideCopies(listOf(d.msgs[pick] to d.msgs)) }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> showDuplicates() }
+            .show()
+    }
+
+    // ---- Lista de deseos ----
+
+    private fun libNameKeys(): Set<String> = libraryMessages().map { nameKey(searchTitle(it)) }.filter { it.length >= 2 }.toSet()
+
+    private fun wishAvailable(w: String, keys: Set<String>): Boolean {
+        val wk = nameKey(w)
+        return wk.length >= 2 && keys.any { " $it ".contains(" $wk ") }
+    }
+
+    private fun showWishlist() {
+        val list = TgLibrary.wishlist(this)
+        val keys = libNameKeys()
+        val b = AlertDialog.Builder(this).setTitle(R.string.tglib_wish_title)
+        if (list.isEmpty()) b.setMessage(R.string.tglib_wish_empty)
+        else b.setItems(list.map { it + (if (wishAvailable(it, keys)) "  " + getString(R.string.tglib_wish_avail) else "") }.toTypedArray()) { _, i ->
+            AlertDialog.Builder(this)
+                .setMessage(getString(R.string.tglib_wish_remove, list[i]))
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    TgLibrary.setWishlist(this, list.filterIndexed { j, _ -> j != i })
+                    showWishlist()
+                }
+                .setNegativeButton(android.R.string.cancel) { _, _ -> showWishlist() }
+                .show()
+        }
+        b.setPositiveButton(R.string.tglib_wish_add) { _, _ -> promptWish() }
+        b.setNegativeButton(R.string.channel_check_close, null).show()
+    }
+
+    private fun promptWish() {
+        val input = android.widget.EditText(this).apply {
+            hint = getString(R.string.tglib_wish_hint)
+            isSingleLine = true
+            val pad = (20 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tglib_wish_title)
+            .setView(input)
+            .setPositiveButton(R.string.tglib_wish_add) { _, _ ->
+                val t = input.text.toString().trim()
+                val cur = TgLibrary.wishlist(this)
+                if (t.length >= 2 && cur.none { nameKey(it) == nameKey(t) }) TgLibrary.setWishlist(this, cur + t)
+                showWishlist()
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> showWishlist() }
+            .show()
+    }
+
+    /** Tras actualizar la biblioteca: avisa de lo que estaba en la lista de deseos y ya ha aparecido, y lo quita de la lista. */
+    private fun notifyWishFound() {
+        val list = TgLibrary.wishlist(this)
+        if (list.isEmpty()) return
+        val keys = libNameKeys()
+        val found = list.filter { wishAvailable(it, keys) }
+        if (found.isEmpty()) return
+        TgLibrary.setWishlist(this, list - found.toSet())
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tglib_wish_title)
+            .setMessage(getString(R.string.tglib_wish_found, found.joinToString("\n") { "• $it" }))
+            .setPositiveButton(android.R.string.ok, null)
             .show()
     }
 
@@ -2423,6 +2768,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     renderLibrary()
                 }
                 Toast.makeText(this, getString(R.string.tglib_done, entries.size), Toast.LENGTH_SHORT).show()
+                notifyWishFound()
             }
         }
         fun nextChat() {
