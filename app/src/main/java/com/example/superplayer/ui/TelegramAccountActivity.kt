@@ -1247,7 +1247,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private val reHyphenYear = Regex("(?<=\\p{L})[-_.]((?:19|20)\\d{2})\\b")
 
     private fun cleanName(raw: String): String {
-        var t = raw.replace(reEmoji, " ").replace(reSizeParen, " ").replace(reExtAny, " ")
+        var t = MovieInfo.stripGenres(raw.replace(reEmoji, " ").replace(reSizeParen, " ").replace(reExtAny, " "))
             .replace(Regex("\\s+"), " ").trim()
         // «Sabrina_y_sus_amores-1995»: sin espacios es un nombre de archivo, no un título.
         if (!t.contains(' ')) t = t.replace('_', ' ').replace('.', ' ')

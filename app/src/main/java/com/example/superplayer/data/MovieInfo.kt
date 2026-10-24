@@ -76,6 +76,20 @@ object MovieInfo {
     private val RE_SIZE = Regex("(?i)\\(\\s*\\d+(?:[.,]\\d+)?\\s*(?:[KMGT]i?B|bytes?)\\s*\\)")
     private val RE_EXT_ANY = Regex("(?i)\\.(mkv|mp4|avi|mov|m4v|webm|ts|mpe?g|wmv|flv)\\b")
     private val RE_HYPHEN_YEAR = Regex("(?<=\\p{L})[-_.]((?:19|20)\\d{2})\\b")
+    /**
+     * «RÍO. (2011) ANIMACIÓN - AVENTURAS - COMEDIA - INFANTIL»: tras el año vienen los géneros, que no son del título.
+     * Si justo después del año empieza una palabra de género, se corta todo lo que sigue y queda «RÍO. (2011)».
+     */
+    private val RE_GENRE_TAIL = Regex(
+        "(?iu)[\\s.\\-–|:,]*\\(?\\b((?:19|20)\\d{2})\\b\\)?[\\s.\\-–|:,]*" +
+            "(?=(?:acci[oó]n|aventuras?|animaci[oó]n|comedia|infantil|fant[aá]stic[oa]|fantas[ií]a|thriller|terror|drama|romance|rom[aá]ntic[ao]|" +
+            "ciencia[\\s-]*ficci[oó]n|sci-?fi|suspense|misterio|b[eé]lic[oa]|documental|musical|western|crimen|familiar|biograf[ií]a|" +
+            "hist[oó]ric[oa]|deportes?|polic[ií]aco|cat[aá]strofes|cine\\s+negro|guerra|noir|action|adventure|animation|comedy|horror|family|crime|mystery)(?![\\p{L}])).*$"
+    )
+
+    /** Quita de un título «Nombre (año) GÉNERO - GÉNERO…» los géneros del final; si no los hay, lo devuelve igual. */
+    fun stripGenres(raw: String): String = raw.replace(RE_GENRE_TAIL, " ($1)")
+
     private val RE_DOTS = Regex("[._]+")
     private val RE_SPACES = Regex("\\s+")
     private val RE_MARKS = Regex("\\p{M}+")
@@ -91,7 +105,7 @@ object MovieInfo {
     }
 
     private fun cleanTitleUncached(raw: String): Pair<String, String?> {
-        var text = raw.replace(RE_EMOJI, " ").replace(RE_SIZE, " ").replace(RE_EXT_ANY, " ").replace(RE_HYPHEN_YEAR, " ($1)").trim()
+        var text = stripGenres(raw.replace(RE_EMOJI, " ").replace(RE_SIZE, " ").replace(RE_EXT_ANY, " ").replace(RE_HYPHEN_YEAR, " ($1)")).trim()
         var year: String? = null
         RE_YEAR_BRACKET.find(text)?.let { year = it.groupValues[1] }
         text = text.replace(RE_SQUARE, " ").replace(RE_ROUND, " ")
