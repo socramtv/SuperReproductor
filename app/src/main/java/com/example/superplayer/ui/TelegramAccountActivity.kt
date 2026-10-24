@@ -3897,6 +3897,13 @@ class TelegramAccountActivity : AppCompatActivity() {
             labels.add(getString(R.string.tgacc_buttons, m.buttons.size))
             actions.add { showButtons(m) }
         }
+        if (currentChat != null && !searching && (isImageMsg(m) || isAudioMsg(m))) {
+            val chatAlbum = findChatAlbum(m)
+            if (chatAlbum != null && chatAlbum.tracks.size >= 2) {
+                labels.add(getString(R.string.music_chat_open, chatAlbum.tracks.size))
+                actions.add { openChatAlbum(m) }
+            }
+        }
         if (m.fileId != null) {
             if (m.kind == "photo" || (m.kind == "document" && (m.mime ?: "").startsWith("image/"))) {
                 labels.add(getString(R.string.tgacc_view_photo))
@@ -4207,6 +4214,99 @@ class TelegramAccountActivity : AppCompatActivity() {
      * Álbum de música en un ZIP (o RAR sin comprimir): descarga el archivo, saca las pistas a la caché
      * y abre la pantalla de música. Si ya se abrió antes, entra directo.
      */
+    // ---- Álbum desde un chat: «foto con datos del álbum» + pistas de audio seguidas (+ un mensaje «Finished.») ----
+
+    private class ChatAlbum(val image: TgMessage?, val tracks: List<TgMessage>)
+
+    private val reAudioExt = Regex("(?i)\\.(mp3|flac|m4a|aac|ogg|opus|wav|wma)$")
+    private val reFinished = Regex("(?i)\\b(finished|terminad[oa]|completad[oa]|finalizad[oa]|done)\\b")
+    private val reAlbumTitle = Regex("(?i)(?:album\\s*title|t[ií]tulo(?:\\s*del)?\\s*[aá]lbum|[aá]lbum)\\s*:\\s*([^\\n]+)")
+    private val reAlbumArtist = Regex("(?i)(?:artist|artista)\\s*:\\s*([^\\n]+)")
+
+    private fun isAudioMsg(m: TgMessage): Boolean {
+        if (m.fileId == null || m.size <= 0) return false
+        if (m.kind == "audio") return true
+        return m.kind == "document" && ((m.mime ?: "").startsWith("audio/") || reAudioExt.containsMatchIn(m.fileName.orEmpty()))
+    }
+
+    /** El álbum al que pertenece [anchor] (su foto o una de sus pistas) entre los mensajes ya cargados del chat; null si no hay pistas. */
+    private fun findChatAlbum(anchor: TgMessage): ChatAlbum? {
+        val asc = messages.distinctBy { it.chatId to it.messageId }.sortedBy { it.messageId }
+        val i = asc.indexOfFirst { it.chatId == anchor.chatId && it.messageId == anchor.messageId }
+        if (i < 0) return null
+        var start = i
+        if (isAudioMsg(anchor)) {
+            // Hacia atrás, hasta la foto que abre el álbum (si no la hay, hasta la primera pista seguida).
+            var j = i - 1
+            var img = -1
+            var firstAudio = i
+            var steps = 0
+            while (j >= 0 && steps < 80) {
+                val x = asc[j]
+                if (isImageMsg(x)) { img = j; break }
+                if (isAudioMsg(x)) firstAudio = j
+                else if (x.fileId == null && reFinished.containsMatchIn(x.text)) break
+                j--
+                steps++
+            }
+            start = if (img >= 0) img else firstAudio
+        }
+        val first = asc[start]
+        val image = if (isImageMsg(first)) first else null
+        val tracks = ArrayList<TgMessage>()
+        var k = if (image != null) start + 1 else start
+        var seenAudio = false
+        while (k < asc.size && tracks.size < 300) {
+            val x = asc[k]
+            if (isAudioMsg(x)) { tracks.add(x); seenAudio = true }
+            else if (isImageMsg(x) && seenAudio) break
+            else if (x.fileId == null && reFinished.containsMatchIn(x.text) && seenAudio) break
+            k++
+        }
+        return if (tracks.isEmpty()) null else ChatAlbum(image, tracks)
+    }
+
+    /** Abre el reproductor de música con las pistas del álbum (emitidas desde Telegram, sin bajarlas antes) y la foto como portada. */
+    private fun openChatAlbum(anchor: TgMessage) {
+        val b = backend ?: return
+        val alb = findChatAlbum(anchor)
+        if (alb == null) {
+            Toast.makeText(this, R.string.music_chat_none, Toast.LENGTH_LONG).show()
+            return
+        }
+        val appCtx = applicationContext
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        TgStreamServer.onProblem = { msg ->
+            handler.post { android.widget.Toast.makeText(appCtx, "Telegram sin datos: $msg", android.widget.Toast.LENGTH_LONG).show() }
+        }
+        val tracks = alb.tracks.mapNotNull { m ->
+            streamFor(m)?.let { MusicArchive.Track(MusicArchive.titleOf(m.fileName ?: titleOf(m)), it.url) }
+        }
+        if (tracks.isEmpty()) {
+            Toast.makeText(this, R.string.music_chat_none, Toast.LENGTH_LONG).show()
+            return
+        }
+        val cap = alb.image?.text.orEmpty()
+        val title = reAlbumTitle.find(cap)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+        val artist = reAlbumArtist.find(cap)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+        val name = listOfNotNull(title, artist).joinToString(" — ").ifEmpty {
+            alb.image?.let { titleOf(it) }?.takeIf { it.isNotBlank() } ?: currentChat?.title ?: getString(R.string.music_chat_default)
+        }
+        fun go(cover: String?) {
+            MusicPlayerActivity.pendingAlbum = MusicArchive.Album(name, tracks, cover)
+            startActivity(Intent(this, MusicPlayerActivity::class.java).putExtra(MusicPlayerActivity.EXTRA_PENDING, true))
+        }
+        val fid = alb.image?.fileId?.toIntOrNull()
+        if (fid == null) {
+            go(null)
+        } else {
+            Toast.makeText(this, R.string.music_chat_loading, Toast.LENGTH_SHORT).show()
+            b.download(fid, { _, _ -> }, { path ->
+                runOnUiThread { if (!isFinishing && !isDestroyed) go(path) }
+            })
+        }
+    }
+
     private fun openMusicAlbum(m: TgMessage) {
         val root = java.io.File(cacheDir, "tgmusic")
         val dir = java.io.File(root, "${m.chatId}_${m.messageId}")

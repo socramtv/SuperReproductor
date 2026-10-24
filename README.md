@@ -1643,3 +1643,6 @@ El póster del programa va arriba a la derecha de la barra de información (junt
 ## Biblioteca con muchos vídeos (rendimiento)
 - La pestaña Biblioteca ya no trabaja en el hilo principal: leer el índice (`tg_library.json`), agrupar series/películas y filtrar se hace en segundo plano (`buildLibrary`) y la pantalla solo recibe el resultado (antes, con miles de vídeos, podía congelarse y cerrarse Telegram).
 - Se calcula una sola vez por vídeo lo costoso (episodio, título, clave de visto) y los favoritos se leen una vez, no por cada vídeo. El índice guarda como máximo los 8000 más recientes, con el texto recortado. Las fichas que se piden a TMDb para los géneros se limitan a 200 por pantalla.
+
+## Álbum desde un chat de Telegram
+En un chat de música (p. ej. un bot que envía la foto del álbum con sus datos, luego las pistas en audio y al final «Finished.»), pulsa la foto o cualquier pista y elige **🎵 Abrir como álbum**. Se abre el reproductor de música con la foto como portada, el título/artista sacados del texto de la foto y las pistas emitidas por streaming (sin descargarlas antes). Solo usa los mensajes ya cargados del chat: si faltan pistas, desplázate hacia arriba/abajo para cargar más.

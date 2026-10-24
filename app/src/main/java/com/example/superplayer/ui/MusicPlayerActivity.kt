@@ -86,7 +86,8 @@ class MusicPlayerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val dir = intent.getStringExtra(EXTRA_DIR)?.let { File(it) }
-        album = dir?.let { MusicArchive.cached(it) }
+        // Álbum de un chat de Telegram (pistas emitidas por internet): llega por [pendingAlbum]; si no, el álbum de un ZIP/RAR en disco.
+        album = if (intent.getBooleanExtra(EXTRA_PENDING, false)) pendingAlbum else dir?.let { MusicArchive.cached(it) }
         val alb = album
         if (alb == null) {
             Toast.makeText(this, R.string.music_err_open, Toast.LENGTH_LONG).show()
@@ -241,7 +242,7 @@ class MusicPlayerActivity : AppCompatActivity() {
             val items = alb.tracks.map { t ->
                 MediaItem.Builder()
                     .setMediaId(t.path)
-                    .setUri(Uri.fromFile(File(t.path)))
+                    .setUri(if (t.path.startsWith("http")) Uri.parse(t.path) else Uri.fromFile(File(t.path)))
                     .setMediaMetadata(
                         MediaMetadata.Builder().setTitle(t.title).setArtist(alb.name).setAlbumTitle(alb.name).setArtworkUri(art).build()
                     )
@@ -375,6 +376,10 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_DIR = "dir"
+        const val EXTRA_PENDING = "pending"
+        /** Álbum armado desde un chat de Telegram (pistas = URLs locales del servidor de Telegram, portada = foto descargada). */
+        @Volatile
+        var pendingAlbum: MusicArchive.Album? = null
         fun intent(ctx: Context, dir: File) = Intent(ctx, MusicPlayerActivity::class.java).putExtra(EXTRA_DIR, dir.absolutePath)
     }
 }

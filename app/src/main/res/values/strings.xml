@@ -873,4 +873,8 @@
     <string name="tgview_open">📋 Ver lista: %1$s</string>
     <string name="tgview_empty">Esta lista no tiene canales.</string>
     <string name="tgview_all">Todos</string>
+    <string name="music_chat_open">🎵 Abrir como álbum (%1$d pistas)</string>
+    <string name="music_chat_none">No encuentro las pistas de este álbum entre los mensajes cargados del chat. Desplázate para cargar más y vuelve a probar.</string>
+    <string name="music_chat_loading">Preparando álbum…</string>
+    <string name="music_chat_default">Álbum</string>
 </resources>
