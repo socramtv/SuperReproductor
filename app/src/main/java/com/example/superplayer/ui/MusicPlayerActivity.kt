@@ -65,12 +65,26 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    /** Fondo con foco bien visible para mando/teclado: relleno azul y borde blanco grueso cuando tiene el foco. */
+    private fun focusBg(normal: Int, radiusDp: Int): android.graphics.drawable.StateListDrawable {
+        fun shape(fill: Int, stroke: Int, w: Int) = GradientDrawable().apply {
+            cornerRadius = dp(radiusDp).toFloat(); setColor(fill); if (w > 0) setStroke(dp(w), stroke)
+        }
+        return android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), shape(0xFF0277BD.toInt(), Color.WHITE, 3))
+            addState(intArrayOf(android.R.attr.state_pressed), shape(0xFF0277BD.toInt(), Color.WHITE, 3))
+            addState(intArrayOf(), shape(normal, 0, 0))
+        }
+    }
+
     private fun mkButton(text: String, size: Float = 18f): Button = Button(this).apply {
         this.text = text
         textSize = size
         isAllCaps = false
         setTextColor(Color.WHITE)
-        background = GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(0xFF2A2A2A.toInt()) }
+        background = focusBg(0xFF2A2A2A.toInt(), 24)
+        stateListAnimator = null
+        setOnFocusChangeListener { v, f -> v.animate().scaleX(if (f) 1.15f else 1f).scaleY(if (f) 1.15f else 1f).setDuration(120).start() }
         minWidth = 0
         minimumWidth = 0
         setPadding(dp(14), dp(6), dp(14), dp(6))
@@ -108,11 +122,19 @@ class MusicPlayerActivity : AppCompatActivity() {
 
         seek = SeekBar(this).apply {
             max = 1000
+            isFocusable = true
+            keyProgressIncrement = 15
+            background = focusBg(Color.TRANSPARENT, 8)
+            setPadding(dp(16), dp(10), dp(16), dp(10))
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
                     if (fromUser) {
                         val d = controller?.duration ?: 0L
-                        if (d > 0) tPos.text = timeText(d * p / 1000)
+                        if (d > 0) {
+                            tPos.text = timeText(d * p / 1000)
+                            // Con mando (flechas) no hay "soltar": salta directamente.
+                            if (!seeking) controller?.seekTo(d * p / 1000)
+                        }
                     }
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) { seeking = true }
@@ -178,6 +200,8 @@ class MusicPlayerActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@MusicPlayerActivity)
             adapter = this@MusicPlayerActivity.adapter
             overScrollMode = View.OVER_SCROLL_NEVER
+            isFocusable = false
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
         adapter.tracks = alb.tracks
 
@@ -255,6 +279,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         refresh()
         refreshModes()
         ui.post(ticker)
+        btnPlay.requestFocus()
     }
 
     private val ticker = object : Runnable {
@@ -283,9 +308,11 @@ class MusicPlayerActivity : AppCompatActivity() {
             sub.text = getString(R.string.music_track_of, idx + 1, alb.tracks.size, alb.name)
         }
         if (adapter.current != idx) {
+            val old = adapter.current
             adapter.current = idx
-            adapter.notifyDataSetChanged()
-            list.scrollToPosition(maxOf(0, idx - 1))
+            if (old >= 0) adapter.notifyItemChanged(old)
+            adapter.notifyItemChanged(idx)
+            if (!list.hasFocus()) list.scrollToPosition(maxOf(0, idx - 1))
         }
     }
 
@@ -358,6 +385,7 @@ class MusicPlayerActivity : AppCompatActivity() {
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(dp(16), dp(12), dp(16), dp(12))
                 isFocusable = true
+                textSize = 17f
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             }
             return object : RecyclerView.ViewHolder(tv) {}
@@ -367,9 +395,14 @@ class MusicPlayerActivity : AppCompatActivity() {
             val on = position == current
             tv.text = String.format("%02d   %s%s", position + 1, if (on) "♪ " else "", tracks[position].title)
             tv.setTextColor(if (on) 0xFF4FC3F7.toInt() else Color.WHITE)
-            tv.setBackgroundColor(if (on) 0xFF1E2A33.toInt() else Color.TRANSPARENT)
+            tv.background = focusBg(if (on) 0xFF1E2A33.toInt() else Color.TRANSPARENT, 8)
             tv.setOnClickListener {
-                controller?.let { c -> c.seekTo(position, 0L); c.play() }
+                // Elegir una pista la reproduce enseguida (aunque el reproductor estuviera parado o en error).
+                controller?.let { c ->
+                    c.seekTo(position, 0L)
+                    if (c.playbackState == Player.STATE_IDLE) c.prepare()
+                    c.play()
+                }
             }
         }
     }
