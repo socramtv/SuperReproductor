@@ -877,4 +877,15 @@
     <string name="music_chat_none">No encuentro las pistas de este álbum entre los mensajes cargados del chat. Desplázate para cargar más y vuelve a probar.</string>
     <string name="music_chat_loading">Preparando álbum…</string>
     <string name="music_chat_default">Álbum</string>
+    <string name="player_ext_title">Formato no compatible</string>
+    <string name="player_ext_msg">Este vídeo (por ejemplo un .avi) no se puede reproducir aquí. ¿Abrirlo con otra app como VLC o MX Player?</string>
+    <string name="player_ext_open">Abrir con otra app</string>
+    <string name="tglib_t_halloween">Halloween</string>
+    <string name="tglib_t_xmas">Navidad</string>
+    <string name="tglib_t_valentine">San Valentín</string>
+    <string name="tglib_t_summer">Verano</string>
+    <string name="tglib_t_easter">Semana Santa</string>
+    <string name="tglib_t_ww2">2ª Guerra Mundial</string>
+    <string name="tglib_t_medieval">Medieval</string>
+    <string name="tglib_t_western">Oeste</string>
 </resources>

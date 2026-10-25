@@ -416,9 +416,34 @@ class PlayerActivity : AppCompatActivity() {
         pendingReconnectRunnable = null
     }
 
+    private var externalOfferShown = false
+
     private fun scheduleAutoReconnectOrShowError(error: PlaybackException) {
         val stream = currentStream
         if (stream == null || isFinishing || isDestroyed) return
+        // Formato que ExoPlayer no sabe leer (típico del .avi/.wmv de Telegram): reintentar no sirve; se ofrece otra app (VLC, MX Player…).
+        val unsupported = error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
+            error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED
+        if (unsupported && stream.url.startsWith("http://127.0.0.1")) {
+            if (!externalOfferShown) {
+                externalOfferShown = true
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.player_ext_title)
+                    .setMessage(R.string.player_ext_msg)
+                    .setPositiveButton(R.string.player_ext_open) { _, _ ->
+                        try {
+                            startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(stream.url), "video/*"), stream.name))
+                        } catch (e: Exception) {
+                            Toast.makeText(this, getString(R.string.player_error, "no hay ninguna app de vídeo"), Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+            return
+        }
         if (autoReconnectAttempts >= RECONNECT_DELAYS_MS.size) {
             Toast.makeText(
                 this,

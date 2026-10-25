@@ -173,10 +173,12 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** Filtros de género (vacío = todos) y novedades (0 todo, 1 hoy, 2 semana, 3 mes); valen en biblioteca, galería de chat y buscador. */
     private var filterGenre = ""
     private var filterNov = 0
+    private var filterYear = ""
+    private var filterTheme = ""
     /** Títulos (para buscar su ficha) de lo que hay en pantalla antes de filtrar: de ahí salen los géneros del diálogo. */
     private var filterPool: List<String> = emptyList()
     private val filterRerun = Runnable {
-        if (!isFinishing && !isDestroyed) { if (filterGenre.isNotEmpty()) rerenderFiltered() else updateFilterRow() }
+        if (!isFinishing && !isDestroyed) { if (filterGenre.isNotEmpty() || filterTheme.isNotEmpty()) rerenderFiltered() else updateFilterRow() }
     }
     /** Pestaña Carpetas: carpetas de chats de Telegram; null = la lista de carpetas, otra = sus chats. */
     private var tgFolders: List<TgFolder> = emptyList()
@@ -407,7 +409,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun showMessage(text: String) {
         useList()
-        binding.tgGenreScroll.visibility = View.GONE
+        setFilterRowsVisible(false)
         adapter.submit(emptyList())
         binding.emptyView.text = text
         binding.emptyView.visibility = View.VISIBLE
@@ -860,7 +862,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun renderChats() {
-        if (chatFilter != VIDEO_TAB && chatFilter != LIB_TAB) { useList(); binding.tgGenreScroll.visibility = View.GONE }
+        if (chatFilter != VIDEO_TAB && chatFilter != LIB_TAB) { useList(); setFilterRowsVisible(false) }
         title = rootTitle()
         searchResults = null
         binding.inputBar.visibility = View.GONE
@@ -869,7 +871,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         updateBack()
         invalidateOptionsMenu()
         if (chatFilter == VIDEO_TAB) {
-            binding.tgGenreScroll.visibility = View.GONE
+            setFilterRowsVisible(false)
             renderVideoFavs()
             return
         }
@@ -2675,7 +2677,39 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     // ---- Filtros (género y novedades), comunes a la biblioteca, la galería de un chat y el buscador ----
 
-    private fun filtersActive() = filterGenre.isNotEmpty() || filterNov != 0
+    private fun filtersActive() = filterGenre.isNotEmpty() || filterNov != 0 || filterYear.isNotEmpty() || filterTheme.isNotEmpty()
+
+    private fun setFilterRowsVisible(v: Boolean) {
+        val vis = if (v) View.VISIBLE else View.GONE
+        binding.tgGenreScroll.visibility = vis
+        binding.tgThemeScroll.visibility = vis
+    }
+
+    /** Año de estreno: el de la ficha si ya se conoce; si no, el que trae el propio título. */
+    private fun yearOf(title: String): String? = MovieInfo.peek(this, title)?.year?.takeIf { it.length == 4 } ?: MovieInfo.cleanTitle(title).second
+
+    /** Épocas del año / temáticas: palabra clave -> expresión que se busca en el título, la sinopsis y el género. */
+    private val themes: List<Pair<String, Regex>> by lazy {
+        fun r(p: String) = Regex("(?i)($p)")
+        listOf(
+            "🎃 " + getString(R.string.tglib_t_halloween) to r("halloween|bruj|vampir|zombi|fantasm|monstru|demoni|diablo|exorcis|maldici|embrujad|pose[ií]d|terror|miedo|sobrenatural|witch|ghost|haunt|monster|demon|horror|slasher|[^a-z]orco"),
+            "🎄 " + getString(R.string.tglib_t_xmas) to r("navidad|navide[ñn]|pap[aá] noel|santa claus|reyes magos|christmas|nochebuena|grinch|trineo|elfo|nochevieja|invierno m[aá]gico"),
+            "💘 " + getString(R.string.tglib_t_valentine) to r("san valent[ií]n|valentine|enamorad|romance|boda|noviazgo|historia de amor|comedia rom[aá]ntica"),
+            "🏖 " + getString(R.string.tglib_t_summer) to r("verano|playa|vacaciones|summer|beach|surf|crucero|isla"),
+            "✝ " + getString(R.string.tglib_t_easter) to r("semana santa|pascua|jes[uú]s|resurrecci|biblia|b[ií]blic|mois[eé]s|easter|nazaret|apostol|pasi[oó]n de cristo"),
+            "🎖 " + getString(R.string.tglib_t_ww2) to r("segunda guerra|guerra mundial|nazi|holocausto|world war|wwii|hitler|d-day|normand[ií]a|1939|1940|1941|1942|1943|1944|1945"),
+            "🏰 " + getString(R.string.tglib_t_medieval) to r("medieval|edad media|rey arturo|caballero|knight|vikingo|viking|castillo|cruzad|templari|robin hood|dragones|drag[oó]n"),
+            "🤠 " + getString(R.string.tglib_t_western) to r("western|far west|oeste|vaquero|cowboy|sheriff|sheri[ff]|pistolero|apache")
+        )
+    }
+
+    private fun themeMatches(theme: String, title: String): Boolean {
+        val re = themes.firstOrNull { it.first == theme }?.second ?: return false
+        val info = MovieInfo.peek(this, title)
+        if (re.containsMatchIn(title)) return true
+        if (info == null) return false
+        return re.containsMatchIn(info.title + " " + (info.genre ?: "") + " " + (info.overview ?: "") + " " + (info.tagline ?: ""))
+    }
 
     /** Título para buscar la ficha de un vídeo del buscador: nombre de la serie o título limpio de la película. */
     private fun searchTitle(m: TgMessage): String = parseEpisode(titleOf(m))?.series ?: libTitle(m)
@@ -2685,6 +2719,14 @@ class TelegramAccountActivity : AppCompatActivity() {
         if (filterNov != 0 && dateSec > 0) {
             val limit = when (filterNov) { 1 -> 86_400L; 2 -> 7 * 86_400L; else -> 30 * 86_400L }
             if (System.currentTimeMillis() / 1000 - dateSec > limit) return false
+        }
+        if (filterYear.isNotEmpty()) {
+            val y = yearOf(title)?.toIntOrNull() ?: return false
+            val ok = if (filterYear.endsWith("s")) y / 10 * 10 == filterYear.dropLast(1).toIntOrNull() else y == filterYear.toIntOrNull()
+            if (!ok) return false
+        }
+        if (filterTheme.isNotEmpty()) {
+            if (title.isEmpty() || !themeMatches(filterTheme, title)) return false
         }
         if (filterGenre.isNotEmpty()) {
             if (title.isEmpty()) return false
@@ -2722,18 +2764,24 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** Fila de botones bajo las pestañas: tipo (solo en la biblioteca), novedades y géneros; un toque activa o quita el filtro. */
     private fun updateFilterRow() {
         if (!filterRowVisible()) {
-            binding.tgGenreScroll.visibility = View.GONE
+            setFilterRowsVisible(false)
             return
         }
         val inLib = currentChat == null && !searching
         val box = binding.tgGenreChips
         val keepX = binding.tgGenreScroll.scrollX
+        val keepX2 = binding.tgThemeScroll.scrollX
         box.removeAllViews()
+        val box2 = binding.tgThemeChips
+        box2.removeAllViews()
         fun chip(label: String, sel: Boolean, onClick: () -> Unit) = box.addView(makeChip(label, sel, onClick))
+        fun chip2(label: String, sel: Boolean, onClick: () -> Unit) = box2.addView(makeChip(label, sel, onClick))
         if (filtersActive()) chip(getString(R.string.tglib_f_clear_chip), false) {
             libFilter = 0
             filterGenre = ""
             filterNov = 0
+            filterYear = ""
+            filterTheme = ""
             rerenderFiltered()
         }
         if (inLib) {
@@ -2743,15 +2791,24 @@ class TelegramAccountActivity : AppCompatActivity() {
         chip("🆕 " + getString(R.string.tglib_n_day), filterNov == 1) { filterNov = if (filterNov == 1) 0 else 1; rerenderFiltered() }
         chip("🆕 " + getString(R.string.tglib_n_week), filterNov == 2) { filterNov = if (filterNov == 2) 0 else 2; rerenderFiltered() }
         chip("🆕 " + getString(R.string.tglib_n_month), filterNov == 3) { filterNov = if (filterNov == 3) 0 else 3; rerenderFiltered() }
+        // Fila 1: años (décadas y años sueltos, de más nuevo a más antiguo).
+        val yc = HashMap<String, Int>()
+        for (t in filterPool.take(800)) yearOf(t)?.toIntOrNull()?.let { yc[it.toString()] = (yc[it.toString()] ?: 0) + 1 }
+        val decs = yc.keys.map { (it.toInt() / 10 * 10).toString() + "s" }.distinct().sortedDescending()
+        for (d in decs) chip("📅 $d", filterYear == d) { filterYear = if (filterYear == d) "" else d; rerenderFiltered() }
+        for (y in yc.keys.sortedDescending().take(60)) chip(y, filterYear == y) { filterYear = if (filterYear == y) "" else y; rerenderFiltered() }
+        // Fila 2: épocas / temáticas y, después, géneros.
+        if (filterTheme.isNotEmpty() || filterPool.isNotEmpty()) prefetchInfo(filterPool)
+        for ((label, _) in themes) chip2(label, filterTheme == label) { filterTheme = if (filterTheme == label) "" else label; rerenderFiltered() }
         val count = HashMap<String, Int>()
         for (t in filterPool.take(600)) MovieInfo.peek(this, t)?.genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()
             ?.forEach { count[it] = (count[it] ?: 0) + 1 }
         if (filterGenre.isNotEmpty()) count.putIfAbsent(filterGenre, 0)
         for (g in count.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { normalize(it.key) }).map { it.key }) {
-            chip(g, filterGenre.equals(g, ignoreCase = true)) { filterGenre = if (filterGenre.equals(g, ignoreCase = true)) "" else g; rerenderFiltered() }
+            chip2(g, filterGenre.equals(g, ignoreCase = true)) { filterGenre = if (filterGenre.equals(g, ignoreCase = true)) "" else g; rerenderFiltered() }
         }
-        binding.tgGenreScroll.visibility = View.VISIBLE
-        box.post { binding.tgGenreScroll.scrollTo(keepX, 0) }
+        setFilterRowsVisible(true)
+        box.post { binding.tgGenreScroll.scrollTo(keepX, 0); binding.tgThemeScroll.scrollTo(keepX2, 0) }
     }
 
     /** Repinta la galería/biblioteca (sin tocar filtros) para que se vean las marcas de «visto» nuevas. */
@@ -2823,6 +2880,8 @@ class TelegramAccountActivity : AppCompatActivity() {
                 libFilter = 0
                 filterGenre = ""
                 filterNov = 0
+                filterYear = ""
+                filterTheme = ""
                 rerenderFiltered()
             }
             .setNegativeButton(android.R.string.cancel, null)

@@ -95,6 +95,24 @@
             android:paddingVertical="6dp" />
     </HorizontalScrollView>
 
+    <!-- Segunda fila: épocas (Halloween, Navidad…) y géneros -->
+    <HorizontalScrollView
+        android:id="@+id/tgThemeScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface_dark"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/tgThemeChips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="10dp"
+            android:paddingBottom="6dp" />
+    </HorizontalScrollView>
+
     <!-- Aviso de directo en el chat (como en Telegram): toca para unirte -->
     <TextView
         android:id="@+id/tgLiveBanner"

@@ -1649,3 +1649,8 @@ En un chat de música (p. ej. un bot que envía la foto del álbum con sus datos
 
 ## Reproductor de música en TV
 Foco bien visible con mando: botones, barra de progreso y pistas se marcan en azul con borde blanco (los botones además crecen un poco). Al abrir, el foco empieza en ▶. La barra salta con ←/→ directamente. Elegir una pista de la lista la reproduce al instante.
+
+## Reconocimiento de títulos, .avi y filtros en dos filas
+- Los títulos de películas ahora se cortan en el año: todo lo que va detrás (calidad, idiomas, subtítulos, bitrate, «820p», «AC3»…) se ignora al buscar la ficha/póster. Si no hay resultado se reintenta sin puntuación ni año.
+- Si un vídeo de Telegram no se puede reproducir por su formato (típico del .avi), el reproductor ofrece abrirlo con otra app (VLC, MX Player…).
+- Filtros: fila 1 = tipo, novedades y años (décadas y años sueltos); fila 2 = épocas (🎃 Halloween, 🎄 Navidad, 💘 San Valentín, 🏖 Verano, ✝ Semana Santa, 🎖 2ª Guerra Mundial, 🏰 Medieval, 🤠 Oeste) y géneros. Las épocas se buscan en título, sinopsis y género (llegan según se cargan las fichas).

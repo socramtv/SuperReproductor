@@ -7,6 +7,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.text.Normalizer
+import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.Executors
 
@@ -60,7 +61,7 @@ object MovieInfo {
     // -----------------------------------------------------------------
 
     private val QUALITY_TAGS = Regex(
-        "\\b(4K|UHD|FHD|HD|SD|HDR|HDR10|MULTI|VOSE|VOS|SUB|SUBS|LAT|CAST|ESP|DUAL|1080p|720p|480p|2160p|x264|x265|HEVC|WEB-?DL|BLURAY|BDRIP)\\b",
+        "\\b(4K|UHD|FHD|HD|SD|HDR|HDR10|MULTI|VOSE|VOS|SUB|SUBS|LAT|CAST|ESP|DUAL|1080p|720p|480p|2160p|x264|x265|HEVC|WEB-?DL|BLURAY|BDRIP|WEBRIP|HDRIP|BRRIP|DVDRIP|DVDSCR|AC3|AAC|DTS|H264|H265|H\\.?26[45]|M?\\d{3,4}P|\\d{3,4}X\\d{3,4}P?|KBS|CASTELLANO|SPANISH|ENGLISH|LATINO|SUBT|SUBTITULOS|REMASTER|REMASTERED)\\b",
         RegexOption.IGNORE_CASE
     )
 
@@ -69,6 +70,7 @@ object MovieInfo {
     private val RE_SQUARE = Regex("\\[[^\\]]*\\]")
     private val RE_ROUND = Regex("\\([^)]*\\)")
     private val RE_LANG_PREFIX = Regex("^\\s*\\|?[A-Za-z]{2,3}\\|?\\s*[-:|]\\s+")
+    private val RE_YEAR_LOOSE = Regex("(?<![\\p{L}\\d])((?:19|20)\\d{2})(?!\\d)")
     private val RE_YEAR_END = Regex("\\s((?:19|20)\\d{2})\\s*$")
     /** Emojis y símbolos sueltos delante o dentro del título («📺 Serie 1x01»): no forman parte del nombre. */
     private val RE_EMOJI = Regex("[\\p{So}\\p{Sk}\\u200D\\uFE0F\\u20E3]")
@@ -107,7 +109,20 @@ object MovieInfo {
     private fun cleanTitleUncached(raw: String): Pair<String, String?> {
         var text = stripGenres(raw.replace(RE_EMOJI, " ").replace(RE_SIZE, " ").replace(RE_EXT_ANY, " ").replace(RE_HYPHEN_YEAR, " ($1)")).trim()
         var year: String? = null
-        RE_YEAR_BRACKET.find(text)?.let { year = it.groupValues[1] }
+        // Todo lo que va detrás del año (calidad, idiomas, subtítulos, bitrate…) es ruido: el título es lo de antes.
+        val yb = RE_YEAR_BRACKET.find(text)
+        if (yb != null) {
+            year = yb.groupValues[1]
+            val before = text.substring(0, yb.range.first).replace(RE_SQUARE, " ").trim(' ', '-', '_', '.', ':', '|')
+            if (before.length >= 2) text = before
+        } else {
+            val maxYear = Calendar.getInstance().get(Calendar.YEAR) + 1
+            val ym = RE_YEAR_LOOSE.findAll(text).firstOrNull { it.range.first > 1 && it.groupValues[1].toInt() <= maxYear }
+            if (ym != null) {
+                val before = text.substring(0, ym.range.first).replace(RE_SQUARE, " ").trim(' ', '-', '_', '.', ':', '|')
+                if (before.length >= 2) { year = ym.groupValues[1]; text = before }
+            }
+        }
         text = text.replace(RE_SQUARE, " ").replace(RE_ROUND, " ")
         text = text.replace(RE_LANG_PREFIX, "")
         if (year == null) {
@@ -273,6 +288,14 @@ object MovieInfo {
         if (checked) info = try { searchTmdb(tmdbKey, title, year) } catch (e: Exception) { null }
         if (info == null) info = try { searchMovie(title, year) } catch (e: Exception) { null }
         if (info == null) info = try { searchShow(title) } catch (e: Exception) { null }
+        // Segundo intento: sin signos de puntuación (comas, dos puntos…) y sin año, por si el año del chat no coincide.
+        if (info == null) {
+            val simple = title.replace(Regex("[,;:!?¡¿\"']"), " ").replace(Regex("\\s+"), " ").trim()
+            if (simple.isNotEmpty() && (simple != title || year != null)) {
+                if (checked) info = try { searchTmdb(tmdbKey, simple, null) } catch (e: Exception) { null }
+                if (info == null) info = try { searchMovie(simple, null) } catch (e: Exception) { null }
+            }
+        }
         return info?.copy(tmdbChecked = checked)
     }
 
