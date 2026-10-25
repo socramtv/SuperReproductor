@@ -2682,7 +2682,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun setFilterRowsVisible(v: Boolean) {
         val vis = if (v) View.VISIBLE else View.GONE
         binding.tgGenreScroll.visibility = vis
-        binding.tgThemeScroll.visibility = vis
+        binding.tgThemeScroll.visibility = View.GONE
     }
 
     /** Año de estreno: el de la ficha si ya se conoce; si no, el que trae el propio título. */
@@ -2761,7 +2761,14 @@ class TelegramAccountActivity : AppCompatActivity() {
             (searching && searchResults.orEmpty().any { isVideoMsg(it) && isMovieFile(it) })
         )
 
-    /** Fila de botones bajo las pestañas: tipo (solo en la biblioteca), novedades y géneros; un toque activa o quita el filtro. */
+    /** Elige una opción de una lista (la marcada lleva ✓); [onPick] recibe el índice. */
+    private fun pickFrom(title: String, labels: List<String>, selected: Int, onPick: (Int) -> Unit) {
+        val shown = labels.mapIndexed { i, l -> if (i == selected) "✓  $l" else "      $l" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle(title).setItems(shown) { _, which -> onPick(which) }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    /** Una sola fila de botones desplegables: tipo (biblioteca), fecha y años, género y otras categorías (épocas). */
     private fun updateFilterRow() {
         if (!filterRowVisible()) {
             setFilterRowsVisible(false)
@@ -2770,12 +2777,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         val inLib = currentChat == null && !searching
         val box = binding.tgGenreChips
         val keepX = binding.tgGenreScroll.scrollX
-        val keepX2 = binding.tgThemeScroll.scrollX
         box.removeAllViews()
-        val box2 = binding.tgThemeChips
-        box2.removeAllViews()
         fun chip(label: String, sel: Boolean, onClick: () -> Unit) = box.addView(makeChip(label, sel, onClick))
-        fun chip2(label: String, sel: Boolean, onClick: () -> Unit) = box2.addView(makeChip(label, sel, onClick))
         if (filtersActive()) chip(getString(R.string.tglib_f_clear_chip), false) {
             libFilter = 0
             filterGenre = ""
@@ -2785,30 +2788,55 @@ class TelegramAccountActivity : AppCompatActivity() {
             rerenderFiltered()
         }
         if (inLib) {
-            chip("📺 " + getString(R.string.tglib_f_series), libFilter == 1) { libFilter = if (libFilter == 1) 0 else 1; rerenderFiltered() }
-            chip("🎬 " + getString(R.string.tglib_f_movies), libFilter == 2) { libFilter = if (libFilter == 2) 0 else 2; rerenderFiltered() }
+            val typeNames = listOf(getString(R.string.tglib_f_all), getString(R.string.tglib_f_series), getString(R.string.tglib_f_movies))
+            chip("🎞 " + (if (libFilter == 0) getString(R.string.tglib_f_type) else typeNames[libFilter]) + " ▾", libFilter != 0) {
+                pickFrom(getString(R.string.tglib_f_type), typeNames, libFilter) { libFilter = it; rerenderFiltered() }
+            }
         }
-        chip("🆕 " + getString(R.string.tglib_n_day), filterNov == 1) { filterNov = if (filterNov == 1) 0 else 1; rerenderFiltered() }
-        chip("🆕 " + getString(R.string.tglib_n_week), filterNov == 2) { filterNov = if (filterNov == 2) 0 else 2; rerenderFiltered() }
-        chip("🆕 " + getString(R.string.tglib_n_month), filterNov == 3) { filterNov = if (filterNov == 3) 0 else 3; rerenderFiltered() }
-        // Fila 1: años (décadas y años sueltos, de más nuevo a más antiguo).
+        // Fecha: novedades + décadas + años, todo en un desplegable.
         val yc = HashMap<String, Int>()
         for (t in filterPool.take(800)) yearOf(t)?.toIntOrNull()?.let { yc[it.toString()] = (yc[it.toString()] ?: 0) + 1 }
         val decs = yc.keys.map { (it.toInt() / 10 * 10).toString() + "s" }.distinct().sortedDescending()
-        for (d in decs) chip("📅 $d", filterYear == d) { filterYear = if (filterYear == d) "" else d; rerenderFiltered() }
-        for (y in yc.keys.sortedDescending().take(60)) chip(y, filterYear == y) { filterYear = if (filterYear == y) "" else y; rerenderFiltered() }
-        // Fila 2: épocas / temáticas y, después, géneros.
-        if (filterTheme.isNotEmpty() || filterPool.isNotEmpty()) prefetchInfo(filterPool)
-        for ((label, _) in themes) chip2(label, filterTheme == label) { filterTheme = if (filterTheme == label) "" else label; rerenderFiltered() }
+        val years = yc.keys.sortedDescending().take(80)
+        val novNames = listOf(R.string.tglib_n_day, R.string.tglib_n_week, R.string.tglib_n_month).map { getString(it) }
+        val dateLabel = listOfNotNull(
+            if (filterNov in 1..3) novNames[filterNov - 1] else null,
+            filterYear.ifEmpty { null }
+        ).joinToString(" · ").ifEmpty { getString(R.string.tglib_f_date) }
+        chip("📅 $dateLabel ▾", filterNov != 0 || filterYear.isNotEmpty()) {
+            val labels = ArrayList<String>()
+            val acts = ArrayList<() -> Unit>()
+            labels.add(getString(R.string.tglib_n_all)); acts.add { filterNov = 0; filterYear = "" }
+            novNames.forEachIndexed { i, n -> labels.add("🆕 $n"); acts.add { filterNov = i + 1 } }
+            for (d in decs) { labels.add("📅 $d"); acts.add { filterYear = d } }
+            for (y in years) { labels.add(y); acts.add { filterYear = y } }
+            val cur = when {
+                filterYear.isNotEmpty() -> labels.indexOf(if (filterYear.endsWith("s")) "📅 $filterYear" else filterYear)
+                filterNov in 1..3 -> filterNov
+                else -> 0
+            }
+            pickFrom(getString(R.string.tglib_f_date), labels, cur) { acts[it](); rerenderFiltered() }
+        }
+        // Género
+        prefetchInfo(filterPool)
         val count = HashMap<String, Int>()
         for (t in filterPool.take(600)) MovieInfo.peek(this, t)?.genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()
             ?.forEach { count[it] = (count[it] ?: 0) + 1 }
         if (filterGenre.isNotEmpty()) count.putIfAbsent(filterGenre, 0)
-        for (g in count.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { normalize(it.key) }).map { it.key }) {
-            chip2(g, filterGenre.equals(g, ignoreCase = true)) { filterGenre = if (filterGenre.equals(g, ignoreCase = true)) "" else g; rerenderFiltered() }
+        val genres = count.entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { normalize(it.key) }).map { it.key }
+        chip("🎭 " + (filterGenre.ifEmpty { getString(R.string.tglib_f_genre) }) + " ▾", filterGenre.isNotEmpty()) {
+            val labels = listOf(getString(R.string.tglib_g_any)) + genres.map { "$it (${count[it] ?: 0})" }
+            val cur = if (filterGenre.isEmpty()) 0 else genres.indexOfFirst { it.equals(filterGenre, true) } + 1
+            pickFrom(getString(R.string.tglib_f_genre), labels, cur) { filterGenre = if (it == 0) "" else genres[it - 1]; rerenderFiltered() }
+        }
+        // Otras categorías: épocas del año y temáticas (van las últimas).
+        chip("✨ " + (filterTheme.ifEmpty { getString(R.string.tglib_f_other) }) + " ▾", filterTheme.isNotEmpty()) {
+            val labels = listOf(getString(R.string.tglib_g_all_cats)) + themes.map { it.first }
+            val cur = if (filterTheme.isEmpty()) 0 else themes.indexOfFirst { it.first == filterTheme } + 1
+            pickFrom(getString(R.string.tglib_f_other), labels, cur) { filterTheme = if (it == 0) "" else themes[it - 1].first; rerenderFiltered() }
         }
         setFilterRowsVisible(true)
-        box.post { binding.tgGenreScroll.scrollTo(keepX, 0); binding.tgThemeScroll.scrollTo(keepX2, 0) }
+        box.post { binding.tgGenreScroll.scrollTo(keepX, 0) }
     }
 
     /** Repinta la galería/biblioteca (sin tocar filtros) para que se vean las marcas de «visto» nuevas. */
