@@ -1426,6 +1426,14 @@ class TelegramAccountActivity : AppCompatActivity() {
             val isVideo = isVideoMsg(m) || isRarPart(m)
             if (isImage) {
                 if (m.messageId in usedImages) continue
+                // Foto con un enlace de Telegram (p. ej. «Ver AQUÍ» de un bot): una sola ficha, la foto con el enlace; no se repite el enlace aparte.
+                val tgLink = m.links.firstOrNull { isTgLink(it) && !isTgMessageLink(it) }
+                if (tgLink != null) {
+                    for (l in m.links) if (isTgLink(l) && !isTgMessageLink(l)) seenLinks.add(l)
+                    items.add(MediaItem(key = "${m.messageId}:img", select = listOf(m), caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
+                        badge = getString(R.string.tgacc_badge_link), link = tgLink, messageId = m.messageId,
+                        onLong = { onMessageLong(m) }) { openTgLink(tgLink) })
+                } else
                 items.add(MediaItem(key = "${m.messageId}:img", select = listOf(m), caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
                     messageId = m.messageId, onLong = { onMessageLong(m) }) { onMessageClick(m) })
             } else if (isVideo) {

@@ -1660,3 +1660,6 @@ Una fila de botones: 🎞 Tipo (solo biblioteca) · 📅 Fecha (novedades, déca
 
 ## Tiempo abierto tras el PIN: hasta 2 años
 El campo «Tiempo abierto tras el PIN» (ajustes generales y por código) admite unidades: `90` (minutos), `2h`, `15d`, `3sem`, `6mes`, `1a`. Máximo 2 años. Al volver a abrir el diálogo se muestra en la unidad más cómoda (p. ej. `6mes`).
+
+## Foto con enlace de bot en la galería
+Si un mensaje es una foto con un enlace de Telegram (p. ej. «Ver AQUÍ» → `t.me/bot?start=…`), la galería muestra una sola ficha: la foto con la etiqueta ENLACE; al tocarla abre el enlace. Ya no sale además la ficha suelta del bot con el mismo enlace (pulsación larga = opciones del mensaje).
