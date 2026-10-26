@@ -1410,6 +1410,20 @@ class TelegramAccountActivity : AppCompatActivity() {
             val img = found ?: continue
             if (usedImages.add(img.messageId)) pairedByLeader[list[0].messageId] = img
         }
+        // Foto con «Play: enlace» (título distinto al del vídeo) publicada justo antes del vídeo: se le asigna como portada.
+        for ((k, list) in groups) {
+            if (k.startsWith("r:") || pairedByLeader.containsKey(list[0].messageId) || list.size != 1) continue
+            val pos = srcPos[list[0].messageId] ?: continue
+            for (j in listOf(pos + 1, pos + 2, pos - 1)) {
+                val c = source.getOrNull(j) ?: continue
+                if (c.chatId != list[0].chatId) continue
+                if (isImageMsg(c) && c.messageId !in usedImages && c.links.any { isTgMessageLink(it) }) {
+                    usedImages.add(c.messageId); pairedByLeader[list[0].messageId] = c
+                    break
+                }
+                if (isVideoMsg(c) || isRarPart(c)) break
+            }
+        }
         // Listas (.m3u…) con su imagen del mismo nombre.
         val listImage = HashMap<Long, TgMessage>()
         for (m in source) {
@@ -4083,11 +4097,14 @@ class TelegramAccountActivity : AppCompatActivity() {
      */
     private fun withLinkVideos(list: List<TgMessage>): List<TgMessage> {
         val out = ArrayList<TgMessage>(list.size)
-        for (m in list) {
+        for ((idx, m) in list.withIndex()) {
             out.add(m)
             if (isVideoMsg(m)) continue
             val links = m.links.filter { isTgMessageLink(it) }.distinct()
             if (links.isEmpty()) continue
+            // Foto con «Play: enlace» y el propio vídeo publicado justo al lado: se queda la foto + el vídeo y se ignora el enlace.
+            if (isImageMsg(m) && (maxOf(0, idx - 2)..minOf(list.lastIndex, idx + 2)).any { j ->
+                    j != idx && list[j].chatId == m.chatId && isVideoMsg(list[j]) }) continue
             val lines = m.text.lineSequence().filter { it.isNotBlank() }.toList()
             for ((i, link) in links.withIndex()) {
                 val own = lines.firstOrNull { it.contains(link) || it.contains(link.removePrefix("https://").removePrefix("http://")) }

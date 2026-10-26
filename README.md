@@ -1663,3 +1663,6 @@ El campo «Tiempo abierto tras el PIN» (ajustes generales y por código) admite
 
 ## Foto con enlace de bot en la galería
 Si un mensaje es una foto con un enlace de Telegram (p. ej. «Ver AQUÍ» → `t.me/bot?start=…`), la galería muestra una sola ficha: la foto con la etiqueta ENLACE; al tocarla abre el enlace. Ya no sale además la ficha suelta del bot con el mismo enlace (pulsación larga = opciones del mensaje).
+
+## Foto con «Play: enlace» + el vídeo
+Si una foto trae un enlace interno (`t.me/c/…`) y el propio vídeo está publicado justo al lado, la galería ignora el enlace y muestra una sola ficha: el vídeo con la foto como portada (y los datos de TMDb). Los enlaces que apuntan a vídeos que no están al lado siguen funcionando como antes.
