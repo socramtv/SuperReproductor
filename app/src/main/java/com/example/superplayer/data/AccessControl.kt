@@ -38,6 +38,38 @@ import java.security.MessageDigest
  * Sin URL guardada no hay ningún bloqueo. Con URL pero sin poder comprobarla (nunca se bajó), todo queda bloqueado.
  */
 object AccessControl {
+    /** Máximo de minutos que puede seguir abierto tras el PIN: 2 años. */
+    const val MAX_UNLOCK_MINUTES = 2 * 365 * 24 * 60
+
+    /** Minutos en la unidad más cómoda que sale exacta (1a, 6mes, 15d, 2h o minutos); se puede volver a escribir tal cual. */
+    fun formatMinutes(min: Int): String = when {
+        min >= 525600 && min % 525600 == 0 -> "${min / 525600}a"
+        min >= 43200 && min % 43200 == 0 -> "${min / 43200}mes"
+        min >= 1440 && min % 1440 == 0 -> "${min / 1440}d"
+        min >= 60 && min % 60 == 0 -> "${min / 60}h"
+        else -> min.toString()
+    }
+
+    /**
+     * Convierte lo escrito en minutos. Vale un número (minutos) o con unidad: 90min, 2h, 15d, 3sem, 6mes, 1a.
+     * null si no se entiende o es menor que 1.
+     */
+    fun parseMinutes(text: String): Int? {
+        val m = Regex("^(\\d{1,7})\\s*([a-zñáéíóú]*)$", RegexOption.IGNORE_CASE).find(text.trim()) ?: return null
+        val n = m.groupValues[1].toLong()
+        val mult = when (m.groupValues[2].lowercase()) {
+            "", "m", "min", "mins", "minuto", "minutos" -> 1L
+            "h", "hora", "horas" -> 60L
+            "d", "dia", "día", "dias", "días" -> 1440L
+            "s", "sem", "semana", "semanas" -> 7L * 1440
+            "mes", "meses" -> 30L * 1440
+            "a", "año", "años", "ano", "anos" -> 365L * 1440
+            else -> return null
+        }
+        val v = n * mult
+        return if (v < 1) null else v.coerceAtMost(MAX_UNLOCK_MINUTES.toLong()).toInt()
+    }
+
     const val S_TELEGRAM = "telegram"
     const val S_CINE = "cine"
     const val S_WEB = "web"
@@ -145,7 +177,7 @@ object AccessControl {
                 for (k in 0 until secArr.length()) hs.add(secArr.optString(k).trim().lowercase())
                 if ("all" !in hs) sec = hs
             }
-            val mins = if (u.has("unlock_minutes")) u.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60 * 30) else null
+            val mins = if (u.has("unlock_minutes")) u.optInt("unlock_minutes", 10).coerceIn(1, MAX_UNLOCK_MINUTES) else null
             creds.add(Cred(keyOf("u:", uh, up), u.optString("name", "").ifBlank { "Código ${i + 1}" }, 1, uh, up, sec, from, exp, mins, parseDevices(u.optJSONArray("devices")) ?: globalDevices))
         }
         Config(
@@ -156,7 +188,7 @@ object AccessControl {
             blockAll = o.optBoolean("block_all", false),
             message = o.optString("message", ""),
             offlineDays = o.optInt("offline_days", 7),
-            unlockMinutes = o.optInt("unlock_minutes", 10).coerceIn(1, 24 * 60 * 30),
+            unlockMinutes = o.optInt("unlock_minutes", 10).coerceIn(1, MAX_UNLOCK_MINUTES),
             logUrl = o.optString("log_url", ""),
             syncUrl = o.optString("sync_url", "")
         )

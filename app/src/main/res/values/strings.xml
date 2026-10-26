@@ -769,7 +769,7 @@
     <string name="access_log_st_future">Empieza el %1$s</string>
     <string name="access_log_st_baddate">Fecha mal escrita (no vale)</string>
     <string name="access_log_newpin">Nuevo PIN (vacío = no cambiar)</string>
-    <string name="access_log_mins_hint">Minutos abierto tras meterlo (vacío = general)</string>
+    <string name="access_log_mins_hint">Tiempo abierto tras meterlo (vacío = general). Ej: 90, 2h, 15d, 6mes, 1a</string>
     <string name="access_log_plus7">+7 días</string>
     <string name="access_log_plus30">+30 días</string>
     <string name="access_log_noexp">Sin caducidad</string>
@@ -778,7 +778,7 @@
     <string name="access_log_enabled">Control de acceso activado</string>
     <string name="access_log_blockall">Bloquear toda la app</string>
     <string name="access_log_message">Mensaje de bloqueo</string>
-    <string name="access_log_unlock_default">Minutos abierto tras el PIN (general)</string>
+    <string name="access_log_unlock_default">Tiempo abierto tras el PIN (general). Ej: 90 (min), 2h, 15d, 6mes, 1a</string>
     <string name="access_log_offline">Días sin conexión permitidos (0 = sin límite)</string>
     <string name="access_log_newmaster">Nuevo PIN maestro (vacío = no cambiar)</string>
     <string name="access_log_newgeneral">Nuevo PIN general (vacío = no cambiar)</string>

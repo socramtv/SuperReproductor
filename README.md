@@ -1657,3 +1657,6 @@ Foco bien visible con mando: botones, barra de progreso y pistas se marcan en az
 
 ## Filtros en una sola fila con desplegables
 Una fila de botones: 🎞 Tipo (solo biblioteca) · 📅 Fecha (novedades, décadas y años en una lista) · 🎭 Género · ✨ Otras categorías (Halloween, Navidad…, al final). Cada botón abre una lista con la opción actual marcada con ✓ y muestra el valor elegido; «✕ Quitar filtros» aparece si hay alguno activo.
+
+## Tiempo abierto tras el PIN: hasta 2 años
+El campo «Tiempo abierto tras el PIN» (ajustes generales y por código) admite unidades: `90` (minutos), `2h`, `15d`, `3sem`, `6mes`, `1a`. Máximo 2 años. Al volver a abrir el diálogo se muestra en la unidad más cómoda (p. ej. `6mes`).

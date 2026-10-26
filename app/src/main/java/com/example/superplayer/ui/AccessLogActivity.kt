@@ -245,7 +245,7 @@ class AccessLogActivity : AppCompatActivity() {
             val (st, color) = expiryText(o, now)
             val secs = o.optJSONArray("sections")
             val secText = if (secs == null || secs.length() == 0) getString(R.string.access_log_all) else (0 until secs.length()).joinToString(", ") { secs.optString(it) }
-            val mins = if (o.has("unlock_minutes")) getString(R.string.access_log_minutes, o.optInt("unlock_minutes")) else null
+            val mins = if (o.has("unlock_minutes")) AccessControl.formatMinutes(o.optInt("unlock_minutes")) else null
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(14), dp(10), dp(14), dp(10))
@@ -308,7 +308,7 @@ class AccessLogActivity : AppCompatActivity() {
         val pin = field(if (old == null) getString(R.string.access_pin_hint) else getString(R.string.access_log_newpin), true)
         val from = field(getString(R.string.access_code_from), false, old?.optString("from", "").orEmpty())
         val exp = field(getString(R.string.access_code_expires), false, old?.optString("expires", "").orEmpty())
-        val mins = field(getString(R.string.access_log_mins_hint), true, if (old != null && old.has("unlock_minutes")) old.optInt("unlock_minutes").toString() else "")
+        val mins = field(getString(R.string.access_log_mins_hint), false, if (old != null && old.has("unlock_minutes")) AccessControl.formatMinutes(old.optInt("unlock_minutes")) else "")
         val devices = JSONArray(old?.optJSONArray("devices")?.toString() ?: "[]")
         val devBtn = mkButton("")
         fun refreshDev() { devBtn.text = getString(R.string.access_log_devices_btn, devices.length()) }
@@ -378,7 +378,7 @@ class AccessLogActivity : AppCompatActivity() {
                 putOrRemove("from", f)
                 putOrRemove("expires", e)
                 val m = mins.text.toString().trim()
-                if (m.isEmpty()) o.remove("unlock_minutes") else o.put("unlock_minutes", m.toIntOrNull()?.coerceIn(1, 43200) ?: 10)
+                if (m.isEmpty()) o.remove("unlock_minutes") else o.put("unlock_minutes", AccessControl.parseMinutes(m) ?: 10)
                 if (sections.isEmpty()) o.remove("sections") else o.put("sections", JSONArray(sections.sorted()))
                 if (devices.length() == 0) o.remove("devices") else o.put("devices", devices)
                 if (old == null) arr.put(o)
@@ -398,7 +398,7 @@ class AccessLogActivity : AppCompatActivity() {
         val enabled = CheckBox(this).apply { text = getString(R.string.access_log_enabled); isChecked = root.optBoolean("enabled", true) }
         val blockAll = CheckBox(this).apply { text = getString(R.string.access_log_blockall); isChecked = root.optBoolean("block_all", false) }
         val message = field(getString(R.string.access_log_message), false, root.optString("message", ""))
-        val unlock = field(getString(R.string.access_log_unlock_default), true, root.optInt("unlock_minutes", 10).toString())
+        val unlock = field(getString(R.string.access_log_unlock_default), false, AccessControl.formatMinutes(root.optInt("unlock_minutes", 10)))
         val offline = field(getString(R.string.access_log_offline), true, root.optInt("offline_days", 7).toString())
         val newMaster = field(getString(R.string.access_log_newmaster), true)
         val newPin = field(getString(R.string.access_log_newgeneral), true)
@@ -434,7 +434,7 @@ class AccessLogActivity : AppCompatActivity() {
                 root.put("enabled", enabled.isChecked)
                 root.put("block_all", blockAll.isChecked)
                 root.put("message", message.text.toString().trim())
-                root.put("unlock_minutes", unlock.text.toString().toIntOrNull()?.coerceIn(1, 43200) ?: 10)
+                root.put("unlock_minutes", AccessControl.parseMinutes(unlock.text.toString()) ?: 10)
                 root.put("offline_days", offline.text.toString().toIntOrNull()?.coerceIn(0, 3650) ?: 7)
                 root.put("locked", JSONArray(locked.sorted()))
                 if (gdevices.length() == 0) root.remove("devices") else root.put("devices", gdevices)
