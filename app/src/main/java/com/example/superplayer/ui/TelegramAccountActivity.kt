@@ -1431,7 +1431,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 if (tgLink != null) {
                     for (l in m.links) if (isTgLink(l) && !isTgMessageLink(l)) seenLinks.add(l)
                     items.add(MediaItem(key = "${m.messageId}:img", select = listOf(m), caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
-                        badge = getString(R.string.tgacc_badge_link), link = tgLink, messageId = m.messageId,
+                        badge = getString(R.string.tgacc_badge_link), messageId = m.messageId, // sin link=: eso cambiaría la foto y el título por los del bot
                         onLong = { onMessageLong(m) }) { openTgLink(tgLink) })
                 } else
                 items.add(MediaItem(key = "${m.messageId}:img", select = listOf(m), caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
