@@ -1666,3 +1666,8 @@ Si un mensaje es una foto con un enlace de Telegram (p. ej. «Ver AQUÍ» → `t
 
 ## Foto con «Play: enlace» + el vídeo
 Si una foto trae un enlace interno (`t.me/c/…`) y el propio vídeo está publicado justo al lado, la galería ignora el enlace y muestra una sola ficha: el vídeo con la foto como portada (y los datos de TMDb). Los enlaces que apuntan a vídeos que no están al lado siguen funcionando como antes.
+
+## Streaming de Telegram con poca RAM
+- El búfer de ExoPlayer se limita por tamaño (~40 MB, sin búfer hacia atrás): lo ya visto se descarta de la RAM al instante.
+- Los datos llegan en trozos de 512 KiB desde un servidor local (127.0.0.1) que los lee de la descarga de TDLib (ventanas de 32 MB solo por delante de donde se ve).
+- Al cerrar el reproductor (vídeo o música) se corta la descarga y se borra lo bajado a medias; los archivos descargados enteros a propósito no se tocan.

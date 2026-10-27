@@ -938,6 +938,18 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         return out
     }
 
+    override fun releaseStream(fileId: Int) {
+        lastRequest.remove(fileId)
+        Thread {
+            try {
+                val f = getFileBlocking(fileId) ?: return@Thread
+                if (f.local.isDownloadingCompleted) return@Thread // descargado entero a propósito: se deja
+                send(TdApi.CancelDownloadFile(fileId, false)) { }
+                send(TdApi.DeleteFile(fileId)) { }
+            } catch (e: Exception) { }
+        }.start()
+    }
+
     /** Última petición de descarga por archivo: [inicio, fin, instante]. Evita reiniciar la descarga de TDLib en cada trozo. */
     private val lastRequest = java.util.concurrent.ConcurrentHashMap<Int, LongArray>()
 

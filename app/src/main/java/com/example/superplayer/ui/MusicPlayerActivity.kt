@@ -368,6 +368,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         if (isFinishing) {
             // Al salir de la pantalla de música se acaba la música.
             try { controller?.stop(); controller?.clearMediaItems() } catch (e: Exception) { }
+            album?.tracks?.forEach { if (it.path.startsWith("http://127.0.0.1")) com.example.superplayer.telegram.TgStreamServer.release(it.path) }
         }
         future?.let { MediaController.releaseFuture(it) }
         controller = null

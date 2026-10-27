@@ -39,6 +39,13 @@ object TgStreamServer {
         return "http://127.0.0.1:${srv.localPort}/tg/$fileId?s=$size&m=$m"
     }
 
+    /** Se dejó de ver este vídeo: se cortan sus lecturas y se borra lo que TDLib había bajado a medias (nada de acumular disco). */
+    fun release(url: String) {
+        val id = Regex("^http://127\\.0\\.0\\.1:\\d+/tg/(\\d+)").find(url)?.groupValues?.get(1)?.toIntOrNull() ?: return
+        generations[id]?.incrementAndGet()
+        try { backend?.releaseStream(id) } catch (e: Exception) { }
+    }
+
     /** Vídeos de RAR por partes registrados (ver [RarVolumes]): id -> vídeo. */
     private val rarSources = java.util.concurrent.ConcurrentHashMap<Int, RarVideo>()
     private val rarCounter = java.util.concurrent.atomic.AtomicInteger()

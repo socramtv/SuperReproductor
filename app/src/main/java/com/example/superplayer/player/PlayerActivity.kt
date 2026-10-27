@@ -1299,7 +1299,10 @@ class PlayerActivity : AppCompatActivity() {
         if (activeInstance === this) activeInstance = null
         tsHandler.removeCallbacks(tsUiRunnable)
         nextEpisodeHandler.removeCallbacks(nextEpisodeTick)
-        if (isFinishing) stopTimeShift()
+        if (isFinishing) {
+            stopTimeShift()
+            currentStream?.url?.let { com.example.superplayer.telegram.TgStreamServer.release(it) }
+        }
         pendingStream = null
         pendingChannelList = emptyList()
     }

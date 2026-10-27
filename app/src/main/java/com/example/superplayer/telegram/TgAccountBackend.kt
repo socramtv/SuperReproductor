@@ -77,6 +77,9 @@ interface TgAccountBackend {
     /** Borra los archivos que Telegram ha ido descargando (vídeos, fotos…) menos los más recientes. */
     fun cleanCache()
 
+    /** Se acabó de ver este archivo en streaming: corta su descarga y borra lo bajado a medias (no toca los archivos ya completos). */
+    fun releaseStream(fileId: Int) {}
+
     /**
      * Despierta la conexión con Telegram (tras un rato sin usarla Android corta la red a la app y
      * TDLib se queda esperando): se le dice el tipo de red actual y que la app está activa.

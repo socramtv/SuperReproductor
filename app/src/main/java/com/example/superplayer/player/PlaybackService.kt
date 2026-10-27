@@ -60,7 +60,15 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
+        // Poca RAM: el búfer se limita por tamaño (~40 MB) en vez de por tiempo, y lo ya reproducido se descarta (sin búfer hacia atrás).
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 40_000, 1_500, 3_000)
+            .setTargetBufferBytes(40 * 1024 * 1024)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .setBackBuffer(0, false)
+            .build()
         val player = ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(StreamMediaSourceFactory(this))
             // Con la pantalla bloqueada, mantiene la CPU y el WiFi despiertos
             // mientras suena (si no, algunos móviles cortan el stream y el
