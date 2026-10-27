@@ -891,4 +891,16 @@
     <string name="tglib_f_date">Fecha</string>
     <string name="tglib_f_other">Otras categorías</string>
     <string name="tglib_g_all_cats">Todas</string>
+    <string name="tg_to_last">Ir al último mensaje</string>
+    <string name="info_play">▶  Reproducir</string>
+    <string name="info_play_ep">▶  Reproducir T%1$d · E%2$02d</string>
+    <string name="info_continue">▶  Continuar T%1$d · E%2$02d</string>
+    <string name="info_pick_version">Elige la versión</string>
+    <string name="info_trailer">▶ Tráiler</string>
+    <string name="info_fav_add">☆ Favoritos</string>
+    <string name="info_fav_on">★ Favorito</string>
+    <string name="info_seen_on">✓ Vista</string>
+    <string name="info_seen_off">○ Marcar vista</string>
+    <string name="info_season_btn">Temporada %1$d · %2$d capítulos</string>
+    <string name="info_seasons">Temporadas</string>
 </resources>

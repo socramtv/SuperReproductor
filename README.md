@@ -1671,3 +1671,8 @@ Si una foto trae un enlace interno (`t.me/c/…`) y el propio vídeo está publi
 - El búfer de ExoPlayer se limita por tamaño (~40 MB, sin búfer hacia atrás): lo ya visto se descarta de la RAM al instante.
 - Los datos llegan en trozos de 512 KiB desde un servidor local (127.0.0.1) que los lee de la descarga de TDLib (ventanas de 32 MB solo por delante de donde se ve).
 - Al cerrar el reproductor (vídeo o música) se corta la descarga y se borra lo bajado a medias; los archivos descargados enteros a propósito no se tocan.
+
+## Telegram: ir al último mensaje, botón de comandos y ficha rediseñada
+- Botón flotante ⬇ en el chat (⬆ en la galería) para saltar al último mensaje / al más reciente; solo aparece si no estás ya ahí.
+- En chats de bots, botón «/» junto a Enviar con los comandos del bot (si no los declara, /start /help /menu /cancel).
+- Ficha de película/serie nueva: cabecera con fondo y degradado, título grande, nota/año/duración, géneros en píldoras, botón Reproducir grande (en series: «Continuar/Reproducir T·E» del siguiente sin ver), fila de tráiler/favorito/visto/«⋯» (cambiar carátula, reenviar, carpeta, marcar serie), sinopsis y reparto; en series, temporadas en un desplegable con su cuadrícula de capítulos (pulsación larga = marcar visto). Con mando de TV el foco se ve con borde blanco.

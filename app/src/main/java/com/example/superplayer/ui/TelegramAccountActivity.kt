@@ -262,6 +262,16 @@ class TelegramAccountActivity : AppCompatActivity() {
             insets
         }
         binding.tgSend.setOnClickListener { sendTyped() }
+        binding.tgCmds.setOnClickListener { showBotCommands() }
+        binding.tgToLast.setOnClickListener {
+            val rv = binding.recyclerView
+            val n = rv.adapter?.itemCount ?: 0
+            if (n > 0) rv.scrollToPosition(if (rv.adapter === chatAdapter) n - 1 else 0)
+            binding.tgToLast.visibility = View.GONE
+        }
+        binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) { updateToLast() }
+        })
         binding.tgAttach.setOnClickListener { attachLauncher.launch("*/*") }
         binding.tgKbdToggle.setOnClickListener {
             kbHidden = !kbHidden
@@ -2012,8 +2022,11 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun isSeriesGroup(options: List<TgMessage>): Boolean =
         options.count { parseEpisode(titleOf(it)) != null } >= 2
 
-    /** Ficha de la película o serie: carátula, datos y sinopsis; abajo, un botón por versión (opción 1…) o por capítulo (T1: 01 02 03…). */
-    private fun showMovieInfo(options: List<TgMessage>, query: String, thumbId: Int) {
+    /**
+     * Ficha de la película o serie (diseño tipo plataforma): cabecera con fondo y título, datos y géneros en píldoras,
+     * botón grande de Reproducir, tráiler/favoritos/visto/más, sinopsis y, en series, temporadas en desplegable con sus capítulos.
+     */
+    private fun showMovieInfo(options: List<TgMessage>, query: String, thumbId: Int, startSeason: Int? = null) {
         val info = MovieInfo.peek(this, query)
         val series = isSeriesGroup(options)
         if (info == null && !series) {
@@ -2022,62 +2035,128 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         val density = resources.displayMetrics.density
         fun dp(v: Int) = (v * density).toInt()
-        val col = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
-        val poster = android.widget.ImageView(this).apply {
-            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, dp(300)
-            ).apply { topMargin = dp(12) }
+        val cBg = 0xFF12121C.toInt()
+        val cCard = 0xFF222232.toInt()
+        val cText = 0xFFFFFFFF.toInt()
+        val cMuted = 0xFFB4B4C6.toInt()
+        val accent = androidx.core.content.ContextCompat.getColor(this, R.color.primary)
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+
+        fun shape(fill: Int, radius: Int, stroke: Int = 0, strokeColor: Int = 0) = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(radius).toFloat()
+            setColor(fill)
+            if (stroke > 0) setStroke(dp(stroke), strokeColor)
         }
-        val localThumb = if (thumbId != 0) thumbPaths[thumbId] else null
-        var dialog: AlertDialog? = null
-        val changeCover = {
-            dialog?.dismiss()
-            showChangeCover(query) { showMovieInfo(options, query, thumbId) }
+        /** Fondo con borde blanco al tener el foco (mando de la TV). */
+        fun focusBg(fill: Int, radius: Int, stroke: Int = 0, strokeColor: Int = 0) = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), shape(fill, radius, 3, cText))
+            addState(intArrayOf(android.R.attr.state_pressed), shape(fill, radius, 3, cText))
+            addState(intArrayOf(), shape(fill, radius, stroke, strokeColor))
         }
-        if (query.isNotEmpty()) poster.setOnClickListener { changeCover() }
-        if (info?.posterUrl != null) poster.load(info.posterUrl)
-        else if (localThumb != null) poster.load(File(localThumb))
-        else poster.visibility = View.GONE
-        col.addView(poster)
-        if (info != null) {
-            val tv = TextView(this).apply {
-                setPadding(dp(20), dp(12), dp(20), dp(8))
-                textSize = 14f
+        fun pill(text: String, fill: Int, textColor: Int = cText, sizeSp: Float = 15f, heightDp: Int = 46, stroke: Int = 0, strokeColor: Int = 0, onClick: () -> Unit) =
+            TextView(this).apply {
+                this.text = text
+                textSize = sizeSp
+                setTextColor(textColor)
+                gravity = android.view.Gravity.CENTER
+                typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                background = focusBg(fill, heightDp / 2, stroke, strokeColor)
+                setPadding(dp(14), 0, dp(14), 0)
+                minHeight = dp(heightDp)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { onClick() }
             }
-            val head = listOfNotNull(
+        fun lp(w: Int, h: Int, l: Int = 0, t: Int = 0, r: Int = 0, b: Int = 0) =
+            android.widget.LinearLayout.LayoutParams(w, h).apply { setMargins(dp(l), dp(t), dp(r), dp(b)) }
+        val MATCH = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        val WRAP = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+
+        val col = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+
+        // ---- Cabecera: fondo (o carátula) con degradado y el título encima ----
+        val localThumb = if (thumbId != 0) thumbPaths[thumbId] else null
+        val headerUrl = info?.backdropUrl?.takeIf { it.isNotBlank() } ?: info?.posterUrl
+        val header = android.widget.FrameLayout(this)
+        val img = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(cCard)
+        }
+        if (headerUrl != null) img.load(headerUrl) else if (localThumb != null) img.load(File(localThumb))
+        header.addView(img, android.widget.FrameLayout.LayoutParams(MATCH, MATCH))
+        header.addView(android.view.View(this).apply {
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x00000000, cBg)
+            )
+        }, android.widget.FrameLayout.LayoutParams(MATCH, dp(130), android.view.Gravity.BOTTOM))
+        if (query.isNotEmpty()) img.setOnClickListener {
+            dialog.dismiss()
+            showChangeCover(query) { showMovieInfo(options, query, thumbId, startSeason) }
+        }
+        col.addView(header, lp(MATCH, dp(240)))
+
+        col.addView(TextView(this).apply {
+            text = info?.title ?: query
+            textSize = 24f
+            setTextColor(cText)
+            gravity = android.view.Gravity.CENTER
+            typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(20), 0, dp(20), 0)
+        }, lp(MATCH, WRAP, t = -34))
+
+        // ---- Datos: nota, año, duración, clasificación ----
+        if (info != null) {
+            val facts = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER
+            }
+            if (info.rating > 0.0) facts.addView(TextView(this).apply {
+                text = "★ " + String.format(java.util.Locale.US, "%.1f", info.rating)
+                textSize = 14f
+                setTextColor(0xFFFFC107.toInt())
+                typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                background = shape(0x33FFC107, 14)
+                setPadding(dp(10), dp(3), dp(10), dp(3))
+            }, lp(WRAP, WRAP, r = 8))
+            val rest = listOfNotNull(
                 info.year,
                 info.runtimeMin.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
                 info.certification?.takeIf { it.isNotBlank() }
-            ).joinToString(" · ")
-            val sb = StringBuilder()
-            val line1 = listOf(infoMeta(info), head).filter { it.isNotEmpty() }.joinToString(" · ")
-            if (line1.isNotEmpty()) sb.append(line1).append("\n\n")
-            info.tagline?.takeIf { it.isNotBlank() }?.let { sb.append("“").append(it).append("”\n\n") }
-            sb.append(info.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis))
-            info.director?.takeIf { it.isNotBlank() }?.let {
-                sb.append("\n\n").append(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director)).append(": ").append(it)
-            }
-            if (info.cast.isNotEmpty()) sb.append("\n\n").append(getString(R.string.cine_cast)).append(": ").append(info.cast.joinToString(", "))
-            tv.text = sb.toString()
-            col.addView(tv)
-        }
-        val trailerKey = info?.trailerKey
-        if (!trailerKey.isNullOrBlank()) col.addView(android.widget.Button(this).apply {
-            text = getString(R.string.cine_trailer)
-            isAllCaps = false
-            setOnClickListener {
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$trailerKey")))
-                } catch (e: Exception) {
-                    Toast.makeText(this@TelegramAccountActivity, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show()
+            ).joinToString("  ·  ")
+            if (rest.isNotEmpty()) facts.addView(TextView(this).apply { text = rest; textSize = 14f; setTextColor(cMuted) })
+            col.addView(facts, lp(MATCH, WRAP, t = 8))
+
+            val genres = info.genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+            if (genres.isNotEmpty()) {
+                val gs = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+                val gl = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER
+                    setPadding(dp(14), 0, dp(14), 0)
                 }
+                for (g in genres) gl.addView(TextView(this).apply {
+                    text = g
+                    textSize = 13f
+                    setTextColor(cText)
+                    background = shape(0x1AFFFFFF, 16, 1, 0x40FFFFFF)
+                    setPadding(dp(14), dp(6), dp(14), dp(6))
+                }, lp(WRAP, WRAP, l = 4, r = 4))
+                gs.addView(gl, android.widget.FrameLayout.LayoutParams(WRAP, WRAP, android.view.Gravity.CENTER_HORIZONTAL))
+                col.addView(gs, lp(MATCH, WRAP, t = 10))
             }
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(dp(16), 0, dp(16), dp(4)) }
-        })
-        // Capítulos en orden (una versión por capítulo; la elegida si hay varias): para el "siguiente capítulo" automático.
+        }
+
+        // ---- Qué se reproduce con el botón grande ----
+        val eps = if (series) options.mapNotNull { m -> parseEpisode(titleOf(m))?.let { Triple(it.season, it.episode, m) } } else emptyList()
+        val others = if (series) options.filter { parseEpisode(titleOf(it)) == null } else emptyList()
+        val ordered = eps.sortedWith(compareBy({ it.first }, { it.second }))
+        val nextUnseen = ordered.firstOrNull { !isSeen(it.third) }
+        val seenCount = ordered.map { watchKey(it.third) }.distinct().count { TgWatched.isWatched(this, it) }
+        val totalCount = ordered.map { watchKey(it.third) }.distinct().size
+
         fun queueFor(m: TgMessage): List<TgMessage> {
             if (!series) return emptyList()
             val byEp = options.mapNotNull { x -> parseEpisode(titleOf(x))?.let { Triple(it.season, it.episode, x) } }
@@ -2086,131 +2165,209 @@ class TelegramAccountActivity : AppCompatActivity() {
                 .map { (_, v) -> v.firstOrNull { it.third.messageId == m.messageId }?.third ?: v.first().third }
         }
         fun play(m: TgMessage) {
-            dialog?.dismiss()
+            dialog.dismiss()
             playVideo(m, queueFor(m))
         }
-        if (series) {
-            // Capítulos por temporada: T1, T2…; cada número es un botón.
-            val eps = options.mapNotNull { m -> parseEpisode(titleOf(m))?.let { Triple(it.season, it.episode, m) } }
-            val others = options.filter { parseEpisode(titleOf(it)) == null }
-            val ordered = eps.sortedWith(compareBy({ it.first }, { it.second }))
-            val nextUnseen = ordered.firstOrNull { !isSeen(it.third) }
-            val seenCount = ordered.map { watchKey(it.third) }.distinct().count { TgWatched.isWatched(this, it) }
-            val totalCount = ordered.map { watchKey(it.third) }.distinct().size
-            fun wideButton(text: String, top: Int, onClick: () -> Unit) = android.widget.Button(this).apply {
-                this.text = text
-                isAllCaps = false
-                setOnClickListener { onClick() }
-                layoutParams = android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(dp(16), dp(top), dp(16), 0) }
-            }
-            if (nextUnseen != null) {
-                col.addView(wideButton(getString(R.string.tgw_next_unseen, nextUnseen.first, nextUnseen.second), 12) { play(nextUnseen.third) })
-            }
-            col.addView(wideButton(
-                if (seenCount >= totalCount) getString(R.string.tgw_clear_all) else getString(R.string.tgw_mark_all, seenCount, totalCount), 6
-            ) {
-                TgWatched.setAll(this, ordered.map { watchKey(it.third) }, seenCount < totalCount)
-                dialog?.dismiss()
-                showMovieInfo(options, query, thumbId)
-                if (!isFinishing) rerenderMarks()
-            })
-            for ((season, list) in eps.groupBy { it.first }.toSortedMap()) {
-                col.addView(TextView(this).apply {
-                    text = getString(R.string.tgvid_season, season)
-                    textSize = 16f
-                    setTypeface(typeface, android.graphics.Typeface.BOLD)
-                    setTextColor(androidx.core.content.ContextCompat.getColor(this@TelegramAccountActivity, R.color.primary))
-                    setPadding(dp(20), dp(12), dp(20), dp(2))
-                })
-                val grid = android.widget.GridLayout(this).apply {
-                    columnCount = 5
-                    setPadding(dp(12), 0, dp(12), 0)
+        var season = startSeason ?: (nextUnseen ?: ordered.firstOrNull())?.first ?: 0
+
+        val playTarget: Triple<Int, Int, TgMessage>? = if (series) (nextUnseen ?: ordered.firstOrNull()) else null
+        val playLabel = when {
+            playTarget != null && seenCount > 0 && nextUnseen != null ->
+                getString(R.string.info_continue, playTarget.first, playTarget.second)
+            playTarget != null -> getString(R.string.info_play_ep, playTarget.first, playTarget.second)
+            else -> getString(R.string.info_play)
+        }
+        val playBtn = pill(playLabel, accent, 0xFFFFFFFF.toInt(), sizeSp = 19f, heightDp = 58) {
+            when {
+                playTarget != null -> play(playTarget.third)
+                series && others.isNotEmpty() -> play(others[0])
+                options.size == 1 -> play(options[0])
+                else -> {
+                    AlertDialog.Builder(this)
+                        .setTitle(R.string.info_pick_version)
+                        .setItems(options.mapIndexed { i, m -> optionLabel(m, i + 1, true) }.toTypedArray()) { _, which -> play(options[which]) }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
                 }
-                for ((_, ep, m) in list.sortedBy { it.second }) {
+            }
+        }
+        col.addView(playBtn, lp(MATCH, WRAP, l = 20, t = 16, r = 20))
+
+        // ---- Fila secundaria: tráiler, favoritos, visto, más ----
+        val row = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
+        val ghost = 0x1FFFFFFF
+        val trailerKey = info?.trailerKey
+        if (!trailerKey.isNullOrBlank()) row.addView(pill(getString(R.string.info_trailer), ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 14f, heightDp = 44) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$trailerKey")))
+            } catch (e: Exception) {
+                Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show()
+            }
+        }, android.widget.LinearLayout.LayoutParams(0, WRAP, 1f).apply { setMargins(0, 0, dp(6), 0) })
+        fun isFavNow() = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
+        lateinit var favBtn: TextView
+        favBtn = pill(getString(if (isFavNow()) R.string.info_fav_on else R.string.info_fav_add), ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 14f, heightDp = 44) {
+            toggleVideoFav(options, query, thumbId)
+            favBtn.text = getString(if (isFavNow()) R.string.info_fav_on else R.string.info_fav_add)
+        }
+        row.addView(favBtn, android.widget.LinearLayout.LayoutParams(0, WRAP, 1f).apply { setMargins(0, 0, dp(6), 0) })
+        if (!series) {
+            val allSeen = options.all { isSeen(it) }
+            row.addView(pill(getString(if (allSeen) R.string.info_seen_on else R.string.info_seen_off), ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 14f, heightDp = 44) {
+                TgWatched.setAll(this, options.map { watchKey(it) }, !allSeen)
+                dialog.dismiss()
+                showMovieInfo(options, query, thumbId, startSeason)
+                rerenderMarks()
+            }, android.widget.LinearLayout.LayoutParams(0, WRAP, 1f).apply { setMargins(0, 0, dp(6), 0) })
+        }
+        row.addView(pill("⋯", ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 18f, heightDp = 44) {
+            val labels = ArrayList<String>()
+            val acts = ArrayList<() -> Unit>()
+            if (series && totalCount > 0) {
+                labels.add(if (seenCount >= totalCount) getString(R.string.tgw_clear_all) else getString(R.string.tgw_mark_all, seenCount, totalCount))
+                acts.add {
+                    TgWatched.setAll(this, ordered.map { watchKey(it.third) }, seenCount < totalCount)
+                    dialog.dismiss()
+                    showMovieInfo(options, query, thumbId, season)
+                    if (!isFinishing) rerenderMarks()
+                }
+            }
+            if (query.isNotEmpty()) {
+                labels.add(getString(R.string.tgcover_btn))
+                acts.add { dialog.dismiss(); showChangeCover(query) { showMovieInfo(options, query, thumbId, season) } }
+            }
+            labels.add(getString(R.string.tgfwd_action)); acts.add { forwardVideoOptions(options, query) }
+            labels.add(getString(R.string.tgfold_add_btn)); acts.add { addToFolder(options, query, thumbId) }
+            AlertDialog.Builder(this).setItems(labels.toTypedArray()) { _, which -> acts[which]() }.show()
+        }, android.widget.LinearLayout.LayoutParams(dp(56), WRAP))
+        col.addView(row, lp(MATCH, WRAP, l = 20, t = 10, r = 20))
+
+        // ---- Sinopsis ----
+        if (info != null) {
+            info.tagline?.takeIf { it.isNotBlank() }?.let { tg ->
+                col.addView(TextView(this).apply {
+                    text = "“$tg”"
+                    textSize = 15f
+                    setTextColor(cText)
+                    typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.ITALIC)
+                    gravity = android.view.Gravity.CENTER
+                }, lp(MATCH, WRAP, l = 24, t = 18, r = 24))
+            }
+            col.addView(TextView(this).apply {
+                text = info.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis)
+                textSize = 15f
+                setTextColor(cMuted)
+                setLineSpacing(0f, 1.25f)
+            }, lp(MATCH, WRAP, l = 24, t = 14, r = 24))
+            val credits = StringBuilder()
+            info.director?.takeIf { it.isNotBlank() }?.let {
+                credits.append(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director)).append(": ").append(it)
+            }
+            if (info.cast.isNotEmpty()) {
+                if (credits.isNotEmpty()) credits.append("\n\n")
+                credits.append(getString(R.string.cine_cast)).append(": ").append(info.cast.joinToString(", "))
+            }
+            if (credits.isNotEmpty()) col.addView(TextView(this).apply {
+                text = credits.toString()
+                textSize = 13f
+                setTextColor(cMuted)
+                setLineSpacing(0f, 1.2f)
+            }, lp(MATCH, WRAP, l = 24, t = 14, r = 24))
+        }
+
+        // ---- Serie: temporadas en desplegable + capítulos de la temporada elegida ----
+        if (series) {
+            val seasons = eps.groupBy { it.first }.toSortedMap()
+            val epsBox = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+            lateinit var seasonBtn: TextView
+            fun seasonLabel(s: Int): String =
+                getString(R.string.info_season_btn, s, seasons[s]?.map { watchKey(it.third) }?.distinct()?.size ?: 0)
+            fun fillEpisodes() {
+                epsBox.removeAllViews()
+                val list = seasons[season].orEmpty().sortedBy { it.second }
+                val grid = android.widget.GridLayout(this).apply { columnCount = 5 }
+                for ((_, ep, m) in list) {
                     val seen = isSeen(m)
-                    val btn = android.widget.Button(this).apply {
-                        text = String.format(java.util.Locale.US, "%02d", ep) + (if (seen) " ✓" else "")
-                        alpha = if (seen) 0.55f else 1f
-                        isAllCaps = false
-                        textSize = 13f
-                        minWidth = 0
-                        minimumWidth = 0
-                        setPadding(0, 0, 0, 0)
-                        setOnClickListener { play(m) }
-                        // Pulsación larga: marca o quita «visto» a mano.
-                        setOnLongClickListener {
-                            val now = !isSeen(m)
-                            TgWatched.set(this@TelegramAccountActivity, watchKey(m), now)
-                            Toast.makeText(this@TelegramAccountActivity, if (now) R.string.tgw_marked else R.string.tgw_unmarked, Toast.LENGTH_SHORT).show()
-                            dialog?.dismiss()
-                            showMovieInfo(options, query, thumbId)
-                            rerenderMarks()
-                            true
-                        }
+                    val isNext = nextUnseen != null && nextUnseen.third.messageId == m.messageId
+                    val b = pill(
+                        String.format(java.util.Locale.US, "%02d", ep) + (if (seen) " ✓" else ""),
+                        if (isNext) 0x33000000 or (accent and 0x00FFFFFF) else cCard,
+                        if (seen) cMuted else cText, sizeSp = 14f, heightDp = 44,
+                        stroke = if (isNext) 2 else 0, strokeColor = accent
+                    ) { play(m) }
+                    b.alpha = if (seen) 0.6f else 1f
+                    b.setPadding(0, 0, 0, 0)
+                    b.setOnLongClickListener {
+                        val now = !isSeen(m)
+                        TgWatched.set(this, watchKey(m), now)
+                        Toast.makeText(this, if (now) R.string.tgw_marked else R.string.tgw_unmarked, Toast.LENGTH_SHORT).show()
+                        dialog.dismiss()
+                        showMovieInfo(options, query, thumbId, season)
+                        rerenderMarks()
+                        true
                     }
-                    val lp = android.widget.GridLayout.LayoutParams(
+                    val glp = android.widget.GridLayout.LayoutParams(
                         android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
                         android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
-                    ).apply {
-                        width = 0
-                        setMargins(dp(3), dp(3), dp(3), dp(3))
-                    }
-                    grid.addView(btn, lp)
+                    ).apply { width = 0; setMargins(dp(3), dp(3), dp(3), dp(3)) }
+                    grid.addView(b, glp)
                 }
-                col.addView(grid)
+                epsBox.addView(grid, lp(MATCH, WRAP))
             }
-            for ((i, m) in others.withIndex()) col.addView(optionButton(m, i + 1, others.size > 1) { play(m) })
-        } else {
-            for ((i, m) in options.withIndex()) col.addView(optionButton(m, i + 1, options.size > 1) { play(m) })
-            val allSeen = options.all { isSeen(it) }
-            col.addView(android.widget.Button(this).apply {
-                text = getString(if (allSeen) R.string.tgw_unmark_movie else R.string.tgw_mark_movie)
-                isAllCaps = false
-                setOnClickListener {
-                    TgWatched.setAll(this@TelegramAccountActivity, options.map { watchKey(it) }, !allSeen)
-                    dialog?.dismiss()
-                    showMovieInfo(options, query, thumbId)
-                    rerenderMarks()
+            if (seasons.isNotEmpty()) {
+                seasonBtn = pill(seasonLabel(season) + "  ▾", cCard, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 15f, heightDp = 48) {
+                    val keys = seasons.keys.toList()
+                    val names = keys.map { seasonLabel(it).removeSuffix(" ▾") }
+                    AlertDialog.Builder(this)
+                        .setTitle(R.string.info_seasons)
+                        .setSingleChoiceItems(names.toTypedArray(), keys.indexOf(season).coerceAtLeast(0)) { d, which ->
+                            season = keys[which]
+                            seasonBtn.text = seasonLabel(season) + "  ▾"
+                            fillEpisodes()
+                            d.dismiss()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
                 }
-                layoutParams = android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(dp(16), dp(10), dp(16), 0) }
-            })
+                col.addView(seasonBtn, lp(MATCH, WRAP, l = 20, t = 22, r = 20))
+                col.addView(epsBox, lp(MATCH, WRAP, l = 17, t = 10, r = 17))
+                fillEpisodes()
+            }
+            for ((i, m) in others.withIndex()) col.addView(
+                pill(optionLabel(m, i + 1, others.size > 1), cCard, sizeSp = 14f, heightDp = 46) { play(m) },
+                lp(MATCH, WRAP, l = 20, t = 8, r = 20)
+            )
         }
-        if (query.isNotEmpty()) col.addView(android.widget.Button(this).apply {
-            text = getString(R.string.tgcover_btn)
-            isAllCaps = false
-            setOnClickListener { changeCover() }
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(dp(16), dp(10), dp(16), 0) }
-        })
-        col.addView(android.widget.Button(this).apply {
-            text = getString(R.string.tgfwd_action)
-            isAllCaps = false
-            setOnClickListener { forwardVideoOptions(options, query) }
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(dp(16), dp(10), dp(16), dp(8)) }
-        })
-        col.addView(android.widget.Button(this).apply {
-            text = getString(R.string.tgfold_add_btn)
-            isAllCaps = false
-            setOnClickListener { addToFolder(options, query, thumbId) }
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(dp(16), 0, dp(16), dp(8)) }
-        })
-        val scroll = android.widget.ScrollView(this).apply { addView(col) }
-        val isFav = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
-        dialog = AlertDialog.Builder(this)
-            .setTitle(info?.title ?: query)
-            .setView(scroll)
-            .setNeutralButton(if (isFav) R.string.tgvid_unfav_btn else R.string.tgvid_fav_btn) { _, _ -> toggleVideoFav(options, query, thumbId) }
-            .setNegativeButton(R.string.channel_check_close, null)
-            .show()
+        col.addView(android.view.View(this), lp(MATCH, dp(28)))
+
+        val scroll = android.widget.ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            addView(col)
+        }
+        val root = android.widget.FrameLayout(this).apply {
+            background = shape(cBg, 22)
+            clipToOutline = true
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            addView(scroll, android.widget.FrameLayout.LayoutParams(MATCH, MATCH))
+            addView(TextView(this@TelegramAccountActivity).apply {
+                text = "✕"
+                textSize = 18f
+                setTextColor(cText)
+                gravity = android.view.Gravity.CENTER
+                background = focusBg(0x99000000.toInt(), 20)
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { dialog.dismiss() }
+            }, android.widget.FrameLayout.LayoutParams(dp(40), dp(40), android.view.Gravity.TOP or android.view.Gravity.END).apply { setMargins(0, dp(12), dp(12), 0) })
+        }
+        dialog.setContentView(root)
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0x00000000))
+            setLayout((resources.displayMetrics.widthPixels * 0.95f).toInt(), (resources.displayMetrics.heightPixels * 0.92f).toInt())
+            setDimAmount(0.75f)
+        }
+        dialog.show()
+        playBtn.requestFocus()
     }
 
     private fun optionButton(m: TgMessage, n: Int, multiple: Boolean, onClick: () -> Unit): android.widget.Button {
@@ -3567,9 +3724,9 @@ class TelegramAccountActivity : AppCompatActivity() {
         backend?.loadBotCommands(chat.userId) { list ->
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                if (list.isEmpty()) {
-                    Toast.makeText(this, R.string.tgacc_no_commands, Toast.LENGTH_LONG).show()
-                } else {
+                val cmds = if (list.isEmpty()) listOf("start" to "", "help" to "", "menu" to "", "cancel" to "") else list
+                run {
+                    val list = cmds
                     val labels = list.map { "/" + it.first + (if (it.second.isNotEmpty()) " — " + it.second else "") }
                     AlertDialog.Builder(this)
                         .setTitle(R.string.tgacc_cmds_title)
@@ -3666,12 +3823,27 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
+    /** Botón flotante «ir al último mensaje»: en el chat sale si no estás abajo del todo; en la galería (lo nuevo arriba), si no estás arriba. */
+    private fun updateToLast() {
+        val rv = binding.recyclerView
+        val lm = rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+        val n = rv.adapter?.itemCount ?: 0
+        val inChat = currentChat != null && !searching && state == TgAuthState.READY && n > 6
+        val show = inChat && lm != null && (
+            if (rv.adapter === chatAdapter) lm.findLastVisibleItemPosition() < n - 2 else lm.findFirstVisibleItemPosition() > 4
+            )
+        binding.tgToLast.text = if (rv.adapter === chatAdapter) "⬇" else "⬆"
+        binding.tgToLast.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
     /** Teclado de respuesta del bot, encima de la caja de texto (como en Telegram), con el botón ⌨ para ocultarlo. */
     private fun updateKeyboard() {
         updateLiveBanner()
         val kb = if (currentChat == null || searching) emptyList()
         else messages.take(15).firstOrNull { m -> m.buttons.any { it.kind == "txt" } }?.buttons?.filter { it.kind == "txt" }.orEmpty()
         binding.tgKbdToggle.visibility = if (kb.isEmpty()) View.GONE else View.VISIBLE
+        binding.tgCmds.visibility = if (currentChat?.kind == "bot" && !searching) View.VISIBLE else View.GONE
+        updateToLast()
         val panel = binding.tgKeyboard
         if (kb.isEmpty() || kbHidden) {
             binding.tgKeyboardScroll.visibility = View.GONE
