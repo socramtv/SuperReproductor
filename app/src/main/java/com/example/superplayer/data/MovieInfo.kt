@@ -46,7 +46,9 @@ object MovieInfo {
         /** "tmdb", "itunes" o "tvmaze". */
         val source: String = "itunes",
         /** true si se buscó con la clave de TMDb puesta (aunque no se encontrara ahí). */
-        val tmdbChecked: Boolean = false
+        val tmdbChecked: Boolean = false,
+        /** Equipo con foto: "D\tnombre\t\tfoto" (director/creador) o "A\tnombre\tpersonaje\tfoto" (reparto). */
+        val people: List<String> = emptyList()
     )
 
     private val pool = Executors.newFixedThreadPool(3)
@@ -196,7 +198,8 @@ object MovieInfo {
                 o.optString("ce").ifEmpty { null },
                 o.optBoolean("tv", false),
                 o.optString("src", "itunes"),
-                o.optBoolean("tt", false)
+                o.optBoolean("tt", false),
+                people = o.optJSONArray("pe")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
             )
         }
     } catch (e: Exception) {
@@ -215,7 +218,7 @@ object MovieInfo {
                 .put("di", info.director ?: "").put("ca", JSONArray(info.cast))
                 .put("tr", info.trailerKey ?: "").put("bd", info.backdropUrl ?: "")
                 .put("ce", info.certification ?: "").put("tv", info.isTv)
-                .put("src", info.source).put("tt", info.tmdbChecked)
+                .put("src", info.source).put("tt", info.tmdbChecked).put("pe", JSONArray(info.people))
         }
         prefs(context).edit().putString(key, json.toString()).apply()
     }
@@ -228,7 +231,7 @@ object MovieInfo {
     fun needsFetch(context: Context, rawTitle: String): Boolean {
         val info = peek(context, rawTitle)
         if (info == null) return !isKnownMissing(context, rawTitle)
-        return AppPrefs.getTmdbKey(context).isNotBlank() && !info.tmdbChecked
+        return AppPrefs.getTmdbKey(context).isNotBlank() && (!info.tmdbChecked || (info.source == "tmdb" && info.people.isEmpty()))
     }
 
     // -----------------------------------------------------------------
@@ -410,6 +413,35 @@ object MovieInfo {
         val cast = if (castArr == null) emptyList()
         else (0 until minOf(castArr.length(), 8)).mapNotNull { castArr.optJSONObject(it)?.optString("name")?.ifEmpty { null } }
 
+        // Personas con foto para la ficha: director o creadores y los primeros actores con su personaje.
+        val people = ArrayList<String>()
+        fun clean(s: String) = s.replace('\t', ' ').replace('\n', ' ').trim()
+        fun photo(p: String?) = if (p.isNullOrEmpty()) "" else TMDB_IMG + "w185" + p
+        if (isMovie) {
+            val crewArr = credits?.optJSONArray("crew")
+            if (crewArr != null) {
+                var n = 0
+                for (i in 0 until crewArr.length()) {
+                    val c = crewArr.optJSONObject(i) ?: continue
+                    if (c.optString("job") != "Director" || n >= 2) continue
+                    people.add("D\t" + clean(c.optString("name")) + "\t\t" + photo(c.optString("profile_path")))
+                    n++
+                }
+            }
+        } else {
+            val creators = o.optJSONArray("created_by")
+            if (creators != null) for (i in 0 until minOf(creators.length(), 2)) {
+                val c = creators.optJSONObject(i) ?: continue
+                people.add("D\t" + clean(c.optString("name")) + "\t\t" + photo(c.optString("profile_path")))
+            }
+        }
+        if (castArr != null) for (i in 0 until minOf(castArr.length(), 14)) {
+            val c = castArr.optJSONObject(i) ?: continue
+            val nm = clean(c.optString("name"))
+            if (nm.isEmpty()) continue
+            people.add("A\t" + nm + "\t" + clean(c.optString("character")) + "\t" + photo(c.optString("profile_path")))
+        }
+
         // Tráiler de YouTube: primero en español, luego en inglés o sin idioma; "Trailer" antes que "Teaser".
         var trailer: String? = null
         val videos = o.optJSONObject("videos")?.optJSONArray("results")
@@ -475,6 +507,7 @@ object MovieInfo {
             votes = o.optInt("vote_count", 0),
             director = director,
             cast = cast,
+            people = people,
             trailerKey = trailer,
             backdropUrl = backdrop,
             certification = certification,

@@ -2131,21 +2131,30 @@ class TelegramAccountActivity : AppCompatActivity() {
 
             val genres = info.genre?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
             if (genres.isNotEmpty()) {
-                val gs = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
-                val gl = android.widget.LinearLayout(this).apply {
-                    orientation = android.widget.LinearLayout.HORIZONTAL
-                    gravity = android.view.Gravity.CENTER
-                    setPadding(dp(14), 0, dp(14), 0)
+                // Géneros en varias líneas centradas (sin perderse por los lados).
+                val avail = resources.displayMetrics.widthPixels * 0.95f - dp(36)
+                val paint = android.graphics.Paint().apply { textSize = 13f * resources.displayMetrics.scaledDensity }
+                val gbox = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL }
+                var line: android.widget.LinearLayout? = null
+                var used = 0f
+                for (g in genres) {
+                    val w = paint.measureText(g) + dp(28) + dp(8)
+                    if (line == null || used + w > avail) {
+                        line = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER }
+                        gbox.addView(line, lp(WRAP, WRAP, t = 6))
+                        used = 0f
+                    }
+                    line!!.addView(TextView(this).apply {
+                        text = g
+                        textSize = 13f
+                        setTextColor(cText)
+                        maxLines = 1
+                        background = shape(0x1AFFFFFF, 16, 1, 0x40FFFFFF)
+                        setPadding(dp(14), dp(6), dp(14), dp(6))
+                    }, lp(WRAP, WRAP, l = 4, r = 4))
+                    used += w
                 }
-                for (g in genres) gl.addView(TextView(this).apply {
-                    text = g
-                    textSize = 13f
-                    setTextColor(cText)
-                    background = shape(0x1AFFFFFF, 16, 1, 0x40FFFFFF)
-                    setPadding(dp(14), dp(6), dp(14), dp(6))
-                }, lp(WRAP, WRAP, l = 4, r = 4))
-                gs.addView(gl, android.widget.FrameLayout.LayoutParams(WRAP, WRAP, android.view.Gravity.CENTER_HORIZONTAL))
-                col.addView(gs, lp(MATCH, WRAP, t = 10))
+                col.addView(gbox, lp(MATCH, WRAP, t = 6))
             }
         }
 
@@ -2177,7 +2186,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             playTarget != null -> getString(R.string.info_play_ep, playTarget.first, playTarget.second)
             else -> getString(R.string.info_play)
         }
-        val playBtn = pill(playLabel, accent, 0xFFFFFFFF.toInt(), sizeSp = 19f, heightDp = 58) {
+        val playBtn = pill(playLabel, accent, 0xFFFFFFFF.toInt(), sizeSp = 16f, heightDp = 46) {
             when {
                 playTarget != null -> play(playTarget.third)
                 series && others.isNotEmpty() -> play(others[0])
@@ -2191,7 +2200,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 }
             }
         }
-        col.addView(playBtn, lp(MATCH, WRAP, l = 20, t = 16, r = 20))
+        col.addView(playBtn, lp(MATCH, dp(46), l = 28, t = 16, r = 28))
 
         // ---- Fila secundaria: tráiler, favoritos, visto, más ----
         val row = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
@@ -2203,14 +2212,14 @@ class TelegramAccountActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show()
             }
-        }, android.widget.LinearLayout.LayoutParams(0, WRAP, 1f).apply { setMargins(0, 0, dp(6), 0) })
+        }, android.widget.LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(6), 0) })
         fun isFavNow() = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
         lateinit var favBtn: TextView
         favBtn = pill(getString(if (isFavNow()) R.string.info_fav_on else R.string.info_fav_add), ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 14f, heightDp = 44) {
             toggleVideoFav(options, query, thumbId)
             favBtn.text = getString(if (isFavNow()) R.string.info_fav_on else R.string.info_fav_add)
         }
-        row.addView(favBtn, android.widget.LinearLayout.LayoutParams(0, WRAP, 1f).apply { setMargins(0, 0, dp(6), 0) })
+        row.addView(favBtn, android.widget.LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(6), 0) })
         if (!series) {
             val allSeen = options.all { isSeen(it) }
             row.addView(pill(getString(if (allSeen) R.string.info_seen_on else R.string.info_seen_off), ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 14f, heightDp = 44) {
@@ -2218,7 +2227,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 dialog.dismiss()
                 showMovieInfo(options, query, thumbId, startSeason)
                 rerenderMarks()
-            }, android.widget.LinearLayout.LayoutParams(0, WRAP, 1f).apply { setMargins(0, 0, dp(6), 0) })
+            }, android.widget.LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(6), 0) })
         }
         row.addView(pill("⋯", ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 18f, heightDp = 44) {
             val labels = ArrayList<String>()
@@ -2239,8 +2248,8 @@ class TelegramAccountActivity : AppCompatActivity() {
             labels.add(getString(R.string.tgfwd_action)); acts.add { forwardVideoOptions(options, query) }
             labels.add(getString(R.string.tgfold_add_btn)); acts.add { addToFolder(options, query, thumbId) }
             AlertDialog.Builder(this).setItems(labels.toTypedArray()) { _, which -> acts[which]() }.show()
-        }, android.widget.LinearLayout.LayoutParams(dp(56), WRAP))
-        col.addView(row, lp(MATCH, WRAP, l = 20, t = 10, r = 20))
+        }, android.widget.LinearLayout.LayoutParams(dp(56), dp(44)))
+        col.addView(row, lp(MATCH, dp(48), l = 28, t = 10, r = 28))
 
         // ---- Sinopsis ----
         if (info != null) {
@@ -2259,11 +2268,60 @@ class TelegramAccountActivity : AppCompatActivity() {
                 setTextColor(cMuted)
                 setLineSpacing(0f, 1.25f)
             }, lp(MATCH, WRAP, l = 24, t = 14, r = 24))
+            val people = info.people.mapNotNull { e -> e.split("\t").takeIf { it.size >= 4 } }
+            if (people.isNotEmpty()) {
+                col.addView(TextView(this).apply {
+                    text = getString(R.string.info_cast_title)
+                    textSize = 17f
+                    setTextColor(cText)
+                    typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                }, lp(MATCH, WRAP, l = 24, t = 20))
+                val hs = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+                val strip = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    setPadding(dp(16), dp(8), dp(16), 0)
+                }
+                for (p in people) {
+                    val isDir = p[0] == "D"
+                    val ring = if (isDir) 0xFFFFC107.toInt() else 0xFF3A3A4E.toInt()
+                    val cell = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL }
+                    val frame = android.widget.FrameLayout(this).apply {
+                        background = android.graphics.drawable.GradientDrawable().apply { shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(cCard); setStroke(dp(2), ring) }
+                        setPadding(dp(3), dp(3), dp(3), dp(3))
+                    }
+                    val face = android.widget.ImageView(this).apply {
+                        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                        clipToOutline = true
+                        outlineProvider = object : android.view.ViewOutlineProvider() {
+                            override fun getOutline(v: android.view.View, o: android.graphics.Outline) { o.setOval(0, 0, v.width, v.height) }
+                        }
+                        setImageResource(android.R.drawable.ic_menu_myplaces)
+                        setColorFilter(0xFF6B6B80.toInt())
+                    }
+                    if (p[3].isNotEmpty()) { face.clearColorFilter(); face.load(p[3]) }
+                    frame.addView(face, android.widget.FrameLayout.LayoutParams(dp(68), dp(68)))
+                    cell.addView(frame, lp(WRAP, WRAP))
+                    cell.addView(TextView(this).apply {
+                        text = p[1]; textSize = 13f; setTextColor(cText); gravity = android.view.Gravity.CENTER; maxLines = 2
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                    }, lp(dp(88), WRAP, t = 6))
+                    val sub = if (isDir) getString(R.string.info_director_label) else p[2]
+                    if (sub.isNotEmpty()) cell.addView(TextView(this).apply {
+                        text = sub; textSize = 11f; gravity = android.view.Gravity.CENTER; maxLines = 2
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        setTextColor(if (isDir) 0xFFFFC107.toInt() else cMuted)
+                        if (isDir) typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                    }, lp(dp(88), WRAP, t = 1))
+                    strip.addView(cell, lp(WRAP, WRAP, l = 4, r = 4))
+                }
+                hs.addView(strip)
+                col.addView(hs, lp(MATCH, WRAP))
+            }
             val credits = StringBuilder()
-            info.director?.takeIf { it.isNotBlank() }?.let {
+            if (people.isEmpty()) info.director?.takeIf { it.isNotBlank() }?.let {
                 credits.append(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director)).append(": ").append(it)
             }
-            if (info.cast.isNotEmpty()) {
+            if (people.isEmpty() && info.cast.isNotEmpty()) {
                 if (credits.isNotEmpty()) credits.append("\n\n")
                 credits.append(getString(R.string.cine_cast)).append(": ").append(info.cast.joinToString(", "))
             }
@@ -2309,7 +2367,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     val glp = android.widget.GridLayout.LayoutParams(
                         android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
                         android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
-                    ).apply { width = 0; setMargins(dp(3), dp(3), dp(3), dp(3)) }
+                    ).apply { width = 0; height = dp(44); setMargins(dp(3), dp(3), dp(3), dp(3)) }
                     grid.addView(b, glp)
                 }
                 epsBox.addView(grid, lp(MATCH, WRAP))
@@ -2329,13 +2387,13 @@ class TelegramAccountActivity : AppCompatActivity() {
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
                 }
-                col.addView(seasonBtn, lp(MATCH, WRAP, l = 20, t = 22, r = 20))
+                col.addView(seasonBtn, lp(MATCH, dp(48), l = 20, t = 22, r = 20))
                 col.addView(epsBox, lp(MATCH, WRAP, l = 17, t = 10, r = 17))
                 fillEpisodes()
             }
             for ((i, m) in others.withIndex()) col.addView(
                 pill(optionLabel(m, i + 1, others.size > 1), cCard, sizeSp = 14f, heightDp = 46) { play(m) },
-                lp(MATCH, WRAP, l = 20, t = 8, r = 20)
+                lp(MATCH, dp(46), l = 20, t = 8, r = 20)
             )
         }
         col.addView(android.view.View(this), lp(MATCH, dp(28)))

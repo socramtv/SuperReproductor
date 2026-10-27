@@ -1676,3 +1676,6 @@ Si una foto trae un enlace interno (`t.me/c/…`) y el propio vídeo está publi
 - Botón flotante ⬇ en el chat (⬆ en la galería) para saltar al último mensaje / al más reciente; solo aparece si no estás ya ahí.
 - En chats de bots, botón «/» junto a Enviar con los comandos del bot (si no los declara, /start /help /menu /cancel).
 - Ficha de película/serie nueva: cabecera con fondo y degradado, título grande, nota/año/duración, géneros en píldoras, botón Reproducir grande (en series: «Continuar/Reproducir T·E» del siguiente sin ver), fila de tráiler/favorito/visto/«⋯» (cambiar carátula, reenviar, carpeta, marcar serie), sinopsis y reparto; en series, temporadas en un desplegable con su cuadrícula de capítulos (pulsación larga = marcar visto). Con mando de TV el foco se ve con borde blanco.
+
+## Ficha: ajustes de diseño y reparto con fotos
+Botón Reproducir más pequeño, botones de tráiler/favoritos con altura fija (ya no se cortan), géneros en varias líneas centradas y sección «Reparto y equipo» con fotos redondas de director/creador (anillo dorado) y actores con su personaje (datos de TMDb; las fichas antiguas se vuelven a pedir para traer las fotos).

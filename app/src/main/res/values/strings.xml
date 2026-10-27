@@ -903,4 +903,6 @@
     <string name="info_seen_off">○ Marcar vista</string>
     <string name="info_season_btn">Temporada %1$d · %2$d capítulos</string>
     <string name="info_seasons">Temporadas</string>
+    <string name="info_cast_title">Reparto y equipo</string>
+    <string name="info_director_label">🎬 Director</string>
 </resources>
