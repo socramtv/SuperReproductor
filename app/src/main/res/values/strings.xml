@@ -905,4 +905,5 @@
     <string name="info_seasons">Temporadas</string>
     <string name="info_cast_title">Reparto y equipo</string>
     <string name="info_director_label">🎬 Director</string>
+    <string name="tgw_warn_desc">Sin ficha: elegir carátula y nombre</string>
 </resources>

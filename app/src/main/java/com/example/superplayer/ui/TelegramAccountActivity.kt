@@ -1968,12 +1968,11 @@ class TelegramAccountActivity : AppCompatActivity() {
         if (query.isEmpty() || !infoRequested.add(query)) return
         if (!MovieInfo.needsFetch(this, query)) return
         MovieInfo.request(this, query) { found ->
-            if (found != null) {
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    mediaAdapter.infoLoaded(query)
-                    chatAdapter.infoLoaded(query)
-                }
+            // También sin resultado: la ficha pasa a mostrar el aviso ✎ para elegir carátula y nombre a mano.
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                mediaAdapter.infoLoaded(query)
+                if (found != null) chatAdapter.infoLoaded(query)
             }
         }
     }
@@ -5227,8 +5226,15 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
             var meta = item.meta
             var posterUrl: String? = null
+            b.tgmWarn.visibility = View.GONE
             if (item.query.isNotEmpty()) {
                 val info = MovieInfo.peek(this@TelegramAccountActivity, item.query)
+                if (info == null && MovieInfo.isKnownMissing(this@TelegramAccountActivity, item.query)) {
+                    b.tgmWarn.visibility = View.VISIBLE
+                    b.tgmWarn.setOnClickListener {
+                        showChangeCover(item.query) { mediaAdapter.infoLoaded(item.query); chatAdapter.infoLoaded(item.query) }
+                    }
+                }
                 if (info != null) {
                     caption = info.title + (info.year?.let { " ($it)" } ?: "")
                     meta = listOf(infoMeta(info), item.meta).filter { it.isNotEmpty() }.joinToString(" · ")

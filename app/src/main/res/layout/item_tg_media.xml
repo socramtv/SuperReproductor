@@ -31,6 +31,21 @@
             android:contentDescription="@null"
             android:visibility="gone" />
 
+        <!-- Aviso: no se encontró la ficha de este título; pulsa para elegir carátula y nombre a mano -->
+        <TextView
+            android:id="@+id/tgmWarn"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="end|top"
+            android:layout_margin="4dp"
+            android:background="@drawable/bg_fab_round"
+            android:gravity="center"
+            android:text="✎"
+            android:textColor="#FFC107"
+            android:textSize="16sp"
+            android:contentDescription="@string/tgw_warn_desc"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/tgmBadge"
             android:layout_width="wrap_content"

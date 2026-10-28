@@ -1679,3 +1679,8 @@ Si una foto trae un enlace interno (`t.me/c/…`) y el propio vídeo está publi
 
 ## Ficha: ajustes de diseño y reparto con fotos
 Botón Reproducir más pequeño, botones de tráiler/favoritos con altura fija (ya no se cortan), géneros en varias líneas centradas y sección «Reparto y equipo» con fotos redondas de director/creador (anillo dorado) y actores con su personaje (datos de TMDb; las fichas antiguas se vuelven a pedir para traer las fotos).
+
+## Fichas: coincidencia estricta y aviso ✎
+- Solo se acepta una ficha si el nombre (título o título original) es igual y, cuando el vídeo trae año, el año coincide (±1). Sin año, solo si no hay duda: un único resultado con ese nombre, o uno claramente más popular. Si no, el vídeo conserva su nombre e imagen originales (nada de «uno parecido»).
+- Los vídeos sin ficha muestran un pequeño botón ✎ en la esquina de la miniatura para elegir carátula y nombre a mano (ficha manual = se respeta siempre).
+- Las fichas guardadas con la búsqueda antigua que no encajan en nombre/año se descartan y se vuelven a buscar; las elegidas a mano antes de este cambio también se vuelven a validar.

@@ -157,6 +157,11 @@ object MovieInfo {
         }
         val raw = prefs(context).getString(key, null) ?: return null
         val info = parseStored(raw)
+        // Fichas guardadas con la búsqueda antigua (aproximada): si su nombre/año no encaja con el vídeo, se descartan y se vuelve a buscar.
+        if (info != null && isStale(raw, info, title, year)) {
+            prefs(context).edit().remove(key).apply()
+            return null
+        }
         synchronized(memory) { memory[key] = info }
         return info
     }
@@ -173,6 +178,18 @@ object MovieInfo {
         } catch (e: Exception) {
             false
         }
+    }
+
+    /** Ficha guardada antes de la búsqueda estricta (sin "v") y que no coincide en nombre y año con lo que se pidió; las elegidas a mano ("mn") se respetan. */
+    private fun isStale(raw: String, info: Info, title: String, year: String?): Boolean = try {
+        val o = JSONObject(raw)
+        if (o.optInt("v", 0) >= 2 || o.optBoolean("mn", false)) false
+        else {
+            val wanted = norm(title)
+            !(listOf(info.title, info.originalTitle.orEmpty()).any { norm(it) == wanted } && yearOk(info.year, year))
+        }
+    } catch (e: Exception) {
+        false
     }
 
     private fun parseStored(raw: String): Info? = try {
@@ -206,7 +223,7 @@ object MovieInfo {
         null
     }
 
-    private fun store(context: Context, key: String, info: Info?, tmdbChecked: Boolean) {
+    private fun store(context: Context, key: String, info: Info?, tmdbChecked: Boolean, manual: Boolean = false) {
         synchronized(memory) { memory[key] = info }
         val json = if (info == null) {
             JSONObject().put("none", System.currentTimeMillis()).put("tt", tmdbChecked)
@@ -218,7 +235,7 @@ object MovieInfo {
                 .put("di", info.director ?: "").put("ca", JSONArray(info.cast))
                 .put("tr", info.trailerKey ?: "").put("bd", info.backdropUrl ?: "")
                 .put("ce", info.certification ?: "").put("tv", info.isTv)
-                .put("src", info.source).put("tt", info.tmdbChecked).put("pe", JSONArray(info.people))
+                .put("src", info.source).put("tt", info.tmdbChecked).put("pe", JSONArray(info.people)).put("v", 2).put("mn", manual)
         }
         prefs(context).edit().putString(key, json.toString()).apply()
     }
@@ -290,13 +307,13 @@ object MovieInfo {
         var info: Info? = null
         if (checked) info = try { searchTmdb(tmdbKey, title, year) } catch (e: Exception) { null }
         if (info == null) info = try { searchMovie(title, year) } catch (e: Exception) { null }
-        if (info == null) info = try { searchShow(title) } catch (e: Exception) { null }
-        // Segundo intento: sin signos de puntuación (comas, dos puntos…) y sin año, por si el año del chat no coincide.
+        if (info == null) info = try { searchShow(title, year) } catch (e: Exception) { null }
+        // Segundo intento: sin signos de puntuación (comas, dos puntos…); el año, si lo hay, se sigue exigiendo.
         if (info == null) {
             val simple = title.replace(Regex("[,;:!?¡¿\"']"), " ").replace(Regex("\\s+"), " ").trim()
-            if (simple.isNotEmpty() && (simple != title || year != null)) {
-                if (checked) info = try { searchTmdb(tmdbKey, simple, null) } catch (e: Exception) { null }
-                if (info == null) info = try { searchMovie(simple, null) } catch (e: Exception) { null }
+            if (simple.isNotEmpty() && simple != title) {
+                if (checked) info = try { searchTmdb(tmdbKey, simple, year) } catch (e: Exception) { null }
+                if (info == null) info = try { searchMovie(simple, year) } catch (e: Exception) { null }
             }
         }
         return info?.copy(tmdbChecked = checked)
@@ -323,6 +340,19 @@ object MovieInfo {
         }
     }
 
+    /** ¿Encaja el año del resultado con el pedido? Sin año pedido, sí; con año, solo si coincide (±1 por estrenos a caballo de año). */
+    private fun yearOk(found: String?, wanted: String?): Boolean {
+        if (wanted == null) return true
+        val a = found?.take(4)?.toIntOrNull() ?: return false
+        val b = wanted.toIntOrNull() ?: return true
+        return kotlin.math.abs(a - b) <= 1
+    }
+
+    /**
+     * Búsqueda ESTRICTA: solo se acepta un resultado con el MISMO nombre (título o título original) y, si el vídeo trae año,
+     * con ese año. Sin año, solo si no hay duda (un único resultado con ese nombre, o uno claramente más popular).
+     * Si no, se devuelve null y el vídeo conserva su nombre y su imagen originales.
+     */
     private fun searchTmdb(key: String, title: String, year: String?): Info? {
         val q = URLEncoder.encode(title, "UTF-8")
         val wanted = norm(title)
@@ -334,28 +364,24 @@ object MovieInfo {
             }
             val body = httpGet("$TMDB/search/$kind?api_key=$key&language=es-ES&query=$q$yearParam") ?: continue
             val results = JSONObject(body).optJSONArray("results") ?: continue
-            var bestId = 0
-            var bestScore = -1.0
-            for (i in 0 until minOf(results.length(), 10)) {
+            val exact = ArrayList<Pair<Int, Double>>() // (id, popularidad)
+            for (i in 0 until minOf(results.length(), 15)) {
                 val r = results.optJSONObject(i) ?: continue
                 val names = if (kind == "movie") listOf(r.optString("title"), r.optString("original_title"))
                 else listOf(r.optString("name"), r.optString("original_name"))
-                var match = 0
-                for (n in names) {
-                    val nn = norm(n)
-                    if (nn.isEmpty()) continue
-                    val m = if (nn == wanted) 10 else if (nn.contains(wanted) || wanted.contains(nn)) 4 else 0
-                    if (m > match) match = m
-                }
-                if (match == 0) continue
-                val score = match + minOf(r.optDouble("popularity", 0.0), 100.0) / 100.0
-                if (score > bestScore) {
-                    bestScore = score
-                    bestId = r.optInt("id")
-                }
+                if (names.none { norm(it) == wanted }) continue
+                val date = r.optString(if (kind == "movie") "release_date" else "first_air_date")
+                if (!yearOk(date, year)) continue
+                exact.add(r.optInt("id") to r.optDouble("popularity", 0.0))
             }
-            if (bestId == 0) continue
-            val info = tmdbDetails(key, kind, bestId)
+            if (exact.isEmpty()) continue
+            exact.sortByDescending { it.second }
+            val pick = when {
+                year != null || exact.size == 1 -> exact[0]
+                exact[0].second >= exact[1].second * 3.0 -> exact[0]
+                else -> continue // varios con el mismo nombre y sin año: no se adivina
+            }
+            val info = tmdbDetails(key, kind, pick.first)
             if (info != null) return info
         }
         return null
@@ -524,20 +550,15 @@ object MovieInfo {
         ) ?: return null
         val results = JSONObject(body).optJSONArray("results") ?: return null
         val wanted = norm(title)
-        var best: JSONObject? = null
-        var bestScore = -1
+        val exact = ArrayList<JSONObject>()
         for (i in 0 until results.length()) {
             val r = results.optJSONObject(i) ?: continue
-            val name = norm(r.optString("trackName"))
-            if (name.isEmpty()) continue
-            var score = 0
-            if (name == wanted) score += 10 else if (name.contains(wanted) || wanted.contains(name)) score += 4 else continue
-            if (year != null && r.optString("releaseDate").startsWith(year)) score += 3
-            if (score > bestScore) {
-                bestScore = score
-                best = r
-            }
+            if (norm(r.optString("trackName")) != wanted) continue
+            if (!yearOk(r.optString("releaseDate"), year)) continue
+            exact.add(r)
         }
+        // Mismo nombre y año (o, sin año, un único resultado): si no, no se adivina.
+        val best: JSONObject? = if (exact.size == 1 || (year != null && exact.isNotEmpty())) exact[0] else null
         val r = best ?: return null
         val poster = r.optString("artworkUrl100").ifEmpty { null }?.replace("100x100bb", "600x600bb")
         val overview = r.optString("longDescription").ifEmpty { r.optString("shortDescription") }.ifEmpty { null }
@@ -550,7 +571,7 @@ object MovieInfo {
         )
     }
 
-    private fun searchShow(title: String): Info? {
+    private fun searchShow(title: String, year: String?): Info? {
         val term = URLEncoder.encode(title, "UTF-8")
         val body = httpGet("https://api.tvmaze.com/singlesearch/shows?q=$term") ?: return null
         val o = JSONObject(body)
@@ -558,7 +579,8 @@ object MovieInfo {
         if (name.isEmpty()) return null
         val wanted = norm(title)
         val found = norm(name)
-        if (!(found == wanted || found.contains(wanted) || wanted.contains(found))) return null
+        if (found != wanted) return null
+        if (!yearOk(o.optString("premiered"), year)) return null
         val image = o.optJSONObject("image")
         val poster = image?.optString("original")?.ifEmpty { null } ?: image?.optString("medium")?.ifEmpty { null }
         val summary = o.optString("summary").ifEmpty { null }?.let {
@@ -708,7 +730,7 @@ object MovieInfo {
             if (choice.tmdbKind != null && choice.tmdbId != 0 && tmdbKey.isNotBlank()) {
                 try { tmdbDetails(tmdbKey, choice.tmdbKind, choice.tmdbId)?.let { info = it } } catch (e: Exception) { }
             }
-            store(appContext, key, info.copy(tmdbChecked = true), true)
+            store(appContext, key, info.copy(tmdbChecked = true), true, manual = true)
             try { onDone() } catch (e: Exception) { }
         }
     }
