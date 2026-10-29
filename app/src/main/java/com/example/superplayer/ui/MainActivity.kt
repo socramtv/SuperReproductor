@@ -231,7 +231,14 @@ class MainActivity : AppCompatActivity() {
                 p.arcTo(android.graphics.RectF(0f, h - 2f * r, w, h), 180f, -180f)
                 p.cubicTo(w, h * 0.38f, w * 0.5f, h * 0.14f, w / 2f, 0f)
                 p.close()
-                outline.setConvexPath(p)
+                // En algunos dispositivos (Fire TV / Android antiguo) la gota no se
+                // considera convexa y setConvexPath lanza excepción: usamos un óvalo de respaldo.
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= 30) outline.setPath(p)
+                    else outline.setConvexPath(p)
+                } catch (e: Exception) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
             }
         }
         val items = listOf(
