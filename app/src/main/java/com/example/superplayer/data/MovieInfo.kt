@@ -47,7 +47,7 @@ object MovieInfo {
         val source: String = "itunes",
         /** true si se buscó con la clave de TMDb puesta (aunque no se encontrara ahí). */
         val tmdbChecked: Boolean = false,
-        /** Equipo con foto: "D\tnombre\t\tfoto" (director/creador) o "A\tnombre\tpersonaje\tfoto" (reparto). */
+        /** Equipo con foto: "D\tnombre\t\tfoto\tidTMDb" (director/creador) o "A\tnombre\tpersonaje\tfoto\tidTMDb" (reparto). */
         val people: List<String> = emptyList()
     )
 
@@ -283,6 +283,54 @@ object MovieInfo {
         }
     }
 
+    /** Una obra de la filmografía de una persona. */
+    class Credit(val title: String, val year: String?, val isTv: Boolean)
+
+    /**
+     * Otras películas y series de una persona (TMDb), las más conocidas primero. Si no se conoce su id
+     * (fichas guardadas antes) se busca por nombre. Devuelve la lista vacía si no hay clave de TMDb o falla la red.
+     */
+    fun filmography(context: Context, personId: Int, name: String, onDone: (List<Credit>) -> Unit) {
+        val key = AppPrefs.getTmdbKey(context.applicationContext)
+        pool.execute {
+            val out = ArrayList<Credit>()
+            try {
+                if (key.isNotBlank()) {
+                    var id = personId
+                    if (id == 0) {
+                        val body = httpGet("$TMDB/search/person?api_key=$key&language=es-ES&query=" + URLEncoder.encode(name, "UTF-8"))
+                        id = body?.let { JSONObject(it).optJSONArray("results")?.optJSONObject(0)?.optInt("id") } ?: 0
+                    }
+                    if (id != 0) {
+                        val body = httpGet("$TMDB/person/$id/combined_credits?api_key=$key&language=es-ES")
+                        if (body != null) {
+                            val o = JSONObject(body)
+                            val all = ArrayList<JSONObject>()
+                            for ((arr, isCrew) in listOf(o.optJSONArray("cast") to false, o.optJSONArray("crew") to true)) {
+                                if (arr == null) continue
+                                for (i in 0 until arr.length()) {
+                                    val c = arr.optJSONObject(i) ?: continue
+                                    if (isCrew && c.optString("job") != "Director") continue
+                                    all.add(c)
+                                }
+                            }
+                            val seen = HashSet<String>()
+                            for (c in all.sortedByDescending { it.optDouble("popularity", 0.0) }) {
+                                val tv = c.optString("media_type") == "tv"
+                                val t = c.optString(if (tv) "name" else "title").trim()
+                                if (t.isEmpty() || !seen.add(t.lowercase(Locale.ROOT))) continue
+                                val date = c.optString(if (tv) "first_air_date" else "release_date")
+                                out.add(Credit(t, date.take(4).takeIf { it.length == 4 }, tv))
+                                if (out.size >= 80) break
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) { }
+            onDone(out)
+        }
+    }
+
     private fun httpGet(url: String): String? {
         val conn = URL(url).openConnection() as HttpURLConnection
         return try {
@@ -450,7 +498,7 @@ object MovieInfo {
                 for (i in 0 until crewArr.length()) {
                     val c = crewArr.optJSONObject(i) ?: continue
                     if (c.optString("job") != "Director" || n >= 2) continue
-                    people.add("D\t" + clean(c.optString("name")) + "\t\t" + photo(c.optString("profile_path")))
+                    people.add("D\t" + clean(c.optString("name")) + "\t\t" + photo(c.optString("profile_path")) + "\t" + c.optInt("id"))
                     n++
                 }
             }
@@ -458,14 +506,14 @@ object MovieInfo {
             val creators = o.optJSONArray("created_by")
             if (creators != null) for (i in 0 until minOf(creators.length(), 2)) {
                 val c = creators.optJSONObject(i) ?: continue
-                people.add("D\t" + clean(c.optString("name")) + "\t\t" + photo(c.optString("profile_path")))
+                people.add("D\t" + clean(c.optString("name")) + "\t\t" + photo(c.optString("profile_path")) + "\t" + c.optInt("id"))
             }
         }
         if (castArr != null) for (i in 0 until minOf(castArr.length(), 14)) {
             val c = castArr.optJSONObject(i) ?: continue
             val nm = clean(c.optString("name"))
             if (nm.isEmpty()) continue
-            people.add("A\t" + nm + "\t" + clean(c.optString("character")) + "\t" + photo(c.optString("profile_path")))
+            people.add("A\t" + nm + "\t" + clean(c.optString("character")) + "\t" + photo(c.optString("profile_path")) + "\t" + c.optInt("id"))
         }
 
         // Tráiler de YouTube: primero en español, luego en inglés o sin idioma; "Trailer" antes que "Teaser".

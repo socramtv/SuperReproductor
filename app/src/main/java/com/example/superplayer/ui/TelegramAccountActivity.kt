@@ -2283,7 +2283,12 @@ class TelegramAccountActivity : AppCompatActivity() {
                 for (p in people) {
                     val isDir = p[0] == "D"
                     val ring = if (isDir) 0xFFFFC107.toInt() else 0xFF3A3A4E.toInt()
-                    val cell = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL }
+                    val cell = android.widget.LinearLayout(this).apply {
+                        orientation = android.widget.LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL
+                        // Pulsar a una persona: sus otras películas y series (las de tu biblioteca, primero).
+                        isClickable = true
+                        setOnClickListener { showPersonTitles(p[1], p.getOrNull(4)?.toIntOrNull() ?: 0) { dialog.dismiss() } }
+                    }
                     val frame = android.widget.FrameLayout(this).apply {
                         background = android.graphics.drawable.GradientDrawable().apply { shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(cCard); setStroke(dp(2), ring) }
                         setPadding(dp(3), dp(3), dp(3), dp(3))
@@ -2605,6 +2610,51 @@ class TelegramAccountActivity : AppCompatActivity() {
             m.fileId == null -> Toast.makeText(this, R.string.tg_nothing_to_play, Toast.LENGTH_SHORT).show()
             m.size > 0 -> streamPlay(m, queue)
             else -> downloadAndPlay(m) // Telegram no dio el tamaño: no se puede emitir, se descarga solo en este caso
+        }
+    }
+
+    /**
+     * Filmografía de una persona: primero lo que tienes en la biblioteca (pulsar abre su ficha),
+     * después el resto de sus obras conocidas.
+     */
+    private fun showPersonTitles(name: String, personId: Int, closeSheet: () -> Unit) {
+        Toast.makeText(this, getString(R.string.person_loading, name), Toast.LENGTH_SHORT).show()
+        MovieInfo.filmography(this, personId, name) { credits ->
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (credits.isEmpty()) {
+                    Toast.makeText(this, R.string.person_none, Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                val groups = libraryMessages().groupBy { nameKey(searchTitle(it)) }
+                val mine = ArrayList<Pair<MovieInfo.Credit, List<TgMessage>>>()
+                val other = ArrayList<MovieInfo.Credit>()
+                for (c in credits) {
+                    val k = nameKey(c.title)
+                    val opts = if (k.length >= 2) groups[k] else null
+                    if (opts != null) mine.add(c to opts) else other.add(c)
+                }
+                fun label(c: MovieInfo.Credit) = c.title + (c.year?.let { " ($it)" } ?: "") + (if (c.isTv) "  📺" else "")
+                val labels = ArrayList<String>()
+                mine.forEach { labels.add("▶ " + label(it.first)) }
+                other.forEach { labels.add("· " + label(it)) }
+                val title = if (mine.isEmpty()) getString(R.string.person_title_none, name)
+                else getString(R.string.person_title, name, mine.size)
+                AlertDialog.Builder(this)
+                    .setTitle(title)
+                    .setItems(labels.toTypedArray()) { _, which ->
+                        if (which < mine.size) {
+                            val (c, opts) = mine[which]
+                            closeSheet()
+                            val th = opts.firstOrNull { it.thumbId != 0 }?.thumbId ?: 0
+                            onVideoClick(opts, searchTitle(opts[0]), th)
+                        } else {
+                            Toast.makeText(this, R.string.person_not_in_lib, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setNegativeButton(R.string.channel_check_close, null)
+                    .show()
+            }
         }
     }
 

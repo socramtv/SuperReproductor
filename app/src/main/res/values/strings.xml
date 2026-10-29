@@ -904,6 +904,11 @@
     <string name="info_season_btn">Temporada %1$d · %2$d capítulos</string>
     <string name="info_seasons">Temporadas</string>
     <string name="info_cast_title">Reparto y equipo</string>
+    <string name="person_loading">Buscando obras de %1$s…</string>
+    <string name="person_none">No se encontraron más obras (comprueba la clave de TMDb o la conexión).</string>
+    <string name="person_title">%1$s · %2$d en tu biblioteca</string>
+    <string name="person_title_none">%1$s · nada en tu biblioteca</string>
+    <string name="person_not_in_lib">Este título no está en tu biblioteca.</string>
     <string name="info_director_label">🎬 Director</string>
     <string name="tgw_warn_desc">Sin ficha: elegir carátula y nombre</string>
 </resources>
