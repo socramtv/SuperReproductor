@@ -1253,6 +1253,10 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** "253-Peli (2025-mkv" y "Peli (2025-" -> "Peli (2025)": el mismo nombre para el vídeo y su imagen. */
     private val reSpaces = Regex("\\s+")
+    /** Etiquetas entre corchetes de bots y subidas: [513.4MB] [1080P] [spa] [BDRip…]; no se tocan títulos como «[REC]». */
+    private val reTagBracket = Regex("(?i)\\[\\s*(?:\\d+(?:[.,]\\d+)?\\s*[KMGT]i?B|\\d{3,4}p|4k|uhd|hd\\w*|spa\\w*|esp\\w*|lat\\w*|cast\\w*|dual|vose|sub\\w*|ing\\w*|eng\\w*|bdrip|webrip|web-?dl|dvdrip|brrip)[^\\]]*\\]")
+    /** Calidad al principio del nombre: «1080p - El vecino». */
+    private val reLeadQuality = Regex("(?i)^(?:[\\s\\-_.|:]*\\b(?:\\d{3,4}p|4k|uhd|hd|dual|mkv|mp4)\\b)+[\\s\\-_.|:]*")
     private val reEmoji = Regex("[\\p{So}\\p{Sk}\\u200D\\uFE0F\\u20E3]")
 
     private val reSizeParen = Regex("(?i)\\(\\s*\\d+(?:[.,]\\d+)?\\s*(?:[KMGT]i?B|bytes?)\\s*\\)")
@@ -1260,8 +1264,9 @@ class TelegramAccountActivity : AppCompatActivity() {
     private val reHyphenYear = Regex("(?<=\\p{L})[-_.]((?:19|20)\\d{2})\\b")
 
     private fun cleanName(raw: String): String {
-        var t = MovieInfo.stripGenres(raw.replace(reEmoji, " ").replace(reSizeParen, " ").replace(reExtAny, " "))
+        var t = MovieInfo.stripGenres(raw.replace(reEmoji, " ").replace(reTagBracket, " ").replace(reSizeParen, " ").replace(reExtAny, " "))
             .replace(reSpaces, " ").trim()
+        t = t.replace(reLeadQuality, "")
         // «Sabrina_y_sus_amores-1995»: sin espacios es un nombre de archivo, no un título.
         if (!t.contains(' ')) t = t.replace('_', ' ').replace('.', ' ')
         t = t.replace(reHyphenYear, " ($1)").replace(reNumPrefix, "")

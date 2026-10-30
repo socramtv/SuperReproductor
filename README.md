@@ -1684,3 +1684,6 @@ Botón Reproducir más pequeño, botones de tráiler/favoritos con altura fija (
 - Solo se acepta una ficha si el nombre (título o título original) es igual y, cuando el vídeo trae año, el año coincide (±1). Sin año, solo si no hay duda: un único resultado con ese nombre, o uno claramente más popular. Si no, el vídeo conserva su nombre e imagen originales (nada de «uno parecido»).
 - Los vídeos sin ficha muestran un pequeño botón ✎ en la esquina de la miniatura para elegir carátula y nombre a mano (ficha manual = se respeta siempre).
 - Las fichas guardadas con la búsqueda antigua que no encajan en nombre/año se descartan y se vuelven a buscar; las elegidas a mano antes de este cambio también se vuelven a validar.
+
+## Series de bots: capítulos agrupados
+Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El vecino - 1x01 - …», «1080p - [spa] - El vecino - 1x01.mkv») ya se agrupan en una sola serie: se quitan los corchetes de tamaño/calidad/idioma y la calidad al principio del nombre antes de reconocer la serie y el capítulo.
