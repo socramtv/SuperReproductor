@@ -1698,3 +1698,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 ## Series en RAR
 - Los capítulos en RAR con nombre «Serie 1x07» se agrupan en una sola ficha por serie («▶ RAR · N cap.»); al pulsar se elige el capítulo (con sus partes) y se reproduce.
 - Se quitan los paréntesis/corchetes vacíos que quedaban en los títulos («Serie 1x02 ( )»).
+
+## Telegram en TV: no llenar el disco al ver vídeos largos
+- TDLib guardaba en disco todo lo reproducido; en un Fire TV con poco espacio se llenaba y el sistema cerraba la app (volvía al menú principal). Ahora, al superar 256 MB descargados de un vídeo en streaming, se borra lo ya visto y se sigue pidiendo desde la posición actual.

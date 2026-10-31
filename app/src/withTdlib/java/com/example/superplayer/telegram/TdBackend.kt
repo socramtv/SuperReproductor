@@ -950,6 +950,25 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
         }.start()
     }
 
+    /**
+     * Al ver un vídeo largo, TDLib va guardando en disco todo lo que se reproduce. En un Fire TV con poco espacio
+     * eso llena el almacenamiento y el sistema cierra la app. Pasado un tope se borra lo ya visto (el reproductor
+     * conserva su búfer por delante) y la siguiente lectura vuelve a pedir desde su posición.
+     */
+    private val lastRecycle = java.util.concurrent.ConcurrentHashMap<Int, Long>()
+
+    private fun recycleIfBig(fileId: Int, f: TdApi.File) {
+        val l = f.local
+        if (l.isDownloadingCompleted || l.downloadedSize < STREAM_DISK_CAP) return
+        val now = System.currentTimeMillis()
+        val prev = lastRecycle[fileId] ?: 0L
+        if (now - prev < 20_000) return
+        lastRecycle[fileId] = now
+        lastRequest.remove(fileId)
+        send(TdApi.CancelDownloadFile(fileId, false)) { }
+        send(TdApi.DeleteFile(fileId)) { }
+    }
+
     /** Última petición de descarga por archivo: [inicio, fin, instante]. Evita reiniciar la descarga de TDLib en cada trozo. */
     private val lastRequest = java.util.concurrent.ConcurrentHashMap<Int, LongArray>()
 
@@ -997,7 +1016,10 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
                     } catch (e: Exception) {
                         null
                     }
-                    if (data != null && data.isNotEmpty()) return data
+                    if (data != null && data.isNotEmpty()) {
+                        recycleIfBig(fileId, f)
+                        return data
+                    }
                 }
             }
             // Pedir a TDLib que descargue desde aquí solo si no hay ya una petición viva que cubra esta posición.
@@ -1210,6 +1232,7 @@ class TdBackend private constructor(context: Context) : TgAccountBackend {
     companion object {
         /** Cuánto pide a TDLib de una vez al reproducir sin descargar (así no baja el vídeo entero). */
         private const val STREAM_WINDOW = 32L * 1024 * 1024
+        private const val STREAM_DISK_CAP = 256L * 1024 * 1024
 
         @Volatile
         private var instance: TdBackend? = null
