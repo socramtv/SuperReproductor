@@ -211,6 +211,17 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
+    <!-- Saltar intro (vídeos de Telegram): en los primeros minutos -->
+    <Button
+        android:id="@+id/skipIntroButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="90dp"
+        android:text="@string/player_skip_intro"
+        android:visibility="gone" />
+
     <!-- Siguiente capítulo automático (series de Telegram): cuenta atrás de 10 s al acabar uno -->
     <LinearLayout
         android:id="@+id/nextEpisodeBox"

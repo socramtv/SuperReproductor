@@ -45,6 +45,7 @@ import com.example.superplayer.telegram.TgAccountBackend
 import com.example.superplayer.telegram.TgAuthState
 import com.example.superplayer.telegram.TgStreamServer
 import com.example.superplayer.telegram.TgWatched
+import com.example.superplayer.telegram.TgResume
 import com.example.superplayer.telegram.MusicArchive
 import com.example.superplayer.telegram.RarVideo
 import com.example.superplayer.telegram.RarVolumes
@@ -1160,8 +1161,9 @@ class TelegramAccountActivity : AppCompatActivity() {
         backend?.refreshConnection(true)
         refreshLive()
         // Al volver del reproductor: repinta las marcas de «visto» si cambiaron.
-        if (TgWatched.version != seenVersion) {
+        if (TgWatched.version != seenVersion || TgResume.version != resumeVersion) {
             seenVersion = TgWatched.version
+            resumeVersion = TgResume.version
             if (state == TgAuthState.READY && !searching) {
                 if (currentChat == null && chatFilter == LIB_TAB) renderLibrary()
                 else if (currentChat != null && mediaMode && !showingTopics) renderMedia(auto = false)
@@ -2822,6 +2824,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun isSeen(m: TgMessage) = TgWatched.isWatched(this, watchKey(m))
 
     private var seenVersion = TgWatched.version
+    private var resumeVersion = TgResume.version
 
     /** Título legible de un vídeo para la biblioteca: sin extensión, puntos/guiones bajos ni etiquetas de calidad (1080p, WEB-DL…). */
     private fun libTitle(m: TgMessage): String {
@@ -2922,6 +2925,25 @@ class TelegramAccountActivity : AppCompatActivity() {
         val pool = ArrayList<String>(groups.size)
         for ((_, list) in groups) list[0].name.takeIf { it.length >= 2 }?.let { pool.add(it) }
         val items = ArrayList<MediaItem>()
+        // «Seguir viendo»: lo que se dejó a medias, lo último primero y por delante de todo.
+        if (type == 0 && !filtersActive()) {
+            for (e in TgResume.getAll(this).take(12)) {
+                val m = e.message
+                val ep = parseEpisode(titleOf(m))
+                val name = if (ep != null) "${ep.series} ${ep.season}x${"%02d".format(ep.episode)}" else libTitle(m).ifEmpty { titleOf(m) }
+                items.add(MediaItem(key = "cont:${e.key}", select = listOf(m), caption = name,
+                    meta = getString(R.string.tg_continue_label), thumbFileId = e.thumb,
+                    badge = getString(R.string.tg_continue_badge, formatClock(e.posMs), formatClock(e.durMs)),
+                    messageId = m.messageId, query = "", pairedImage = false,
+                    onLong = {
+                        AlertDialog.Builder(this).setTitle(name)
+                            .setItems(arrayOf(getString(R.string.tg_continue_remove))) { _, _ ->
+                                TgResume.remove(this, e.key)
+                                renderLibrary()
+                            }.show()
+                    }) { streamPlay(m) })
+            }
+        }
         for ((k, list) in groups) {
             val isSeries = k.startsWith("s:")
             if ((type == 1 && !isSeries) || (type == 2 && isSeries)) continue
@@ -4592,7 +4614,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         val audio = m.kind == "audio" || m.kind == "voice" || (m.mime ?: "").startsWith("audio/")
         val mime = m.mime ?: if (audio) "audio/mpeg" else "video/mp4"
         val url = TgStreamServer.urlFor(b, fileId, m.size, mime)
-        if (!audio) TgWatched.register(url, watchKey(m))
+        if (!audio) {
+            TgWatched.register(url, watchKey(m))
+            TgResume.register(url, watchKey(m), m, m.thumbId)
+        }
         return Stream(name = name, type = if (audio) "MP3" else "MP4", url = url, icon = null, category = "Telegram")
     }
 
@@ -5405,4 +5430,12 @@ class TelegramAccountActivity : AppCompatActivity() {
 
         inner class VH(val b: ItemTgMediaBinding) : RecyclerView.ViewHolder(b.root)
     }
+}
+
+private fun formatClock(ms: Long): String {
+    val t = (ms / 1000L).coerceAtLeast(0L)
+    val h = t / 3600
+    val m = (t % 3600) / 60
+    val sec = t % 60
+    return if (h > 0) String.format(java.util.Locale.US, "%d:%02d:%02d", h, m, sec) else String.format(java.util.Locale.US, "%d:%02d", m, sec)
 }

@@ -1701,3 +1701,7 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Telegram en TV: no llenar el disco al ver vídeos largos
 - TDLib guardaba en disco todo lo reproducido; en un Fire TV con poco espacio se llenaba y el sistema cerraba la app (volvía al menú principal). Ahora, al superar 256 MB descargados de un vídeo en streaming, se borra lo ya visto y se sigue pidiendo desde la posición actual.
+
+## Telegram: Seguir viendo y Saltar intro
+- **Seguir viendo:** los vídeos de Telegram (streaming) que dejas a medias se guardan con su posición (`TgResume`). Al abrirlos de nuevo se reanudan solos unos segundos antes, y en la pestaña Biblioteca (sin filtros) salen primero, con «⏯ pos / duración». Pulsación larga = quitar de la lista. Se quita solo al verlo casi entero. (No incluye los vídeos en RAR.)
+- **Saltar intro:** en vídeos de Telegram de más de 10 min, durante los primeros 5 min sale el botón «⏭ Saltar intro» (salta 85 s). En series recuerda dónde acabó la intro y en los siguientes capítulos salta directo a ese punto.

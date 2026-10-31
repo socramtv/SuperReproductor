@@ -546,6 +546,58 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     // -----------------------------------------------------------------
+    // Saltar intro (vídeos de Telegram): en los primeros minutos sale un botón «Saltar intro». Salta 85 s;
+    // en una serie recuerda dónde acabó la intro y en los siguientes capítulos salta directo a ese punto.
+    // -----------------------------------------------------------------
+
+    private val skipIntroHandler = Handler(Looper.getMainLooper())
+    private var skipIntroShown = false
+    private val skipIntroTick = object : Runnable {
+        override fun run() {
+            if (isFinishing || isDestroyed || !::binding.isInitialized) return
+            updateSkipIntro()
+            skipIntroHandler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun skipIntroTarget(posMs: Long): Long {
+        val url = currentStream?.url ?: return posMs + SKIP_INTRO_MS
+        val series = com.example.superplayer.telegram.TgResume.keyFor(url)?.let { com.example.superplayer.telegram.TgResume.seriesOf(it) }
+        val saved = if (series != null) com.example.superplayer.telegram.TgResume.introEnd(this, series) else 0L
+        return if (saved > posMs + 5_000L) saved else posMs + SKIP_INTRO_MS
+    }
+
+    private fun updateSkipIntro() {
+        val ctrl = controller
+        val url = currentStream?.url
+        val show = ctrl != null && url != null && com.example.superplayer.telegram.TgResume.isTelegramUrl(url) &&
+            ctrl.isPlaying && ctrl.duration != C.TIME_UNSET && ctrl.duration >= 10 * 60_000L &&
+            ctrl.currentPosition in 3_000L..SKIP_INTRO_WINDOW_MS
+        if (show == skipIntroShown) return
+        skipIntroShown = show
+        binding.skipIntroButton.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) {
+            binding.skipIntroButton.setOnClickListener {
+                val c = controller ?: return@setOnClickListener
+                val target = skipIntroTarget(c.currentPosition).coerceAtMost(c.duration - 5_000L)
+                c.seekTo(target)
+                val series = currentStream?.url?.let { u -> com.example.superplayer.telegram.TgResume.keyFor(u) }
+                    ?.let { k -> com.example.superplayer.telegram.TgResume.seriesOf(k) }
+                if (series != null) com.example.superplayer.telegram.TgResume.setIntroEnd(this, series, target)
+                binding.skipIntroButton.visibility = View.GONE
+                skipIntroShown = false
+            }
+            binding.skipIntroButton.requestFocus()
+        }
+    }
+
+    private fun startSkipIntroWatcher() {
+        skipIntroHandler.removeCallbacksAndMessages(null)
+        skipIntroShown = false
+        skipIntroHandler.postDelayed(skipIntroTick, 1000)
+    }
+
+    // -----------------------------------------------------------------
     // Siguiente capítulo automático: al acabar un capítulo de una serie de
     // Telegram (la lista de canales trae los capítulos en orden), cuenta
     // atrás de 10 s y salta al siguiente. "Cancelar" lo deja como está.
@@ -1299,6 +1351,7 @@ class PlayerActivity : AppCompatActivity() {
         if (activeInstance === this) activeInstance = null
         tsHandler.removeCallbacks(tsUiRunnable)
         nextEpisodeHandler.removeCallbacks(nextEpisodeTick)
+        skipIntroHandler.removeCallbacksAndMessages(null)
         if (isFinishing) {
             stopTimeShift()
             currentStream?.url?.let { com.example.superplayer.telegram.TgStreamServer.release(it) }
@@ -1506,7 +1559,7 @@ class PlayerActivity : AppCompatActivity() {
         playbackStarted = true
         // "Continuar viendo": si es una película/vídeo que se dejó a medias,
         // se reanuda donde se quedó (unos segundos antes, para situarse).
-        val resumeAt = currentStream?.let { ContinueWatching.positionFor(this, it.id) }
+        val resumeAt = currentStream?.let { ContinueWatching.positionFor(this, it.id) ?: com.example.superplayer.telegram.TgResume.positionFor(this, it.url) }
         if (resumeAt != null) {
             val start = (resumeAt - 5_000L).coerceAtLeast(0L)
             ctrl.setMediaItem(item, start)
@@ -1522,6 +1575,7 @@ class PlayerActivity : AppCompatActivity() {
         ctrl.prepare()
         startStuckControlsWatchdog()
         startAutoPlayGuard()
+        startSkipIntroWatcher()
     }
 
     // -----------------------------------------------------------------
@@ -2017,6 +2071,7 @@ class PlayerActivity : AppCompatActivity() {
         val duration = ctrl.duration
         if (duration == C.TIME_UNSET || duration < MIN_VOD_DURATION_MS) return
         com.example.superplayer.telegram.TgWatched.onProgress(this, stream.url, ctrl.currentPosition, duration)
+        com.example.superplayer.telegram.TgResume.onProgress(this, stream.url, ctrl.currentPosition, duration)
         ContinueWatching.save(this, stream, ctrl.currentPosition, duration)
     }
 
@@ -2153,6 +2208,8 @@ class PlayerActivity : AppCompatActivity() {
 
         // Menos que esto no se considera película/vídeo "para continuar" (clips, avances...).
         private const val MIN_VOD_DURATION_MS = 5 * 60_000L
+        private const val SKIP_INTRO_MS = 85_000L
+        private const val SKIP_INTRO_WINDOW_MS = 5 * 60_000L
         private val SLEEP_TIMER_MINUTES = listOf(30, 60, 90, 120)
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
