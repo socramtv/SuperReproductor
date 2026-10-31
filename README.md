@@ -1694,3 +1694,7 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 ## Series: más formatos de capítulo
 - `Serie_S04E04_Episodio 4` (guiones bajos) ya se reconoce como capítulo.
 - `Serie - Temporada 2 [Cap.205]` (temporada y capítulo por separado; 205 = temporada 2, capítulo 05) también agrupa en una sola ficha por serie.
+
+## Series en RAR
+- Los capítulos en RAR con nombre «Serie 1x07» se agrupan en una sola ficha por serie («▶ RAR · N cap.»); al pulsar se elige el capítulo (con sus partes) y se reproduce.
+- Se quitan los paréntesis/corchetes vacíos que quedaban en los títulos («Serie 1x02 ( )»).

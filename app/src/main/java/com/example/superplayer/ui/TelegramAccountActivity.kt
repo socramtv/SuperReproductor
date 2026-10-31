@@ -1264,7 +1264,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private val reHyphenYear = Regex("(?<=\\p{L})[-_.]((?:19|20)\\d{2})\\b")
 
     private fun cleanName(raw: String): String {
-        var t = MovieInfo.stripGenres(raw.replace(reEmoji, " ").replace(reTagBracket, " ").replace(reSizeParen, " ").replace(reExtAny, " "))
+        var t = MovieInfo.stripGenres(raw.replace(reEmoji, " ").replace(reTagBracket, " ").replace(reEmptyBr, " ").replace(reSizeParen, " ").replace(reExtAny, " "))
             .replace(reSpaces, " ").trim()
         t = t.replace(reLeadQuality, "")
         // «Sabrina_y_sus_amores-1995»: sin espacios es un nombre de archivo, no un título.
@@ -1355,6 +1355,9 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun isRarPart(m: TgMessage) =
         m.kind == "document" && m.size > 0 && m.fileId != null && RarVolumes.isRar(m.fileName) && !isListMsg(m)
 
+    /** Paréntesis o corchetes vacíos que quedan al quitar etiquetas: «Serie 1x02 ( )», «Serie [ ]». */
+    private val reEmptyBr = Regex("\\(\\s*\\)|\\[\\s*\\]")
+
     private val reRarNoise = Regex(
         "(?i)\\b(web\\s*dl|webrip|blu\\s*ray|brrip|bdrip|hdtv|dvdrip|remux|uhd|hdr10|hdr|dolby\\s*vision|dolby|atmos|" +
             "4k|2160p|1080p|720p|480p|x264|x265|h\\s*264|h\\s*265|hevc|aac|ac3|eac3|dts|ddp?\\d?|5\\s*1|7\\s*1|rar)\\b"
@@ -1363,7 +1366,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     /** Título legible de un vídeo en RAR: nombre del archivo sin «.partN.rar», sin guiones bajos ni etiquetas de calidad (WEB-DL, 4K, HDR…). */
     private fun rarTitle(m: TgMessage): String {
         val base = RarVolumes.baseName(m.fileName.orEmpty()).replace('_', ' ').replace('.', ' ').replace('-', ' ')
-        return base.replace(reRarNoise, " ").replace(Regex("[+]+"), " ").replace(Regex("\\s+"), " ").trim()
+        return base.replace(reRarNoise, " ").replace(reEmptyBr, " ").replace(Regex("[+]+"), " ").replace(Regex("\\s+"), " ").trim()
     }
 
     /** Primera línea con texto (sin enlaces) o, si no hay, el nombre del archivo. */
@@ -1389,14 +1392,18 @@ class TelegramAccountActivity : AppCompatActivity() {
         fun findImage(k: String): TgMessage? = imageByName[k] ?: imageNoYear[noYear(k)]?.takeIf { noYear(k).length >= 2 }
         val groups = LinkedHashMap<String, MutableList<TgMessage>>()
         val groupName = HashMap<String, String>() // clave del grupo -> nombre para buscar en TMDb
+        val rarEp = HashMap<Long, EpInfo>() // partes RAR cuyo nombre es un capítulo de serie
         for (m in source) {
             val rar = isRarPart(m)
             if (!isVideoMsg(m) && !rar) continue
             val ep = if (rar) null else parseEpisode(titleOf(m))
-            val base = if (rar) nameKey(rarTitle(m)) else if (ep != null) nameKey(ep.series) else nameKey(titleOf(m))
+            val rep = if (rar) parseEpisode(rarTitle(m)) else null // capítulo suelto en RAR: «Serie 1x07»
+            if (rep != null) rarEp[m.messageId] = rep
+            val base = if (rep != null) nameKey(rep.series) else if (rar) nameKey(rarTitle(m)) else if (ep != null) nameKey(ep.series) else nameKey(titleOf(m))
             val k = if (base.length >= 2) (if (rar) "r:$base" else if (ep != null) "s:$base" else base) else "id${m.messageId}"
             groups.getOrPut(k) { ArrayList() }.add(m)
             if (ep != null) groupName.putIfAbsent(k, ep.series)
+            if (rep != null) groupName.putIfAbsent(k, rep.series)
         }
         val pairedByLeader = HashMap<Long, TgMessage>() // id del vídeo principal -> su imagen
         val usedImages = HashSet<Long>()
@@ -1508,6 +1515,27 @@ class TelegramAccountActivity : AppCompatActivity() {
                 if (list.isNotEmpty() && list[0].messageId != m.messageId) continue // ya salió con su grupo
                 val isSeries = k != null && k.startsWith("s:")
                 val isRarGroup = isRarPart(m)
+                if (isRarGroup && list.any { rarEp.containsKey(it.messageId) }) {
+                    // Serie con capítulos en RAR: una sola ficha; al pulsar se elige el capítulo (cada uno con sus partes).
+                    val eps = list.groupBy { (rarEp[it.messageId]?.season ?: 0) * 1000 + (rarEp[it.messageId]?.episode ?: 0) }
+                        .toSortedMap().values.map { g -> g.sortedBy { RarVolumes.index(it.fileName.orEmpty()) } }
+                    val name = (k?.let { groupName[it] } ?: rarTitle(list[0])).ifEmpty { list[0].fileName.orEmpty() }
+                    val rimg = pairedByLeader[m.messageId]
+                    val rthumb = rimg?.thumbId?.takeIf { it != 0 } ?: 0
+                    val label = { g: List<TgMessage> ->
+                        val e = rarEp[g[0].messageId]
+                        (if (e != null) "${e.season}x${"%02d".format(e.episode)}" else rarTitle(g[0])) + (if (g.size > 1) "  (${g.size} partes)" else "")
+                    }
+                    items.add(MediaItem(key = "${m.messageId}:rar", select = list, caption = name, meta = date, thumbFileId = rthumb,
+                        badge = "▶ RAR · ${eps.size} cap.", messageId = m.messageId,
+                        query = name.takeIf { it.length >= 2 }.orEmpty(), options = list, pairedImage = rimg != null,
+                        onLong = { onMessageLong(list[0]) }) {
+                        if (eps.size == 1) playRar(eps[0][0])
+                        else AlertDialog.Builder(this).setTitle(name)
+                            .setItems(eps.map { label(it) }.toTypedArray()) { _, i -> playRar(eps[i][0]) }.show()
+                    })
+                    continue
+                }
                 if (isRarGroup) {
                     val parts = list.sortedBy { RarVolumes.index(it.fileName.orEmpty()) }
                     val first = parts.first()
