@@ -553,7 +553,6 @@ class PlayerActivity : AppCompatActivity() {
     private val skipIntroHandler = Handler(Looper.getMainLooper())
     private var skipIntroShown = false
     private var skipIntroUrl: String? = null   // capítulo para el que ya se ofreció el botón (una sola vez)
-    private var skipIntroHideAt = 0L
     private val skipIntroTick = object : Runnable {
         override fun run() {
             if (isFinishing || isDestroyed || !::binding.isInitialized) return
@@ -582,15 +581,14 @@ class PlayerActivity : AppCompatActivity() {
         val key = com.example.superplayer.telegram.TgResume.keyFor(url) ?: return
         if (com.example.superplayer.telegram.TgResume.seriesOf(key) == null) return
         if (skipIntroShown) {
-            // Se quita solo a los 5 s si no se pulsa.
-            if (SystemClock.elapsedRealtime() >= skipIntroHideAt) hideSkipIntro()
+            // Solo en los 5 primeros segundos del vídeo: pasados, se quita.
+            if (ctrl.currentPosition > SKIP_INTRO_SHOW_MS) hideSkipIntro()
             return
         }
         if (skipIntroUrl == url) return // ya se ofreció en este capítulo
-        if (!ctrl.isPlaying || ctrl.duration == C.TIME_UNSET || ctrl.duration < 10 * 60_000L || ctrl.currentPosition > SKIP_INTRO_WINDOW_MS) return
+        if (!ctrl.isPlaying || ctrl.duration == C.TIME_UNSET || ctrl.duration < 10 * 60_000L || ctrl.currentPosition > SKIP_INTRO_SHOW_MS) return
         skipIntroUrl = url
         skipIntroShown = true
-        skipIntroHideAt = SystemClock.elapsedRealtime() + 5_000L
         binding.skipIntroButton.visibility = View.VISIBLE
         binding.skipIntroButton.setOnClickListener {
             val c = controller ?: return@setOnClickListener
@@ -2218,7 +2216,7 @@ class PlayerActivity : AppCompatActivity() {
         // Menos que esto no se considera película/vídeo "para continuar" (clips, avances...).
         private const val MIN_VOD_DURATION_MS = 5 * 60_000L
         private const val SKIP_INTRO_MS = 85_000L
-        private const val SKIP_INTRO_WINDOW_MS = 10 * 60_000L
+        private const val SKIP_INTRO_SHOW_MS = 5_000L
         private val SLEEP_TIMER_MINUTES = listOf(30, 60, 90, 120)
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2
