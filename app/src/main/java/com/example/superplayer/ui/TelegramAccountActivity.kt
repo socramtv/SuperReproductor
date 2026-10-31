@@ -1276,21 +1276,44 @@ class TelegramAccountActivity : AppCompatActivity() {
         return t.trim(' ', '-', '_', '.')
     }
 
-    private val reEpisode = Regex("(?i)\\bS(\\d{1,2})\\s*E(\\d{1,3})\\b|\\b(\\d{1,2})\\s*[x×]\\s*(\\d{1,3})\\b|\\bT(?:emporada)?\\s*(\\d{1,2})\\s*[ .-]*(?:E|Cap(?:itulo|ítulo)?\\.?)\\s*(\\d{1,3})\\b")
+    // Sin \b: con «Serie_S01E02_Título» el guion bajo cuenta como letra y no habría límite.
+    private val reEpisode = Regex("(?i)(?<![\\p{L}\\d])S(\\d{1,2})\\s*E(\\d{1,3})(?!\\d)|(?<![\\p{L}\\d])(\\d{1,2})\\s*[x×]\\s*(\\d{1,3})(?!\\d)|(?<![\\p{L}\\d])T(?:emporada)?\\s*(\\d{1,2})\\s*[ .-]*(?:E|Cap(?:itulo|ítulo)?\\.?)\\s*(\\d{1,3})(?!\\d)")
+    /** «Temporada 2» / «Season 2» y «Cap.205» / «Episodio 5» por separado (p. ej. «Serie - Temporada 2 [Cap.205]»). */
+    private val reSeasonWord = Regex("(?i)(?<![\\p{L}\\d])(?:temporada|temp\\.?|season)\\s*(\\d{1,2})(?!\\d)")
+    private val reCapWord = Regex("(?i)(?<![\\p{L}\\d])(?:cap(?:[ií]tulo)?|ep(?:isodio|isode)?)\\.?\\s*(\\d{1,3})(?!\\d)")
     private val reYearWord = Regex("\\b(?:19|20)\\d{2}\\b")
 
     /** Capítulo de una serie: temporada, número y nombre de la serie ("Serie 1x02", "Serie S01E02", "Serie T1 E02"). */
     private class EpInfo(val season: Int, val episode: Int, val series: String)
 
     private fun parseEpisode(raw: String): EpInfo? {
-        var t = raw.trim().replace(reNumPrefix, "").replace(reExtSuffix, "")
-        val m = reEpisode.find(t) ?: return null
-        val g = m.groupValues
-        val season = (g[1].ifEmpty { g[3].ifEmpty { g[5] } }).toIntOrNull() ?: return null
-        val episode = (g[2].ifEmpty { g[4].ifEmpty { g[6] } }).toIntOrNull() ?: return null
-        var series = t.substring(0, m.range.first).trim(' ', '-', '_', '.', ':', '|')
-        if (series.length < 2) series = t.substring(m.range.last + 1).trim(' ', '-', '_', '.', ':', '|')
-        series = cleanName(series)
+        val t = raw.trim().replace(reNumPrefix, "").replace(reExtSuffix, "")
+        val seps = charArrayOf(' ', '-', '_', '.', ':', '|')
+        val m = reEpisode.find(t)
+        if (m != null) {
+            val g = m.groupValues
+            val season = (g[1].ifEmpty { g[3].ifEmpty { g[5] } }).toIntOrNull() ?: return null
+            val episode = (g[2].ifEmpty { g[4].ifEmpty { g[6] } }).toIntOrNull() ?: return null
+            var series = t.substring(0, m.range.first).trim(*seps)
+            if (series.length < 2) series = t.substring(m.range.last + 1).trim(*seps)
+            series = cleanName(series)
+            if (series.length < 2) return null
+            return EpInfo(season, episode, series)
+        }
+        val sw = reSeasonWord.find(t)
+        val cw = reCapWord.find(t)
+        if (sw == null && cw == null) return null
+        var season = sw?.groupValues?.get(1)?.toIntOrNull()
+        var episode = 0
+        if (cw != null) {
+            val d = cw.groupValues[1]
+            if (d.length == 3 && season == null) { season = d.substring(0, 1).toInt(); episode = d.substring(1).toInt() }
+            else if (d.length == 3 && d.startsWith(season.toString())) episode = d.substring(season.toString().length).toInt()
+            else episode = d.toIntOrNull() ?: 0
+        }
+        if (season == null) season = 1
+        val cut = listOfNotNull(sw?.range?.first, cw?.range?.first).min()
+        val series = cleanName(t.substring(0, cut).trim(*seps))
         if (series.length < 2) return null
         return EpInfo(season, episode, series)
     }

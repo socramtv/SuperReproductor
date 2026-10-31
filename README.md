@@ -1690,3 +1690,7 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Álbum en la galería
 - En la vista «solo imagen y vídeo», la foto que abre un álbum (seguida de pistas) sale como ficha «🎵 Álbum» con el título del álbum; al pulsarla abre el álbum directo.
+
+## Series: más formatos de capítulo
+- `Serie_S04E04_Episodio 4` (guiones bajos) ya se reconoce como capítulo.
+- `Serie - Temporada 2 [Cap.205]` (temporada y capítulo por separado; 205 = temporada 2, capítulo 05) también agrupa en una sola ficha por serie.
