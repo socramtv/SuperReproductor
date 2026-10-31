@@ -1448,6 +1448,15 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         val groupOf = HashMap<Long, String>()
         for ((k, list) in groups) for (v in list) groupOf[v.messageId] = k
+        // Fotos que abren un álbum de música (la siguiente cosa del chat son pistas de audio): una ficha «Álbum» que lo abre directo.
+        val albumImgs = HashSet<Long>()
+        run {
+            val asc = messages.distinctBy { it.chatId to it.messageId }.sortedBy { it.messageId }
+            for (i in asc.indices) {
+                val x = asc[i]
+                if (isImageMsg(x) && i + 1 < asc.size && isAudioMsg(asc[i + 1])) albumImgs.add(x.messageId)
+            }
+        }
         for (m in source) { // de más nuevo a más antiguo
             val caption = m.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
             val date = df.format(Date(m.date * 1000L))
@@ -1457,7 +1466,12 @@ class TelegramAccountActivity : AppCompatActivity() {
                 if (m.messageId in usedImages) continue
                 // Foto con un enlace de Telegram (p. ej. «Ver AQUÍ» de un bot): una sola ficha, la foto con el enlace; no se repite el enlace aparte.
                 val tgLink = m.links.firstOrNull { isTgLink(it) && !isTgMessageLink(it) }
-                if (tgLink != null) {
+                if (m.messageId in albumImgs && currentChat != null) {
+                    val alb = reAlbumTitle.find(m.text)?.groupValues?.get(1)?.trim().orEmpty()
+                    items.add(MediaItem(key = "${m.messageId}:img", select = listOf(m), caption = alb.ifEmpty { caption.ifEmpty { getString(R.string.music_chat_default) } }, meta = date, thumbFileId = m.thumbId,
+                        badge = getString(R.string.tgacc_badge_album), messageId = m.messageId,
+                        onLong = { onMessageLong(m) }) { openChatAlbum(m) })
+                } else if (tgLink != null) {
                     for (l in m.links) if (isTgLink(l) && !isTgMessageLink(l)) seenLinks.add(l)
                     items.add(MediaItem(key = "${m.messageId}:img", select = listOf(m), caption = caption.ifEmpty { m.fileName.orEmpty() }, meta = date, thumbFileId = m.thumbId,
                         badge = getString(R.string.tgacc_badge_link), messageId = m.messageId, // sin link=: eso cambiaría la foto y el título por los del bot
@@ -3510,6 +3524,13 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun onMessageLong(m: TgMessage) {
         val labels = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
+        if (currentChat != null && !searching && (isImageMsg(m) || isAudioMsg(m))) {
+            val chatAlbum = findChatAlbum(m)
+            if (chatAlbum != null && chatAlbum.tracks.isNotEmpty()) {
+                labels.add(getString(R.string.music_chat_open, chatAlbum.tracks.size))
+                actions.add { openChatAlbum(m) }
+            }
+        }
         // Listas: las opciones de siempre (cargar como lista principal / elegir un canal suelto).
         if (m.fileId != null && looksLikePlaylist(m) && !isImageMsg(m)) {
             labels.add(getString(R.string.tg_load_as_main))
@@ -4292,7 +4313,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         if (currentChat != null && !searching && (isImageMsg(m) || isAudioMsg(m))) {
             val chatAlbum = findChatAlbum(m)
-            if (chatAlbum != null && chatAlbum.tracks.size >= 2) {
+            if (chatAlbum != null && chatAlbum.tracks.isNotEmpty()) {
                 labels.add(getString(R.string.music_chat_open, chatAlbum.tracks.size))
                 actions.add { openChatAlbum(m) }
             }
@@ -4620,7 +4641,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private val reAlbumArtist = Regex("(?i)(?:artist|artista)\\s*:\\s*([^\\n]+)")
 
     private fun isAudioMsg(m: TgMessage): Boolean {
-        if (m.fileId == null || m.size <= 0) return false
+        if (m.fileId == null) return false
         if (m.kind == "audio") return true
         return m.kind == "document" && ((m.mime ?: "").startsWith("audio/") || reAudioExt.containsMatchIn(m.fileName.orEmpty()))
     }

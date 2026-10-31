@@ -876,6 +876,7 @@
     <string name="music_chat_open">🎵 Abrir como álbum (%1$d pistas)</string>
     <string name="music_chat_none">No encuentro las pistas de este álbum entre los mensajes cargados del chat. Desplázate para cargar más y vuelve a probar.</string>
     <string name="music_chat_loading">Preparando álbum…</string>
+    <string name="tgacc_badge_album">🎵 Álbum</string>
     <string name="music_chat_default">Álbum</string>
     <string name="player_ext_title">Formato no compatible</string>
     <string name="player_ext_msg">Este vídeo (por ejemplo un .avi) no se puede reproducir aquí. ¿Abrirlo con otra app como VLC o MX Player?</string>
