@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Corazón: enseña solo los canales marcados como favoritos (ver
+         EpgGridActivity.toggleFavoritesOnly). Va a la izquierda de la lupa. -->
+    <item
+        android:id="@+id/action_epg_favorites"
+        android:title="@string/epg_grid_favorites_only"
+        android:icon="@drawable/ic_heart_outline"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_search"
+        android:title="@string/action_search"
+        android:icon="@android:drawable/ic_menu_search"
+        app:showAsAction="collapseActionView|ifRoom"
+        app:actionViewClass="androidx.appcompat.widget.SearchView" />
+
+</menu>

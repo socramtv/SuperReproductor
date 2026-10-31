@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Insignia premium: solo visible con un código de acceso desbloqueado (ver MainActivity.onPrepareOptionsMenu). -->
+    <item
+        android:id="@+id/action_premium"
+        android:title="@string/premium_tag"
+        android:visible="false"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_search"
+        android:title="@string/action_search"
+        android:icon="@android:drawable/ic_menu_search"
+        app:showAsAction="collapseActionView|always"
+        app:actionViewClass="androidx.appcompat.widget.SearchView" />
+
+    <!-- Búsqueda global por voz (ver MainActivity.startVoiceSearch) -->
+    <item
+        android:id="@+id/action_voice"
+        android:title="@string/action_voice"
+        android:icon="@android:drawable/ic_btn_speak_now"
+        app:iconTint="@color/on_background"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_epg_grid"
+        android:title="@string/action_epg_grid"
+        android:icon="@android:drawable/ic_menu_agenda"
+        app:showAsAction="always" />
+
+    <!-- Icono/título reales los pone MainActivity.updateThemeMenuItem según
+         el modo actual (sol/luna); esto es solo el valor inicial.
+         app:iconTint="@color/on_background": ic_sun.xml/ic_moon.xml llevan
+         su relleno en blanco fijo, que se perdería contra la barra blanca
+         del modo claro; el tintado de icono de menú se vuelve a aplicar
+         solo con cada icono que ponga updateThemeMenuItem (comportamiento
+         de AppCompat), así que basta con ponerlo aquí una vez. -->
+    <item
+        android:id="@+id/action_theme_toggle"
+        android:title="@string/action_switch_to_light"
+        android:icon="@drawable/ic_sun"
+        app:iconTint="@color/on_background"
+        app:showAsAction="always" />
+
+
+    <!-- Copia de seguridad (ver BackupManager): en el menú de los tres
+         puntos para no recargar la barra. -->
+    <!-- Mosaico de favoritos con lo que emiten ahora (ver NowLiveActivity) -->
+    <item
+        android:id="@+id/action_now_live"
+        android:title="@string/action_now_live"
+        app:showAsAction="never" />
+
+    <!-- Navegador web dentro de la app (ver ui/WebActivity) -->
+    <item
+        android:id="@+id/action_web"
+        android:title="@string/action_web"
+        app:showAsAction="never" />
+
+    <!-- Móvil como mando de la tele (ver ui/RemoteActivity) y ajustes de control remoto de esta pantalla (ver remote/RemoteServer) -->
+    <item
+        android:id="@+id/action_remote_control"
+        android:title="@string/action_remote_control"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_remote_settings"
+        android:title="@string/action_remote_settings"
+        app:showAsAction="never" />
+
+    <!-- Cine: carátulas y sinopsis de las películas (ver ui/CineActivity) -->
+
+    <!-- Perfiles (ver data/Profiles); el título lleva el perfil activo (lo pone MainActivity) -->
+    <item
+        android:id="@+id/action_profiles"
+        android:title="@string/action_profiles"
+        app:showAsAction="never" />
+
+    <!-- Avisos cuando la guía trae un programa o serie (ver reminder/ProgramAlerts) -->
+    <item
+        android:id="@+id/action_program_alerts"
+        android:title="@string/action_program_alerts"
+        app:showAsAction="never" />
+
+    <!-- Pausa en directo: cuántos minutos se guardan (ver player/TimeShiftSession) -->
+    <item
+        android:id="@+id/action_timeshift"
+        android:title="@string/timeshift_menu_item"
+        app:showAsAction="never" />
+
+    <!-- Avisos de goles y eventos de tus equipos (ver sports/GoalAlerts) -->
+    <item
+        android:id="@+id/action_goal_alerts"
+        android:title="@string/action_goal_alerts"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_backup_export"
+        android:title="@string/action_backup_export"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_backup_import"
+        android:title="@string/action_backup_import"
+        app:showAsAction="never" />
+
+    <!-- Bloqueo con PIN gestionado a distancia (ver data/AccessControl) -->
+    <item
+        android:id="@+id/action_access"
+        android:title="@string/action_access"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_access_log"
+        android:title="@string/action_access_log"
+        app:showAsAction="never" />
+
+    <!-- Elegir un archivo JSON/M3U del propio dispositivo (antes era un botón de la pantalla principal) -->
+    <item
+        android:id="@+id/action_load_file"
+        android:title="@string/action_load_file_menu"
+        app:showAsAction="never" />
+
+</menu>

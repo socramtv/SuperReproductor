@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de la ventana "Ordenar categorías" (ver MainActivity.
+     showCategoryOrderDialog): nombre + flechas ▲ ▼ (valen con el mando de
+     la TV; en el móvil además se puede arrastrar la fila entera). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="16dp"
+    android:paddingEnd="4dp">
+
+    <TextView
+        android:id="@+id/orderName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:paddingVertical="12dp"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="15sp"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/orderUp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:gravity="center"
+        android:text="▲"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="18sp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:id="@+id/orderDown"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:gravity="center"
+        android:text="▼"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="18sp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="@null" />
+
+</LinearLayout>

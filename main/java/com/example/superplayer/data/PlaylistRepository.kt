@@ -1,0 +1,438 @@
+package com.example.superplayer.data
+
+import android.content.Context
+import android.net.Uri
+import com.example.superplayer.model.Category
+import com.example.superplayer.model.DrmInfo
+import com.example.superplayer.model.PlaylistData
+import com.example.superplayer.model.Stream
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Lee y valida la playlist, ya sea desde un Uri elegido por el usuario
+ * (Storage Access Framework) o desde los assets de la app (lista de
+ * ejemplo usada la primera vez que se abre la app). Admite JSON (ver el
+ * comentario en model/Playlist.kt para el detalle de campos/alias) y
+ * listas M3U/M3U8 extendidas (líneas #EXTM3U / #EXTINF).
+ */
+object PlaylistRepository {
+
+    fun loadFromUri(context: Context, uri: Uri): PlaylistData {
+        val text = context.contentResolver.openInputStream(uri)?.use { input ->
+            input.bufferedReader().readText()
+        } ?: throw IllegalStateException("No se pudo abrir el archivo seleccionado")
+        return parse(text)
+    }
+
+    fun loadFromAssets(context: Context, fileName: String): PlaylistData {
+        val text = context.assets.open(fileName).use { input ->
+            input.bufferedReader().readText()
+        }
+        return parse(text)
+    }
+
+    /** Descarga y lee una playlist alojada en una URL (p. ej. un raw de GitHub). */
+    fun loadFromUrl(urlString: String): PlaylistData = parse(downloadRaw(urlString))
+
+    /**
+     * Solo la parte de descarga (sin analizar), para quien necesite quedarse
+     * también con el texto crudo (p. ej. MainActivity.loadFromRemoteUrl, que
+     * lo guarda en PlaylistCache para poder abrirlo sin red más adelante).
+     */
+    fun downloadRaw(urlString: String): String {
+        val connection = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
+        return try {
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 10_000
+            connection.inputStream.bufferedReader().readText()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    fun parse(text: String): PlaylistData = parseDepth(text, 0)
+
+    /** [depth]: cuántas listas «anfitrión» (enlaces a otras listas dentro de una .w3u) se han abierto ya para llegar aquí. */
+    private fun parseDepth(text: String, depth: Int): PlaylistData {
+        val trimmed = text.removePrefix("\uFEFF").trim()
+        return if (trimmed.startsWith("#EXTM3U", ignoreCase = true)) {
+            parseM3u(trimmed)
+        } else {
+            parseJson(trimmed, depth)
+        }
+    }
+
+    // ---------- JSON ----------
+
+    private fun parseJson(trimmed: String, depth: Int = 0): PlaylistData {
+        val isArrayRoot = trimmed.startsWith("[")
+        val rootObject: JSONObject? = if (isArrayRoot) null else JSONObject(trimmed)
+
+        // Listas públicas tipo tdtchannels.com (raíz objeto con "countries"):
+        // esquema totalmente distinto, con su propia función dedicada.
+        val countriesJson = rootObject?.optJSONArray("countries")
+        if (rootObject != null && countriesJson != null) {
+            return parseTdtChannelsJson(rootObject, countriesJson)
+        }
+
+        // Listas con raíz "groups" -> "stations" (otro formato público
+        // distinto, con sus propios nombres de campo): esquema propio,
+        // función dedicada (ver parseGroupsStationsJson).
+        val groupsJson = rootObject?.optJSONArray("groups")
+        if (rootObject != null && (groupsJson != null || rootObject.optJSONArray("stations") != null)) {
+            return parseGroupsStationsJson(rootObject, depth)
+        }
+
+        val categoriesJson: JSONArray = if (isArrayRoot) {
+            JSONArray(trimmed)
+        } else {
+            rootObject?.optJSONArray("categories") ?: JSONArray()
+        }
+
+        // EPG (opcional): solo disponible cuando la raíz es un objeto (el
+        // formato en array no tiene un sitio a nivel de raíz para ponerlo).
+        val epgUrl = rootObject?.let { root ->
+            root.optString("epgUrl")
+                .ifBlank { root.optString("epg_url") }
+                .ifBlank { root.optString("url-tvg") }
+                .ifBlank { root.optString("xmltv") }
+                .takeIf { it.isNotBlank() }
+        }
+
+        val categories = ArrayList<Category>(categoriesJson.length())
+
+        for (i in 0 until categoriesJson.length()) {
+            val catObj = categoriesJson.optJSONObject(i) ?: continue
+            val categoryName = catObj.optString("name").ifBlank { "Sin categoría" }
+            val streamsJson = catObj.optJSONArray("streams")
+                ?: catObj.optJSONArray("samples")
+                ?: JSONArray()
+
+            val streams = ArrayList<Stream>(streamsJson.length())
+
+            for (j in 0 until streamsJson.length()) {
+                val sObj = streamsJson.optJSONObject(j) ?: continue
+                val url = sObj.optString("url").ifBlank { sObj.optString("uri") }
+                if (url.isBlank()) continue // un canal sin URL no sirve de nada
+
+                val typeRaw = sObj.optString("type").ifBlank { sObj.optString("extension") }
+                val icon = sObj.optString("icon").ifBlank { sObj.optString("image") }
+                    .ifBlank { sObj.optString("icono") }.takeIf { it.isNotBlank() }
+                val tokenUrl = sObj.optString("token").takeIf { it.isNotBlank() }
+                val tvgId = sObj.optString("tvgId").ifBlank { sObj.optString("tvg_id") }
+                    .ifBlank { sObj.optString("tvg-id") }.ifBlank { sObj.optString("epgId") }
+                    .takeIf { it.isNotBlank() }
+
+                streams.add(
+                    Stream(
+                        name = sObj.optString("name").ifBlank { "Sin nombre" },
+                        type = typeRaw.ifBlank { "HLS" },
+                        url = url,
+                        icon = icon,
+                        category = categoryName,
+                        headers = sObj.optJSONObject("headers")?.toStringMap() ?: emptyMap(),
+                        drm = buildDrmInfo(sObj),
+                        tokenUrl = tokenUrl,
+                        tvgId = tvgId
+                    )
+                )
+            }
+            categories.add(Category(categoryName, streams))
+        }
+        return PlaylistData(categories, epgUrl)
+    }
+
+    // ---------- Listas públicas tipo tdtchannels.com ----------
+
+    /**
+     * Formato de listas públicas como las que sirve tdtchannels.com en su
+     * carpeta "lists" (radio.json, y probablemente otras del mismo estilo):
+     * raíz objeto con "countries" -> "ambits" (categorías) -> "channels", y
+     * cada canal con "logo", "epg_id" y "options" (variantes de stream; nos
+     * quedamos con la primera). El EPG, si lo trae, viene en "epg": {"json":
+     * "URL"} y apunta a un JSON propio de tdtchannels (no un XMLTV) —
+     * EpgRepository detecta solo cuál de los dos formatos es.
+     */
+    private fun parseTdtChannelsJson(root: JSONObject, countriesJson: JSONArray): PlaylistData {
+        val epgUrl = root.optJSONObject("epg")?.optStringOrNull("json")
+
+        val singleCountry = countriesJson.length() <= 1
+        val categories = ArrayList<Category>()
+
+        for (i in 0 until countriesJson.length()) {
+            val countryObj = countriesJson.optJSONObject(i) ?: continue
+            val countryName = countryObj.optString("name").ifBlank { "Sin país" }
+            val ambitsJson = countryObj.optJSONArray("ambits") ?: JSONArray()
+
+            for (j in 0 until ambitsJson.length()) {
+                val ambitObj = ambitsJson.optJSONObject(j) ?: continue
+                val ambitName = ambitObj.optString("name").ifBlank { "Sin categoría" }
+                val categoryName = if (singleCountry) ambitName else "$countryName - $ambitName"
+                val channelsJson = ambitObj.optJSONArray("channels") ?: JSONArray()
+
+                val streams = ArrayList<Stream>(channelsJson.length())
+                for (k in 0 until channelsJson.length()) {
+                    val chObj = channelsJson.optJSONObject(k) ?: continue
+                    val stream = buildTdtChannelsStream(chObj, categoryName)
+                    if (stream != null) streams.add(stream)
+                }
+                if (streams.isNotEmpty()) {
+                    categories.add(Category(categoryName, streams))
+                }
+            }
+        }
+        return PlaylistData(categories, epgUrl)
+    }
+
+    /**
+     * Un canal trae varias "options" (calidades/CDNs alternativos). Nos
+     * quedamos con la primera que se pueda reproducir dentro de la app
+     * (HLS/DASH/progresivo); si TODAS son de YouTube (format "youtube"),
+     * usamos esa igualmente pero marcada como tipo "YOUTUBE", que
+     * PlayerActivity abre en la app de YouTube en vez de intentar
+     * reproducirla con ExoPlayer (un enlace de YouTube no es un stream
+     * directo que ExoPlayer pueda entender).
+     *
+     * Si el canal trae "referer", se manda como cabecera HTTP Referer: algunos
+     * servidores exigen ese dato exacto y si no, rechazan el stream.
+     */
+    private fun buildTdtChannelsStream(chObj: JSONObject, categoryName: String): Stream? {
+        val optionsJson = chObj.optJSONArray("options") ?: return null
+
+        var chosenUrl: String? = null
+        var chosenType: String? = null
+        for (i in 0 until optionsJson.length()) {
+            val opt = optionsJson.optJSONObject(i) ?: continue
+            val url = opt.optStringOrNull("url") ?: continue
+            val type = tdtChannelsStreamType(opt.optStringOrNull("format").orEmpty())
+            if (type != "YOUTUBE") {
+                chosenUrl = url
+                chosenType = type
+                break
+            }
+            if (chosenUrl == null) {
+                // La guardamos como respaldo por si ninguna opción posterior es reproducible.
+                chosenUrl = url
+                chosenType = type
+            }
+        }
+        val url = chosenUrl ?: return null
+        val type = chosenType ?: return null
+
+        val headers = chObj.optStringOrNull("referer")
+            ?.let { mapOf("Referer" to it) }
+            ?: emptyMap()
+
+        return Stream(
+            name = chObj.optString("name").ifBlank { "Sin nombre" },
+            type = type,
+            url = url,
+            icon = chObj.optStringOrNull("logo"),
+            category = categoryName,
+            headers = headers,
+            tvgId = chObj.optStringOrNull("epg_id")
+        )
+    }
+
+    private fun tdtChannelsStreamType(format: String): String = when {
+        format.contains("youtube", ignoreCase = true) -> "YOUTUBE"
+        format.contains("hls", ignoreCase = true) ||
+            format.contains("m3u8", ignoreCase = true) -> "HLS"
+        format.contains("dash", ignoreCase = true) ||
+            format.contains("mpd", ignoreCase = true) -> "DASH"
+        else -> "PROGRESSIVE"
+    }
+
+    // ---------- Listas con raíz "groups" -> "stations" ----------
+
+    /**
+     * Otro formato público de lista, con sus propios nombres de campo: raíz
+     * objeto con "groups" (cada uno una categoría, con "name" y "stations"),
+     * y cada "station" con "name", "image" y "url". Si trae "referer" y/o
+     * "userAgent" (sueltos, no anidados en un "headers": {...} como en el
+     * formato de más arriba), se mandan como cabeceras HTTP Referer/
+     * User-Agent -algunos servidores las exigen para no rechazar el
+     * stream-, igual que ya se hace con el "referer" de las listas
+     * tdtchannels. El "type" no viene declarado en este formato, así que se
+     * adivina de la extensión de la URL, igual que en M3U.
+     *
+     * Ojo: algunas listas de este estilo incluyen canales cuyo "url" no es
+     * el stream en sí, sino una página web que primero hay que abrir para
+     * encontrar dentro el vídeo real. Esta app solo reproduce streams
+     * directos (DASH/HLS/progresivo): esos canales se cargan igual en la
+     * lista, pero no arrancarán al tocarlos.
+     */
+    private fun parseGroupsStationsJson(root: JSONObject, depth: Int = 0): PlaylistData {
+        // Formato .w3u (Wiseplay): "groups" (que pueden anidar más "groups") con sus "stations", y también
+        // "stations" sueltas en la raíz. Una estación con "isHost": true no es un canal sino el enlace a otra lista:
+        // se abre y se mezcla (hasta 2 niveles y 10 enlaces, para no engancharse con listas que se enlazan en círculo).
+        val byName = LinkedHashMap<String, MutableList<Stream>>()
+        var hostsOpened = 0
+
+        fun add(categoryName: String, st: Stream) {
+            byName.getOrPut(categoryName) { ArrayList() }.add(st)
+        }
+
+        fun addStations(stationsJson: JSONArray?, categoryName: String) {
+            if (stationsJson == null) return
+            for (j in 0 until stationsJson.length()) {
+                val stObj = stationsJson.optJSONObject(j) ?: continue
+                val url = stObj.optStringOrNull("url") ?: continue
+                val isHost = stObj.optBoolean("isHost", false) ||
+                    url.substringBefore('?').lowercase().let { it.endsWith(".w3u") || it.endsWith(".json") }
+                if (isHost) {
+                    if (depth < 2 && hostsOpened < 10 && (url.startsWith("http://", true) || url.startsWith("https://", true))) {
+                        hostsOpened++
+                        try {
+                            val sub = parseDepth(downloadRaw(url), depth + 1)
+                            for (c in sub.categories) for (x in c.streams) add(c.name, x)
+                        } catch (e: Exception) {
+                            // enlace roto o lento: se salta sin romper el resto de la lista
+                        }
+                    }
+                    continue
+                }
+
+                val headers = LinkedHashMap<String, String>()
+                stObj.optStringOrNull("referer")?.let { headers["Referer"] = it }
+                stObj.optStringOrNull("userAgent")?.let { headers["User-Agent"] = it }
+                stObj.optStringOrNull("origin")?.let { headers["Origin"] = it }
+
+                add(
+                    categoryName,
+                    Stream(
+                        name = stObj.optString("name").ifBlank { "Sin nombre" },
+                        type = stObj.optStringOrNull("type")?.uppercase()?.takeIf { it == "HLS" || it == "DASH" || it == "PROGRESSIVE" }
+                            ?: guessTypeFromUrl(url),
+                        url = url,
+                        icon = stObj.optStringOrNull("image") ?: stObj.optStringOrNull("logo"),
+                        category = categoryName,
+                        headers = headers,
+                        drm = buildDrmInfo(stObj)
+                    )
+                )
+            }
+        }
+
+        fun walk(groupObj: JSONObject, parent: String) {
+            val name = groupObj.optString("name").ifBlank { "Sin categoría" }
+            val full = if (parent.isEmpty()) name else "$parent › $name"
+            addStations(groupObj.optJSONArray("stations"), full)
+            val sub = groupObj.optJSONArray("groups")
+            if (sub != null) for (i in 0 until sub.length()) sub.optJSONObject(i)?.let { walk(it, full) }
+        }
+
+        addStations(root.optJSONArray("stations"), root.optString("name").ifBlank { "Sin categoría" })
+        val groupsJson = root.optJSONArray("groups")
+        if (groupsJson != null) for (i in 0 until groupsJson.length()) groupsJson.optJSONObject(i)?.let { walk(it, "") }
+
+        val categories = byName.filter { it.value.isNotEmpty() }.map { Category(it.key, it.value) }
+        val epgUrl = root.optStringOrNull("epgUrl") ?: root.optStringOrNull("epg_url") ?: (root.opt("epg") as? String)?.takeIf { it.startsWith("http") }
+        return PlaylistData(categories, epgUrl = epgUrl)
+    }
+
+    /** Sin campo "type"/"extension" explícito, se adivina de la URL (igual que en M3U). */
+    private fun guessTypeFromUrl(url: String): String = when {
+        url.contains(".m3u8", ignoreCase = true) -> "HLS"
+        url.contains(".mpd", ignoreCase = true) -> "DASH"
+        else -> "PROGRESSIVE"
+    }
+
+    /**
+     * Como optString(key), pero distingue "no viene" o "viene null explícito"
+     * (-> null de Kotlin) de "viene un texto vacío" (-> ""); optString a
+     * secas convierte un JSON null en el texto literal "null", lo que
+     * rompería los `.takeIf { it.isNotBlank() }` de más arriba.
+     */
+    private fun JSONObject.optStringOrNull(key: String): String? {
+        if (isNull(key)) return null
+        return optString(key).takeIf { it.isNotBlank() }
+    }
+
+    private fun buildDrmInfo(sObj: JSONObject): DrmInfo? {
+        val drmScheme = sObj.optString("drm_scheme")
+        // Un esquema distinto de clearkey (widevine/playready...) necesita su propio
+        // servidor de licencias; no está implementado, así que se ignora sin romper nada.
+        if (drmScheme.isNotBlank() && !drmScheme.equals("clearkey", ignoreCase = true)) return null
+
+        val licenseJson = sObj.optString("license_key").takeIf { it.isNotBlank() }
+
+        val drmObj = sObj.optJSONObject("drm")
+        val keyId = drmObj?.optString("keyId")?.takeIf { it.isNotBlank() }
+            ?: sObj.optString("kid").takeIf { it.isNotBlank() }
+        val key = drmObj?.optString("key")?.takeIf { it.isNotBlank() }
+            ?: sObj.optString("key").takeIf { it.isNotBlank() }
+
+        if (licenseJson == null && (keyId == null || key == null)) return null
+        return DrmInfo(keyId = keyId, key = key, rawLicenseJson = licenseJson)
+    }
+
+    private fun JSONObject.toStringMap(): Map<String, String> {
+        val map = LinkedHashMap<String, String>()
+        val keysIterator = keys()
+        while (keysIterator.hasNext()) {
+            val k = keysIterator.next()
+            map[k] = optString(k)
+        }
+        return map
+    }
+
+    // ---------- M3U / M3U8 extendido ----------
+
+    private fun parseM3u(text: String): PlaylistData {
+        var pendingName: String? = null
+        var pendingLogo: String? = null
+        var pendingGroup: String = "Sin categoría"
+        var pendingTvgId: String? = null
+        var epgUrl: String? = null
+        val byCategory = LinkedHashMap<String, MutableList<Stream>>()
+
+        for (rawLine in text.lineSequence()) {
+            val line = rawLine.trim()
+            if (line.isEmpty()) continue
+
+            if (line.startsWith("#EXTM3U", ignoreCase = true)) {
+                // "url-tvg"/"x-tvg-url": la guía EPG (XMLTV) de toda la lista.
+                // Si trae varias separadas por comas, nos quedamos con la primera.
+                epgUrl = (extractAttr(line, "url-tvg") ?: extractAttr(line, "x-tvg-url"))
+                    ?.substringBefore(',')?.trim()?.takeIf { it.isNotBlank() }
+                continue
+            }
+
+            if (line.startsWith("#EXTINF", ignoreCase = true)) {
+                val commaIndex = line.indexOf(',')
+                val attrsPart = if (commaIndex >= 0) line.substring(0, commaIndex) else line
+                val titlePart = if (commaIndex >= 0) line.substring(commaIndex + 1).trim() else ""
+
+                pendingLogo = extractAttr(attrsPart, "tvg-logo")
+                pendingTvgId = extractAttr(attrsPart, "tvg-id")?.takeIf { it.isNotBlank() }
+                pendingGroup = extractAttr(attrsPart, "group-title")?.takeIf { it.isNotBlank() }
+                    ?: "Sin categoría"
+                pendingName = (extractAttr(attrsPart, "tvg-name")?.takeIf { it.isNotBlank() }
+                    ?: titlePart).ifBlank { "Sin nombre" }
+            } else if (!line.startsWith("#")) {
+                // Cualquier línea que no sea una etiqueta "#..." es la URL del canal.
+                val stream = Stream(
+                    name = pendingName ?: "Sin nombre",
+                    type = guessTypeFromUrl(line),
+                    url = line,
+                    icon = pendingLogo,
+                    category = pendingGroup,
+                    tvgId = pendingTvgId
+                )
+                byCategory.getOrPut(pendingGroup) { mutableListOf() }.add(stream)
+                pendingName = null
+                pendingLogo = null
+                pendingTvgId = null
+            }
+            // Otras etiquetas (#EXTGRP, #EXTVLCOPT, #EXT-X-..., comentarios) se ignoran.
+        }
+
+        val categories = byCategory.map { (name, streams) -> Category(name, streams) }
+        return PlaylistData(categories, epgUrl)
+    }
+
+    private fun extractAttr(source: String, key: String): String? =
+        Regex("$key=\"([^\"]*)\"").find(source)?.groupValues?.get(1)
+}

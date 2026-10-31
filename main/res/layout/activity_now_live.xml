@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ahora en directo (ver NowLiveActivity): vista previa de un canal arriba y, debajo, el mosaico de tus favoritos con lo que emiten ahora -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background_dark">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        android:background="@color/surface_dark"
+        app:titleTextColor="@color/on_background" />
+
+    <FrameLayout
+        android:id="@+id/previewBox"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:background="@android:color/black">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/previewPlayer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:use_controller="false"
+            app:show_buffering="when_playing" />
+
+        <TextView
+            android:id="@+id/previewHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:padding="16dp"
+            android:gravity="center"
+            android:text="@string/nowlive_hint"
+            android:textColor="@color/player_text_muted"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/previewName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="8dp"
+            android:background="#99000000"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/player_text"
+            android:textSize="13sp"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:padding="6dp" />
+
+        <TextView
+            android:id="@+id/emptyView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:padding="32dp"
+            android:gravity="center"
+            android:text="@string/nowlive_empty"
+            android:textColor="@color/on_surface_muted"
+            android:visibility="gone" />
+    </FrameLayout>
+
+</LinearLayout>

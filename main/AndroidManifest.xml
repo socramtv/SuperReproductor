@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Móvil como mando de la tele: encontrar y anunciar la app en la red local (ver remote/) -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Recordatorios de la guía EPG (ver reminder/ReminderManager.kt) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+        leanback + touchscreen required="false": la app funciona igual sin
+        esto (por eso al instalar el APK a mano ya "funciona perfecto"),
+        pero son las dos etiquetas con las que Android/Google Play saben que
+        una app está pensada también para TV (sin pantalla táctil) y no solo
+        para móvil. Sin la de touchscreen, por defecto se asume que toda app
+        la necesita. No son la causa de que no aparezca en el menú
+        principal de la TV (eso es la categoría LEANBACK_LAUNCHER, más
+        abajo, en MainActivity) pero es lo correcto declararlas en una app
+        pensada para los dos (y hace falta si algún día se publica en la
+        Play Store para TV).
+    -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <!-- Fila "Continuar viendo" del inicio de Android TV (ver tv/WatchNextSync); si el sistema no la concede, solo no sale la fila -->
+    <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <queries>
+        <package android:name="ch.protonvpn.android" />
+        <package android:name="com.cloudflare.onedotonedotonedotone" />
+        <package android:name="com.wireguard.android" />
+        <package android:name="com.windscribe.vpn" />
+    </queries>
+
+    <application
+        android:name=".SuperPlayerApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SuperReproductor"
+        android:usesCleartextTraffic="true">
+
+        <!--
+            usesCleartextTraffic="true": pensado para poder reproducir streams
+            propios/autohospedados en http:// dentro de tu red local. Si vas a
+            publicar la app o solo usas https, puedes ponerlo en "false" o,
+            mejor, usar un network_security_config.xml con dominios concretos.
+        -->
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <!--
+                category.LEANBACK_LAUNCHER: es la que mira Android TV para
+                decidir qué apps poner en la fila de la pantalla de inicio;
+                sin ella, la app se instala y funciona bien (por eso se
+                podía abrir desde Ajustes > Aplicaciones), pero el launcher
+                de la TV ni se entera de que existe, porque solo busca
+                actividades con esta categoría, no con LAUNCHER (esa es la
+                que usan los launchers normales de móvil/tablet). Se dejan
+                las dos en el mismo filtro para que la app siga funcionando
+                igual en móvil/tablet.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <!-- Órdenes del asistente de voz: «Ok Google, pon La 1 en Socram TV» (ver MainActivity.handleAssistantIntent) -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.StreamListActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Visor de listas de Telegram (ver TelegramListActivity) -->
+        <activity
+            android:name=".ui.TelegramListActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Ahora en directo: mosaico de favoritos con vista previa (ver NowLiveActivity) -->
+        <activity
+            android:name=".ui.NowLiveActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Móvil como mando de la tele (ver RemoteActivity) -->
+        <activity
+            android:name=".ui.RemoteActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Telegram con la cuenta del usuario, TDLib (ver TelegramAccountActivity) -->
+        <activity
+            android:name=".ui.TelegramAccountActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Navegador web con marcadores y detección de vídeos (ver WebActivity) -->
+        <activity
+            android:name=".ui.WebActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
+
+        <!-- Ver directos de Telegram dentro de la app (ver LiveActivity) -->
+        <activity
+            android:name=".ui.LiveActivity"
+            android:exported="false"
+            android:screenOrientation="fullSensor"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
+
+        <!-- Cine: carátulas y sinopsis (ver CineActivity) -->
+        <activity
+            android:name=".ui.CineActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
+            android:name=".ui.EpgGridActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!--
+            supportsPictureInPicture + resizeableActivity: dejan entrar en
+            modo imagen-en-imagen (ver maybeEnterPictureInPicture en
+            PlayerActivity). configChanges añade screenLayout y
+            smallestScreenSize -recomendado por la propia documentación de
+            Android para actividades con PiP- para que, al entrar/salir o
+            cambiar el tamaño de la ventana flotante, la actividad no se
+            destruya y se vuelva a crear (lo que cortaría el vídeo un
+            instante): sigue siendo la misma instancia, solo cambia de
+            tamaño.
+        -->
+        <activity
+            android:name=".player.PlayerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:screenOrientation="userLandscape"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.SuperReproductor.Player" />
+
+        <!--
+            Entrada de la fila "Continuar viendo" del inicio de Android TV
+            (ver tv/WatchNextSync): exportada porque la abre el inicio del
+            sistema, que es otra app; solo recibe un id y no hace nada más
+            que abrir el reproductor con un canal de "Continuar viendo".
+        -->
+        <activity
+            android:name=".tv.WatchNextActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SuperReproductor.Player"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <!-- Multivista: dos canales a la vez (ver MultiViewActivity) -->
+        <activity
+            android:name=".player.MultiViewActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.SuperReproductor.Player" />
+
+        <!-- Avisos de goles y eventos: la alarma que hace cada vuelta de comprobación (ver sports/GoalAlerts) -->
+        <receiver
+            android:name=".sports.GoalAlertReceiver"
+            android:exported="false" />
+
+        <!-- Aviso de un recordatorio de la guía EPG (lo dispara AlarmManager) -->
+        <receiver
+            android:name=".reminder.ReminderReceiver"
+            android:exported="false" />
+
+        <!-- Vuelve a programar los recordatorios tras reiniciar el móvil -->
+        <receiver
+            android:name=".reminder.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Widget de favoritos para la pantalla de inicio (ver widget/FavoritesWidgetProvider.kt) -->
+        <receiver
+            android:name=".widget.FavoritesWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/favorites_widget_info" />
+        </receiver>
+
+        <!-- Widget completo con pestañas y lista (ver widget/HomeWidgetProvider.kt) -->
+        <receiver
+            android:name=".widget.HomeWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.HomeWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!-- Pantalla invisible a la que apuntan las filas del widget (ver widget/WidgetClickActivity.kt) -->
+        <activity
+            android:name=".widget.WidgetClickActivity"
+            android:exported="false"
+            android:theme="@style/Theme.SuperReproductor.Player"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <activity
+            android:name=".CrashActivity"
+            android:exported="false" />
+
+        <!--
+            Mantiene la reproducción de radio (audio) activa en segundo
+            plano y en la pantalla de bloqueo, con controles de sistema
+            (notificación / lock screen). PlayerActivity solo controla esto
+            a través de un MediaController; el ExoPlayer real vive aquí.
+        -->
+        <activity
+            android:name=".ui.AccessLogActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode" />
+
+        <activity
+            android:name=".ui.MusicPlayerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode" />
+
+        <service
+            android:name=".player.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
+        <!--
+            Chromecast (ver CastOptionsProviderImpl/PlaybackService/
+            PlayerActivity.castButton): el framework de Cast localiza esta
+            clase por reflexión a partir de este meta-data; aquí SÍ hace
+            falta el nombre completo del paquete (quien lo lee es esta
+            librería, no el propio Android, así que no vale el punto inicial
+            que sí usan las Activity de arriba).
+        -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.example.superplayer.player.CastOptionsProviderImpl" />
+
+    </application>
+
+</manifest>

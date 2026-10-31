@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Marco de foco de una celda de la parrilla EPG (se pone como "foreground"
+    de la celda, ver EpgGridAdapter.buildCellView): con el mando de la TV es
+    la única pista de en qué programa estás. Sin foco es transparente.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#55FF6B4A" />
+            <stroke
+                android:width="3dp"
+                android:color="@color/primary" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+</selector>
