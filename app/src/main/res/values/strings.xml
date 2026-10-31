@@ -531,6 +531,9 @@
     <string name="player_next_text">Siguiente: %1$s\nEmpieza en %2$d s</string>
     <string name="tg_continue_label">Seguir viendo</string>
     <string name="tg_continue_remove">Quitar de «Seguir viendo»</string>
+    <string name="tg_intro_set">⏭ Duración de la intro: %1$d s</string>
+    <string name="tg_intro_title">Duración de la intro</string>
+    <string name="tg_intro_msg">Segundos que salta «Saltar intro» en esta serie.</string>
     <string name="player_skip_intro">⏭ Saltar intro</string>
     <string name="tg_continue_badge">⏯ %1$s / %2$s</string>
     <string name="player_next_now">Ver ya</string>

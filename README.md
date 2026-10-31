@@ -1705,3 +1705,7 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 ## Telegram: Seguir viendo y Saltar intro
 - **Seguir viendo:** los vídeos de Telegram (streaming) que dejas a medias se guardan con su posición (`TgResume`). Al abrirlos de nuevo se reanudan solos unos segundos antes, y en la pestaña Biblioteca (sin filtros) salen primero, con «⏯ pos / duración». Pulsación larga = quitar de la lista. Se quita solo al verlo casi entero. (No incluye los vídeos en RAR.)
 - **Saltar intro:** en vídeos de Telegram de más de 10 min, durante los primeros 5 min sale el botón «⏭ Saltar intro» (salta 85 s). En series recuerda dónde acabó la intro y en los siguientes capítulos salta directo a ese punto.
+
+## Saltar intro: ajustes
+- Solo en series (no en películas). El botón sale una sola vez por capítulo (al empezar) y se quita al pulsarlo o solo a los 5 s si no se pulsa.
+- La duración que salta es por serie (85 s por defecto): en la ficha de la serie, menú «⋯» → «Duración de la intro».

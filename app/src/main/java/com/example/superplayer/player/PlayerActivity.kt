@@ -552,49 +552,58 @@ class PlayerActivity : AppCompatActivity() {
 
     private val skipIntroHandler = Handler(Looper.getMainLooper())
     private var skipIntroShown = false
+    private var skipIntroUrl: String? = null   // capítulo para el que ya se ofreció el botón (una sola vez)
+    private var skipIntroHideAt = 0L
     private val skipIntroTick = object : Runnable {
         override fun run() {
             if (isFinishing || isDestroyed || !::binding.isInitialized) return
             updateSkipIntro()
-            skipIntroHandler.postDelayed(this, 1000)
+            skipIntroHandler.postDelayed(this, 500)
         }
     }
 
-    private fun skipIntroTarget(posMs: Long): Long {
-        val url = currentStream?.url ?: return posMs + SKIP_INTRO_MS
+    private fun skipIntroMs(): Long {
+        val url = currentStream?.url ?: return SKIP_INTRO_MS
         val series = com.example.superplayer.telegram.TgResume.keyFor(url)?.let { com.example.superplayer.telegram.TgResume.seriesOf(it) }
-        val saved = if (series != null) com.example.superplayer.telegram.TgResume.introEnd(this, series) else 0L
-        return if (saved > posMs + 5_000L) saved else posMs + SKIP_INTRO_MS
+        val sec = if (series != null) com.example.superplayer.telegram.TgResume.introSeconds(this, series)
+        else com.example.superplayer.telegram.TgResume.DEFAULT_INTRO_SECONDS
+        return sec * 1000L
+    }
+
+    private fun hideSkipIntro() {
+        skipIntroShown = false
+        binding.skipIntroButton.visibility = View.GONE
     }
 
     private fun updateSkipIntro() {
-        val ctrl = controller
-        val url = currentStream?.url
-        val show = ctrl != null && url != null && com.example.superplayer.telegram.TgResume.isTelegramUrl(url) &&
-            ctrl.isPlaying && ctrl.duration != C.TIME_UNSET && ctrl.duration >= 10 * 60_000L &&
-            ctrl.currentPosition in 3_000L..SKIP_INTRO_WINDOW_MS
-        if (show == skipIntroShown) return
-        skipIntroShown = show
-        binding.skipIntroButton.visibility = if (show) View.VISIBLE else View.GONE
-        if (show) {
-            binding.skipIntroButton.setOnClickListener {
-                val c = controller ?: return@setOnClickListener
-                val target = skipIntroTarget(c.currentPosition).coerceAtMost(c.duration - 5_000L)
-                c.seekTo(target)
-                val series = currentStream?.url?.let { u -> com.example.superplayer.telegram.TgResume.keyFor(u) }
-                    ?.let { k -> com.example.superplayer.telegram.TgResume.seriesOf(k) }
-                if (series != null) com.example.superplayer.telegram.TgResume.setIntroEnd(this, series, target)
-                binding.skipIntroButton.visibility = View.GONE
-                skipIntroShown = false
-            }
-            binding.skipIntroButton.requestFocus()
+        val ctrl = controller ?: return
+        val url = currentStream?.url ?: return
+        // Solo en series (capítulos «Serie 1x02»); las películas no llevan el botón.
+        val key = com.example.superplayer.telegram.TgResume.keyFor(url) ?: return
+        if (com.example.superplayer.telegram.TgResume.seriesOf(key) == null) return
+        if (skipIntroShown) {
+            // Se quita solo a los 5 s si no se pulsa.
+            if (SystemClock.elapsedRealtime() >= skipIntroHideAt) hideSkipIntro()
+            return
         }
+        if (skipIntroUrl == url) return // ya se ofreció en este capítulo
+        if (!ctrl.isPlaying || ctrl.duration == C.TIME_UNSET || ctrl.duration < 10 * 60_000L || ctrl.currentPosition > SKIP_INTRO_WINDOW_MS) return
+        skipIntroUrl = url
+        skipIntroShown = true
+        skipIntroHideAt = SystemClock.elapsedRealtime() + 5_000L
+        binding.skipIntroButton.visibility = View.VISIBLE
+        binding.skipIntroButton.setOnClickListener {
+            val c = controller ?: return@setOnClickListener
+            c.seekTo((c.currentPosition + skipIntroMs()).coerceAtMost(c.duration - 5_000L))
+            hideSkipIntro()
+        }
+        binding.skipIntroButton.requestFocus()
     }
 
     private fun startSkipIntroWatcher() {
         skipIntroHandler.removeCallbacksAndMessages(null)
         skipIntroShown = false
-        skipIntroHandler.postDelayed(skipIntroTick, 1000)
+        skipIntroHandler.postDelayed(skipIntroTick, 500)
     }
 
     // -----------------------------------------------------------------
@@ -2209,7 +2218,7 @@ class PlayerActivity : AppCompatActivity() {
         // Menos que esto no se considera película/vídeo "para continuar" (clips, avances...).
         private const val MIN_VOD_DURATION_MS = 5 * 60_000L
         private const val SKIP_INTRO_MS = 85_000L
-        private const val SKIP_INTRO_WINDOW_MS = 5 * 60_000L
+        private const val SKIP_INTRO_WINDOW_MS = 10 * 60_000L
         private val SLEEP_TIMER_MINUTES = listOf(30, 60, 90, 120)
         private const val MENU_ID_VIDEO = 1
         private const val MENU_ID_AUDIO = 2

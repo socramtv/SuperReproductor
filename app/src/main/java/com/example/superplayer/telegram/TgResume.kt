@@ -85,10 +85,12 @@ object TgResume {
 
     // ---- Saltar intro ----
 
-    /** Dónde acaba la intro de esta serie (ms), si el usuario ya la saltó antes. */
-    fun introEnd(c: Context, series: String): Long = prefs(c).getLong("intro:$series", 0L)
+    const val DEFAULT_INTRO_SECONDS = 85
 
-    fun setIntroEnd(c: Context, series: String, ms: Long) {
-        prefs(c).edit().putLong("intro:$series", ms).apply()
+    /** Duración de la intro de esta serie en segundos (se cambia en su ficha). */
+    fun introSeconds(c: Context, series: String): Int = prefs(c).getInt("introsec:$series", DEFAULT_INTRO_SECONDS)
+
+    fun setIntroSeconds(c: Context, series: String, sec: Int) {
+        prefs(c).edit().putInt("introsec:$series", sec.coerceIn(5, 600)).apply()
     }
 }

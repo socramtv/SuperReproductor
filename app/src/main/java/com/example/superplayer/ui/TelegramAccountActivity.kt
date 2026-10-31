@@ -2303,6 +2303,25 @@ class TelegramAccountActivity : AppCompatActivity() {
         row.addView(pill("⋯", ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 18f, heightDp = 44) {
             val labels = ArrayList<String>()
             val acts = ArrayList<() -> Unit>()
+            if (series) {
+                val sk = TgResume.seriesOf(watchKey(options[0]))
+                if (sk != null) {
+                    labels.add(getString(R.string.tg_intro_set, TgResume.introSeconds(this, sk)))
+                    acts.add {
+                        val et = android.widget.EditText(this).apply {
+                            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+                            setText(TgResume.introSeconds(this@TelegramAccountActivity, sk).toString())
+                            selectAll()
+                        }
+                        AlertDialog.Builder(this).setTitle(R.string.tg_intro_title).setMessage(R.string.tg_intro_msg).setView(et)
+                            .setPositiveButton(android.R.string.ok) { _, _ ->
+                                val sec = et.text.toString().trim().toIntOrNull()
+                                if (sec != null) TgResume.setIntroSeconds(this, sk, sec)
+                            }
+                            .setNegativeButton(android.R.string.cancel, null).show()
+                    }
+                }
+            }
             if (series && totalCount > 0) {
                 labels.add(if (seenCount >= totalCount) getString(R.string.tgw_clear_all) else getString(R.string.tgw_mark_all, seenCount, totalCount))
                 acts.add {
