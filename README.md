@@ -1715,3 +1715,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Web: cambio de agente
 - Menú ⋮ del navegador → «🕵 Cambiar agente»: Predeterminado, Escritorio (Chrome Linux, Chrome 124 y 120 Windows, Safari Mac, Firefox), iPhone, iPad, Smart TV o uno personalizado (se escribe la cadena User-Agent). Se recuerda al cerrar y recarga la página al cambiar. «Versión de escritorio» sigue funcionando como atajo.
+
+## Vídeos en RAR con ficha
+- Los vídeos en RAR abren la misma ficha que los demás (carátula, sinopsis, reparto, temporadas y capítulos en las series) y se reproducen desde ella con «Reproducir» o eligiendo capítulo. Si no hay datos del título, siguen abriéndose directos. Al verlos casi enteros se marcan como vistos.
