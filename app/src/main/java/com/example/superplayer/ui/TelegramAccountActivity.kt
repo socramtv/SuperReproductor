@@ -2824,7 +2824,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             val mark = if (isFav) "★" else "📁"
             items.add(MediaItem(key = "fav:$folder:$k", caption = name, meta = lead.chatTitle, thumbFileId = th,
                 badge = if (options.size > 1) "▶ ×${options.size} $mark" else "▶ $mark", messageId = lead.messageId, query = q,
-                options = options, pairedImage = th != 0,
+                options = options, pairedImage = th != 0 && q.isEmpty(), // con título: manda la carátula de TMDb (igual que la ficha)
                 onLong = { if (isFav) toggleVideoFav(options, q, th) else removeFromFolder(folder, options, q, th) }) { onVideoClick(options, q, th) })
         }
         mediaAdapter.submit(items)
@@ -2950,10 +2950,12 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val m = e.message
                 val ep = parseEpisode(titleOf(m))
                 val name = if (ep != null) "${ep.series} ${ep.season}x${"%02d".format(ep.episode)}" else libTitle(m).ifEmpty { titleOf(m) }
+                val q = (ep?.series ?: libTitle(m)).takeIf { it.length >= 2 }.orEmpty() // para la carátula de TMDb, como en la ficha
+                val epTag = if (ep != null) "${ep.season}x${"%02d".format(ep.episode)} · " else ""
                 items.add(MediaItem(key = "cont:${e.key}", select = listOf(m), caption = name,
-                    meta = getString(R.string.tg_continue_label), thumbFileId = e.thumb,
+                    meta = epTag + getString(R.string.tg_continue_label), thumbFileId = e.thumb,
                     badge = getString(R.string.tg_continue_badge, formatClock(e.posMs), formatClock(e.durMs)),
-                    messageId = m.messageId, query = "", pairedImage = false,
+                    messageId = m.messageId, query = q, pairedImage = false,
                     onLong = {
                         AlertDialog.Builder(this).setTitle(name)
                             .setItems(arrayOf(getString(R.string.tg_continue_remove))) { _, _ ->

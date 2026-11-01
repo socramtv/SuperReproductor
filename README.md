@@ -1709,3 +1709,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 ## Saltar intro: ajustes
 - Solo en series (no en películas). El botón sale una sola vez por capítulo (al empezar) y se quita al pulsarlo o solo a los 5 s si no se pulsa.
 - La duración que salta es por serie (85 s por defecto): en la ficha de la serie, menú «⋯» → «Duración de la intro».
+
+## Miniaturas en Favoritos y Seguir viendo
+- Favoritos y «Seguir viendo» usan la carátula de TMDb (la misma de la ficha) cuando el vídeo tiene título; la imagen suelta del chat solo se usa si no hay carátula. En «Seguir viendo» el capítulo («1x02») pasa a la línea de abajo.
