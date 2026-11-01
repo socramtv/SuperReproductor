@@ -78,6 +78,7 @@ class WebActivity : AppCompatActivity() {
         s.loadWithOverviewMode = true
         s.allowFileAccess = false
         defaultUa = s.userAgentString
+        applySavedAgent()
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
         wv.webViewClient = object : WebViewClient() {
@@ -696,6 +697,7 @@ class WebActivity : AppCompatActivity() {
         menu.menu.add(0, 2, 1, R.string.web_add_bookmark)
         menu.menu.add(0, 3, 2, getString(R.string.web_videos_menu, detected.size))
         menu.menu.add(0, 4, 3, R.string.web_desktop).apply { isCheckable = true; isChecked = desktop }
+        menu.menu.add(0, 10, 4, getString(R.string.web_agent_menu, agentLabel()))
         menu.menu.add(0, 5, 4, R.string.web_home)
         menu.menu.add(0, 6, 5, R.string.web_open_external)
         menu.menu.add(0, 8, 6, R.string.web_home_set)
@@ -707,11 +709,11 @@ class WebActivity : AppCompatActivity() {
                 2 -> addBookmark()
                 3 -> showDetectedVideos()
                 4 -> {
-                    desktop = !desktop
-                    binding.webView.settings.userAgentString = if (desktop) DESKTOP_UA else defaultUa
+                    setAgent(if (desktop) "" else "desktop", "")
                     binding.webView.reload()
                     hideHome()
                 }
+                10 -> chooseAgent()
                 5 -> goHome()
                 8 -> chooseHomePage()
                 9 -> {
@@ -778,6 +780,82 @@ class WebActivity : AppCompatActivity() {
     private val fadeCursor = Runnable { cursorView?.animate()?.alpha(0.4f)?.setDuration(300)?.start() }
 
     private fun cursorEnabled() = prefs().getBoolean("cursor", true)
+
+    // ---- Cambio de agente (User-Agent): cómo se presenta el navegador a las webs ----
+
+    /** Agentes predefinidos: clave, nombre y cadena (vacía = el del propio móvil/tele). */
+    private val agents = listOf(
+        Triple("", "📱 Predeterminado (este dispositivo)", ""),
+        Triple("desktop", "🖥 Escritorio · Chrome (Linux)", DESKTOP_UA),
+        Triple("win", "🖥 Escritorio · Chrome (Windows)",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+        Triple("win120", "🖥 Escritorio · Chrome 120 (Windows)",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+        Triple("mac", "💻 Escritorio · Safari (Mac)",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"),
+        Triple("ff", "🦊 Escritorio · Firefox",
+            "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0"),
+        Triple("iphone", "📱 iPhone · Safari",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"),
+        Triple("ipad", "📱 iPad · Safari",
+            "Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"),
+        Triple("tv", "📺 Smart TV (Android TV)",
+            "Mozilla/5.0 (Linux; Android 12; BRAVIA 4K UR3 Build/SR1A.211012.001) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 TV")
+    )
+
+    private fun agentKey() = prefs().getString("ua", "") ?: ""
+
+    private fun agentLabel(): String {
+        val k = agentKey()
+        if (k == "custom") return getString(R.string.web_agent_custom_name)
+        return (agents.firstOrNull { it.first == k } ?: agents[0]).second.substringAfter(' ')
+    }
+
+    private fun setAgent(key: String, custom: String) {
+        prefs().edit().putString("ua", key).putString("ua_custom", custom).apply()
+        applySavedAgent()
+    }
+
+    private fun applySavedAgent() {
+        val k = agentKey()
+        val ua = when {
+            k == "custom" -> (prefs().getString("ua_custom", "") ?: "").ifBlank { defaultUa }
+            k.isEmpty() -> defaultUa
+            else -> agents.firstOrNull { it.first == k }?.third?.ifEmpty { defaultUa } ?: defaultUa
+        }
+        desktop = k.isNotEmpty() && k != "iphone" && k != "ipad" && k != "tv"
+        binding.webView.settings.userAgentString = ua
+    }
+
+    private fun chooseAgent() {
+        val names = ArrayList(agents.map { it.second })
+        names.add("✏ " + getString(R.string.web_agent_custom))
+        val cur = agentKey().let { k -> if (k == "custom") agents.size else agents.indexOfFirst { it.first == k }.coerceAtLeast(0) }
+        AlertDialog.Builder(this).setTitle(R.string.web_agent_title)
+            .setSingleChoiceItems(names.toTypedArray(), cur) { d, i ->
+                d.dismiss()
+                if (i < agents.size) {
+                    setAgent(agents[i].first, "")
+                    binding.webView.reload()
+                    hideHome()
+                } else {
+                    val et = android.widget.EditText(this).apply {
+                        setText(prefs().getString("ua_custom", "") ?: "")
+                        hint = "Mozilla/5.0 …"
+                        setSingleLine(false)
+                    }
+                    AlertDialog.Builder(this).setTitle(R.string.web_agent_custom).setView(et)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            val v = et.text.toString().trim()
+                            setAgent(if (v.isEmpty()) "" else "custom", v)
+                            binding.webView.reload()
+                            hideHome()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
 
     private fun setupTv() {
         val d = resources.displayMetrics.density

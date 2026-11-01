@@ -1712,3 +1712,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Miniaturas en Favoritos y Seguir viendo
 - Favoritos y «Seguir viendo» usan la carátula de TMDb (la misma de la ficha) cuando el vídeo tiene título; la imagen suelta del chat solo se usa si no hay carátula. En «Seguir viendo» el capítulo («1x02») pasa a la línea de abajo.
+
+## Web: cambio de agente
+- Menú ⋮ del navegador → «🕵 Cambiar agente»: Predeterminado, Escritorio (Chrome Linux, Chrome 124 y 120 Windows, Safari Mac, Firefox), iPhone, iPad, Smart TV o uno personalizado (se escribe la cadena User-Agent). Se recuerda al cerrar y recarga la página al cambiar. «Versión de escritorio» sigue funcionando como atajo.

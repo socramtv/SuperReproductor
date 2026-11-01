@@ -567,6 +567,10 @@
     <string name="web_bookmark_added">Página guardada</string>
     <string name="web_bookmark_exists">Ya está en tus marcadores</string>
     <string name="web_bookmark_delete">¿Borrar el marcador «%1$s»?</string>
+    <string name="web_agent_menu">🕵 Cambiar agente: %1$s</string>
+    <string name="web_agent_title">Agente del navegador</string>
+    <string name="web_agent_custom">Personalizado…</string>
+    <string name="web_agent_custom_name">Personalizado</string>
     <string name="web_desktop">🖥 Versión de escritorio</string>
     <string name="web_home">🏠 Página de inicio</string>
     <string name="web_open_external">↗ Abrir en otro navegador</string>
