@@ -2911,6 +2911,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 binding.emptyView.visibility = if (res.items.isEmpty() && !libScanning) View.VISIBLE else View.GONE
                 updateFilterRow()
                 focusItemIfTv()
+                notifyWishFound() // al abrir la biblioteca: avisa de lo de la lista que ya esté
                 if (!libAutoTried && !libScanning && TgLibrary.sources(this).isNotEmpty() && TgLibrary.isStale(this)) {
                     libAutoTried = true
                     libScan()
@@ -3445,25 +3446,27 @@ class TelegramAccountActivity : AppCompatActivity() {
                 val t = input.text.toString().trim()
                 val cur = TgLibrary.wishlist(this)
                 if (t.length >= 2 && cur.none { nameKey(it) == nameKey(t) }) TgLibrary.setWishlist(this, cur + t)
-                showWishlist()
+                // Si ya está en la biblioteca, se avisa en el momento (y sale de la lista); si no, se ve la lista.
+                if (!notifyWishFound()) showWishlist()
             }
             .setNegativeButton(android.R.string.cancel) { _, _ -> showWishlist() }
             .show()
     }
 
     /** Tras actualizar la biblioteca: avisa de lo que estaba en la lista de deseos y ya ha aparecido, y lo quita de la lista. */
-    private fun notifyWishFound() {
+    private fun notifyWishFound(): Boolean {
         val list = TgLibrary.wishlist(this)
-        if (list.isEmpty()) return
+        if (list.isEmpty() || isFinishing || isDestroyed) return false
         val keys = libNameKeys()
         val found = list.filter { wishAvailable(it, keys) }
-        if (found.isEmpty()) return
+        if (found.isEmpty()) return false
         TgLibrary.setWishlist(this, list - found.toSet())
         AlertDialog.Builder(this)
             .setTitle(R.string.tglib_wish_title)
             .setMessage(getString(R.string.tglib_wish_found, found.joinToString("\n") { "• $it" }))
             .setPositiveButton(android.R.string.ok, null)
             .show()
+        return true
     }
 
     /** Lee los últimos mensajes de cada fuente, uno tras otro, y reconstruye el índice de la biblioteca. */

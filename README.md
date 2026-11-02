@@ -1721,3 +1721,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Biblioteca con vídeos en RAR
 - Al actualizar la biblioteca (⟳) también se guardan los vídeos en RAR (la parte 1 de cada uno) y salen junto a los demás, agrupados por serie/película y con ficha. Hay que pulsar actualizar una vez para que aparezcan.
+
+## Lista de deseos: avisos
+- Al añadir un título que ya está en la biblioteca, avisa en el momento (y lo quita de la lista). También avisa al abrir la pestaña Biblioteca y al terminar de actualizarla.
