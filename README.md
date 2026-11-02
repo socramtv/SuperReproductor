@@ -1718,3 +1718,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Vídeos en RAR con ficha
 - Los vídeos en RAR abren la misma ficha que los demás (carátula, sinopsis, reparto, temporadas y capítulos en las series) y se reproducen desde ella con «Reproducir» o eligiendo capítulo. Si no hay datos del título, siguen abriéndose directos. Al verlos casi enteros se marcan como vistos.
+
+## Biblioteca con vídeos en RAR
+- Al actualizar la biblioteca (⟳) también se guardan los vídeos en RAR (la parte 1 de cada uno) y salen junto a los demás, agrupados por serie/película y con ficha. Hay que pulsar actualizar una vez para que aparezcan.

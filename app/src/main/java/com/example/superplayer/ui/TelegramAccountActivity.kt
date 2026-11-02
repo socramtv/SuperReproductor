@@ -2855,6 +2855,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Título legible de un vídeo para la biblioteca: sin extensión, puntos/guiones bajos ni etiquetas de calidad (1080p, WEB-DL…). */
     private fun libTitle(m: TgMessage): String {
+        if (isRarPart(m)) return rarTitle(m)
         val raw = cleanName(titleOf(m)).replace('_', ' ').replace('.', ' ')
         return raw.replace(reRarNoise, " ").replace(reSpaces, " ").trim(' ', '-')
     }
@@ -2925,9 +2926,18 @@ class TelegramAccountActivity : AppCompatActivity() {
         for (o in TelegramAccountPrefs.videoFavorites(this)) favKeys.add(o.optLong("c") to o.optLong("m"))
         val seenSet = HashSet<String>()
         val rows = ArrayList<LibRow>(entries.size)
+        // Los RAR: de cada vídeo se queda solo la parte 1 (o la de número más bajo).
+        fun rarKey(m: TgMessage) = m.chatId.toString() + "|" + RarVolumes.baseName(m.fileName.orEmpty()).lowercase()
+        val rarMin = HashMap<String, Int>()
+        for (e in entries) if (isRarPart(e.first)) {
+            val k = rarKey(e.first)
+            val i = RarVolumes.index(e.first.fileName.orEmpty())
+            rarMin[k] = minOf(rarMin[k] ?: Int.MAX_VALUE, i)
+        }
         for (e in entries.sortedByDescending { it.first.date }) {
             val m = e.first
-            if (!isVideoMsg(m) || !isMovieFile(m) || TgLibrary.keyOf(m) in hidden) continue
+            if (!((isVideoMsg(m) && isMovieFile(m)) || isRarPart(m)) || TgLibrary.keyOf(m) in hidden) continue
+            if (isRarPart(m) && RarVolumes.index(m.fileName.orEmpty()) != rarMin[rarKey(m)]) continue
             val ep = parseEpisode(epText(m))
             val key: String
             val name: String
@@ -3500,7 +3510,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             var pages = 0
             fun page(from: Long) {
                 b.loadHistory(id, titles[id].orEmpty(), from, 0) { list ->
-                    synchronized(found) { found.addAll(list.filter { isVideoMsg(it) && isMovieFile(it) }) }
+                    synchronized(found) { found.addAll(list.filter { (isVideoMsg(it) && isMovieFile(it)) || isRarPart(it) }) }
                     pages++
                     if (list.size >= 20 && pages < TgLibrary.PAGES) page(list.minOf { it.messageId })
                     else {
