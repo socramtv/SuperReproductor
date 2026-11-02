@@ -456,6 +456,8 @@
     <string name="tgacc_search_tab_names">Chats</string>
     <string name="tgacc_search_tab_messages">Mensajes</string>
     <string name="tgacc_search_prompt_names">Escribe el nombre de un canal, grupo, bot o persona</string>
+    <string name="tgacc_search_prompt_lib">Escribe el título a buscar en la biblioteca</string>
+    <string name="tgacc_search_hint_lib">Buscar en la biblioteca</string>
     <string name="tgacc_search_prompt_messages">Escribe el texto a buscar en tus mensajes</string>
     <string name="tgacc_search_hint_names">Nombre del canal, grupo o bot</string>
     <string name="tgacc_search_hint_messages">Texto en mensajes</string>

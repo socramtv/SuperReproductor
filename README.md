@@ -1731,3 +1731,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## «Continuar viendo»: vaciar de verdad
 - «Vaciar Continuar viendo» ahora también sube el borrado a la sincronización y recuerda cuándo se vació: lo visto antes de ese momento ya no vuelve al reabrir la app (antes la sincronización lo traía de otros dispositivos o del servidor).
+
+## Buscador según dónde estés
+- Dentro de un canal, grupo o chat: busca solo en él. En la pestaña Biblioteca: busca solo en la biblioteca (títulos, series y nombres de archivo, incluidos los RAR) y muestra las mismas fichas con carátula. En el menú principal (el resto de pestañas): busca en todo Telegram (chats, canales, bots y mensajes), con sus pestañas Todo / Nombres / Mensajes.

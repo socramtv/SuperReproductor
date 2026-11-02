@@ -129,6 +129,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var searching = false
     /** Búsqueda global: [SM_ALL] = todo a la vez (chats y mensajes), [SM_NAMES] = solo chats/canales/bots, [SM_MSGS] = solo mensajes. */
     private var searchMode = SM_ALL
+    /** La búsqueda se abrió en la pestaña Biblioteca: busca solo en la biblioteca (no en todo Telegram). */
+    private var searchInLib = false
     /** Filtro de tipo de archivo del buscador: "" (todo), "video", "audio", "document", "photo" o "url". */
     private var searchType = ""
     /** Filtro de formato (extensión en minúsculas, p. ej. "mkv"); "" = todos. */
@@ -1776,6 +1778,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     private fun searchPromptText(): String = getString(
         when {
+            searchInLib -> R.string.tgacc_search_prompt_lib
             currentChat != null || searchMode == SM_MSGS -> R.string.tgacc_search_prompt_messages
             searchMode == SM_NAMES -> R.string.tgacc_search_prompt_names
             else -> R.string.tgacc_search_prompt_all
@@ -1786,6 +1789,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val inChat = currentChat != null
         searchView?.queryHint = getString(
             when {
+                searchInLib -> R.string.tgacc_search_hint_lib
                 inChat || searchMode == SM_MSGS -> R.string.tgacc_search_hint_messages
                 searchMode == SM_NAMES -> R.string.tgacc_search_hint_names
                 else -> R.string.tgacc_search_hint_all
@@ -1872,6 +1876,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     private fun enterSearchUi() {
+        searchInLib = currentChat == null && chatFilter == LIB_TAB
         searchResults = null
         searchChatResults = emptyList()
         searchQuery = ""
@@ -1879,7 +1884,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         searchFormat = ""
         binding.inputBar.visibility = View.GONE
         binding.tgTabs.visibility = View.GONE
-        binding.tgSearchTabs.visibility = if (currentChat == null) View.VISIBLE else View.GONE
+        binding.tgSearchTabs.visibility = if (currentChat == null && !searchInLib) View.VISIBLE else View.GONE // en una biblioteca/chat se busca solo ahí
         updateSearchHint()
         updateSearchFilters()
         showMessage(searchPromptText())
@@ -1980,6 +1985,15 @@ class TelegramAccountActivity : AppCompatActivity() {
         if (!searching) return
         val q = searchQuery.trim()
         val chat = currentChat
+        if (searchInLib) { // Biblioteca: solo lo que hay en ella (título, serie o nombre de archivo), con carátulas
+            searchSeq++
+            if (q.isEmpty()) {
+                showMessage(searchPromptText())
+                return
+            }
+            renderLibSearch()
+            return
+        }
         val msgMode = chat != null || searchMode != SM_NAMES
         // Con un tipo de archivo elegido se puede buscar sin escribir nada (lo más reciente de ese tipo).
         if (q.isEmpty() && !(msgMode && searchType.isNotEmpty())) {
@@ -2027,7 +2041,35 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
+    /** Resultados de la búsqueda dentro de la biblioteca: las mismas fichas con carátula, solo las que encajan. */
+    private fun renderLibSearch() {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) return
+        val seq = ++searchSeq
+        title = getString(R.string.tgacc_search_results, q)
+        Thread {
+            var res: LibResult? = null
+            try {
+                res = buildLibrary(0, q)
+            } catch (e: Exception) {
+            } catch (e: OutOfMemoryError) {
+            }
+            val r = res
+            runOnUiThread {
+                if (isFinishing || isDestroyed || !searching || seq != searchSeq || !searchInLib) return@runOnUiThread
+                useGrid()
+                binding.recyclerView.visibility = View.VISIBLE
+                mediaAdapter.submit(r?.items.orEmpty())
+                binding.emptyView.text = getString(R.string.tgacc_search_none)
+                binding.emptyView.visibility = if (r == null || r.items.isEmpty()) View.VISIBLE else View.GONE
+                if (r != null) prefetchInfo(r.pool.take(100))
+                focusItemIfTv()
+            }
+        }.start()
+    }
+
     private fun renderSearch() {
+        if (searchInLib) { renderLibSearch(); return }
         useList()
         title = if (searchQuery.isNotEmpty()) getString(R.string.tgacc_search_results, searchQuery)
         else typeLabel(searchType) + (if (searchFormat.isNotEmpty()) " · " + searchFormat.uppercase() else "")
@@ -2971,7 +3013,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun buildLibrary(type: Int): LibResult {
+    private fun buildLibrary(type: Int, query: String = ""): LibResult {
+        val nquery = if (query.isEmpty()) "" else normalize(query)
         val entries = libEntries ?: TgLibrary.load(this).also { libEntries = it }
         val hidden = TgLibrary.hidden(this)
         val favKeys = HashSet<Pair<Long, Long>>()
@@ -3006,6 +3049,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 name = t
                 seenKey = "m:" + nk.ifEmpty { "${m.chatId}:${m.messageId}" }
             }
+            if (nquery.isNotEmpty() && !normalize(name + " " + titleOf(m) + " " + m.fileName.orEmpty()).contains(nquery)) continue
             if (TgWatched.isWatched(this, seenKey)) seenSet.add(seenKey)
             rows.add(LibRow(m, e.second, ep, name, key, seenKey))
         }
@@ -3015,7 +3059,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         for ((_, list) in groups) list[0].name.takeIf { it.length >= 2 }?.let { pool.add(it) }
         val items = ArrayList<MediaItem>()
         // «Seguir viendo»: lo que se dejó a medias, lo último primero y por delante de todo.
-        if (type == 0 && !filtersActive()) {
+        if (type == 0 && !filtersActive() && query.isEmpty()) {
             for (e in TgResume.getAll(this).take(12)) {
                 val m = e.message
                 val ep = epOf(m)
