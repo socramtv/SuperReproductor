@@ -1375,6 +1375,57 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun titleOf(m: TgMessage): String =
         m.text.lineSequence().map { it.replace(reUrlInText, "").trim() }.firstOrNull { it.isNotEmpty() } ?: m.fileName.orEmpty()
 
+    // ---- Series de bots que responden «por lotes»: escribes el nombre al bot y te manda todos los capítulos ----
+
+    private var batchKey = ""
+    private var batchMap: Map<Long, EpInfo> = emptyMap()
+
+    /**
+     * Cada mensaje tuyo (texto, sin comando) abre un lote que llega hasta tu siguiente mensaje: ahí van el «Enviando…»,
+     * los capítulos y el «Envío completado». Los capítulos que solo traen «2x01» o «Temporada 1 Capítulo 181» (sin el
+     * nombre de la serie) se asignan a la serie del lote: la que más se repite entre los capítulos con nombre o,
+     * si ninguno lo trae, el nombre que escribiste al bot.
+     */
+    private fun batchOverrides(): Map<Long, EpInfo> {
+        val key = "${messages.size}:${messages.firstOrNull()?.messageId}:${messages.lastOrNull()?.messageId}"
+        if (key == batchKey) return batchMap
+        val asc = messages.distinctBy { it.chatId to it.messageId }.sortedBy { it.messageId }
+        val out = HashMap<Long, EpInfo>()
+        var i = 0
+        while (i < asc.size) {
+            val q = asc[i]
+            val isQuery = q.outgoing && q.fileId == null && q.text.isNotBlank() && !q.text.trim().startsWith("/")
+            if (!isQuery) { i++; continue }
+            var j = i + 1
+            val vids = ArrayList<TgMessage>()
+            while (j < asc.size && !asc[j].outgoing) {
+                if (isVideoMsg(asc[j])) vids.add(asc[j])
+                j++
+            }
+            val named = vids.mapNotNull { parseEpisode(epText(it))?.series }
+            val name = named.groupingBy { nameKey(it) }.eachCount().maxByOrNull { it.value }?.key
+                ?.let { k -> named.first { nameKey(it) == k } }
+                ?: cleanName(q.text.trim())
+            if (name.length >= 2) {
+                for (v in vids) {
+                    if (parseEpisode(epText(v)) != null) continue
+                    val m = reEpisode.find(epText(v)) ?: continue
+                    val g = m.groupValues
+                    val season = (g[1].ifEmpty { g[3].ifEmpty { g[5] } }).toIntOrNull() ?: continue
+                    val episode = (g[2].ifEmpty { g[4].ifEmpty { g[6] } }).toIntOrNull() ?: continue
+                    out[v.messageId] = EpInfo(season, episode, name)
+                }
+            }
+            i = j
+        }
+        batchKey = key
+        batchMap = out
+        return out
+    }
+
+    /** Capítulo de un mensaje: el que se lee en su texto o, si solo trae «2x01», el de la serie de su lote. */
+    private fun epOf(m: TgMessage): EpInfo? = parseEpisode(epText(m)) ?: batchOverrides()[m.messageId]
+
     /** Texto del que sale el capítulo: en un vídeo en RAR, el nombre del archivo sin «.part1.rar» y sin etiquetas. */
     private fun epText(m: TgMessage): String = if (isRarPart(m)) rarTitle(m) else titleOf(m)
 
@@ -1401,7 +1452,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         for (m in source) {
             val rar = isRarPart(m)
             if (!isVideoMsg(m) && !rar) continue
-            val ep = if (rar) null else parseEpisode(epText(m))
+            val ep = if (rar) null else epOf(m)
             val rep = if (rar) parseEpisode(rarTitle(m)) else null // capítulo suelto en RAR: «Serie 1x07»
             if (rep != null) rarEp[m.messageId] = rep
             val base = if (rep != null) nameKey(rep.series) else if (rar) nameKey(rarTitle(m)) else if (ep != null) nameKey(ep.series) else nameKey(titleOf(m))
@@ -1558,7 +1609,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     continue
                 }
                 val options = if (isSeries) {
-                    list.sortedWith(compareBy({ parseEpisode(epText(it))?.season ?: 0 }, { parseEpisode(epText(it))?.episode ?: 0 }, { it.messageId }))
+                    list.sortedWith(compareBy({ epOf(it)?.season ?: 0 }, { epOf(it)?.episode ?: 0 }, { it.messageId }))
                 } else list.sortedBy { it.messageId }
                 val img = pairedByLeader[m.messageId]
                 val thumb = img?.thumbId?.takeIf { it != 0 } ?: m.thumbId
@@ -2060,7 +2111,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private fun bubbleQuery(m: TgMessage): String {
         if (m.kind != "video" && !(m.kind == "document" && looksLikeMedia(m))) return ""
         if (!isVideoMsg(m) || !isMovieFile(m)) return ""
-        val q = parseEpisode(epText(m))?.series ?: libTitle(m)
+        val q = epOf(m)?.series ?: libTitle(m)
         return q.takeIf { it.length >= 2 }.orEmpty()
     }
 
@@ -2098,7 +2149,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** ¿Son los capítulos de una serie? (varios con temporada y número). */
     private fun isSeriesGroup(options: List<TgMessage>): Boolean =
-        options.count { parseEpisode(epText(it)) != null } >= 2
+        options.count { epOf(it) != null } >= 2
 
     /**
      * Ficha de la película o serie (diseño tipo plataforma): cabecera con fondo y título, datos y géneros en píldoras,
@@ -2237,8 +2288,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
 
         // ---- Qué se reproduce con el botón grande ----
-        val eps = if (series) options.mapNotNull { m -> parseEpisode(epText(m))?.let { Triple(it.season, it.episode, m) } } else emptyList()
-        val others = if (series) options.filter { parseEpisode(epText(it)) == null } else emptyList()
+        val eps = if (series) options.mapNotNull { m -> epOf(m)?.let { Triple(it.season, it.episode, m) } } else emptyList()
+        val others = if (series) options.filter { epOf(it) == null } else emptyList()
         val ordered = eps.sortedWith(compareBy({ it.first }, { it.second }))
         val nextUnseen = ordered.firstOrNull { !isSeen(it.third) }
         val seenCount = ordered.map { watchKey(it.third) }.distinct().count { TgWatched.isWatched(this, it) }
@@ -2246,7 +2297,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
         fun queueFor(m: TgMessage): List<TgMessage> {
             if (!series) return emptyList()
-            val byEp = options.mapNotNull { x -> parseEpisode(epText(x))?.let { Triple(it.season, it.episode, x) } }
+            val byEp = options.mapNotNull { x -> epOf(x)?.let { Triple(it.season, it.episode, x) } }
                 .groupBy { it.first to it.second }
             return byEp.toSortedMap(compareBy<Pair<Int, Int>>({ it.first }, { it.second }))
                 .map { (_, v) -> v.firstOrNull { it.third.messageId == m.messageId }?.third ?: v.first().third }
@@ -2843,7 +2894,7 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Clave de «visto»: el capítulo (serie + temporada + número) o la película, igual para todas sus copias y versiones. */
     private fun watchKey(m: TgMessage): String {
-        val ep = parseEpisode(epText(m))
+        val ep = epOf(m)
         return if (ep != null) "s:${nameKey(ep.series)}:${ep.season}x${ep.episode}"
         else "m:" + nameKey(libTitle(m)).ifEmpty { "${m.chatId}:${m.messageId}" }
     }
@@ -2939,7 +2990,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             val m = e.first
             if (!((isVideoMsg(m) && isMovieFile(m)) || isRarPart(m)) || TgLibrary.keyOf(m) in hidden) continue
             if (isRarPart(m) && RarVolumes.index(m.fileName.orEmpty()) != rarMin[rarKey(m)]) continue
-            val ep = parseEpisode(epText(m))
+            val ep = epOf(m)
             val key: String
             val name: String
             val seenKey: String
@@ -2967,7 +3018,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         if (type == 0 && !filtersActive()) {
             for (e in TgResume.getAll(this).take(12)) {
                 val m = e.message
-                val ep = parseEpisode(epText(m))
+                val ep = epOf(m)
                 val name = if (ep != null) "${ep.series} ${ep.season}x${"%02d".format(ep.episode)}" else libTitle(m).ifEmpty { titleOf(m) }
                 val q = (ep?.series ?: libTitle(m)).takeIf { it.length >= 2 }.orEmpty() // para la carátula de TMDb, como en la ficha
                 val epTag = if (ep != null) "${ep.season}x${"%02d".format(ep.episode)} · " else ""
@@ -3130,7 +3181,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     /** Título para buscar la ficha de un vídeo del buscador: nombre de la serie o título limpio de la película. */
-    private fun searchTitle(m: TgMessage): String = parseEpisode(epText(m))?.series ?: libTitle(m)
+    private fun searchTitle(m: TgMessage): String = epOf(m)?.series ?: libTitle(m)
 
     /** ¿Encaja este título (con la fecha de su mensaje más reciente, en segundos) con los filtros activos? */
     private fun passesFilters(title: String, dateSec: Long): Boolean {
@@ -3348,7 +3399,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val titles = HashMap<String, String>()
         for (m in libraryMessages()) {
             if (TgLibrary.keyOf(m) in hidden) continue
-            val ep = parseEpisode(epText(m))
+            val ep = epOf(m)
             val k: String
             if (ep != null) {
                 k = "s:" + nameKey(ep.series) + ":${ep.season}x${ep.episode}"
@@ -5183,7 +5234,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 var name = m.fileName ?: when (m.kind) { "audio" -> "Audio"; "voice" -> "Nota de voz"; "video" -> "Vídeo"; else -> "Archivo" }
                 // Vídeo reconocido: título limpio (el oficial de TMDb si ya está) en vez del nombre del archivo.
                 if (bq.isNotEmpty()) {
-                    val epTag = parseEpisode(epText(m))?.let { String.format(java.util.Locale.US, " · T%d E%02d", it.season, it.episode) }.orEmpty()
+                    val epTag = epOf(m)?.let { String.format(java.util.Locale.US, " · T%d E%02d", it.season, it.episode) }.orEmpty()
                     name = (binfo?.let { it.title + (it.year?.let { y -> " ($y)" } ?: "") } ?: bq) + epTag
                 }
                 val size = if (m.size > 0) String.format(java.util.Locale.US, "  (%.1f MB)", m.size / 1048576.0) else ""

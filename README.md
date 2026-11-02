@@ -1725,3 +1725,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 ## Lista de deseos: avisos
 - Al añadir un título que ya está en la biblioteca, avisa en el momento (y lo quita de la lista). También avisa al abrir la pestaña Biblioteca y al terminar de actualizarla.
 - La lista de deseos también tiene en cuenta los vídeos en RAR de la biblioteca (hay que actualizar la biblioteca una vez para que se indexen).
+
+## Series de bots por lotes
+- En un chat con un bot, lo que escribes (p. ej. «Miércoles») abre un lote que llega hasta tu siguiente mensaje: «Enviando…», los capítulos y «Envío completado». Los capítulos que solo traen «2x01» o «Temporada 1 Capítulo 181» (sin nombre de serie) se agrupan con la serie del lote: la que más se repite entre los capítulos con nombre, o si ninguno la trae, lo que escribiste. Funciona en la galería y en la ficha de la serie.
