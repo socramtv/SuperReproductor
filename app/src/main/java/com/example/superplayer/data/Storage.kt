@@ -426,8 +426,10 @@ object ContinueWatching {
         val byId = LinkedHashMap<String, Entry>()
         for (e in getAll(context)) byId[e.stream.id] = e
         var changed = 0
+        val clearedAt = prefs(context).getLong("cleared_at", 0L)
         for (e in incoming) {
             if (isTelegram(e.stream)) continue
+            if (e.updatedAt <= clearedAt) continue // visto antes de vaciar la lista: no vuelve
             val existing = byId[e.stream.id]
             if (existing == null || e.updatedAt > existing.updatedAt) { byId[e.stream.id] = e; changed++ }
         }
@@ -472,7 +474,12 @@ object ContinueWatching {
     }
 
     fun clear(context: Context) {
-        prefs(context).edit().remove(KEY_ENTRIES).apply()
+        // Vaciar también en los demás dispositivos: se sube el borrado de cada título y se anota cuándo se vació,
+        // para que la sincronización no vuelva a traer lo anterior (antes reaparecía al reabrir la app).
+        val now = System.currentTimeMillis()
+        val old = getAll(context)
+        prefs(context).edit().remove(KEY_ENTRIES).putLong("cleared_at", now).apply()
+        for (e in old) ProgressSync.push(context, e.stream, e.positionMs, e.durationMs, now, removed = true)
         com.example.superplayer.tv.WatchNextSync.sync(context)
     }
 

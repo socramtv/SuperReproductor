@@ -1728,3 +1728,6 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Series de bots por lotes
 - En un chat con un bot, lo que escribes (p. ej. «Miércoles») abre un lote que llega hasta tu siguiente mensaje: «Enviando…», los capítulos y «Envío completado». Los capítulos que solo traen «2x01» o «Temporada 1 Capítulo 181» (sin nombre de serie) se agrupan con la serie del lote: la que más se repite entre los capítulos con nombre, o si ninguno la trae, lo que escribiste. Funciona en la galería y en la ficha de la serie.
+
+## «Continuar viendo»: vaciar de verdad
+- «Vaciar Continuar viendo» ahora también sube el borrado a la sincronización y recuerda cuándo se vació: lo visto antes de ese momento ya no vuelve al reabrir la app (antes la sincronización lo traía de otros dispositivos o del servidor).
