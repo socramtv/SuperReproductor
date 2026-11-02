@@ -1724,3 +1724,4 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Lista de deseos: avisos
 - Al añadir un título que ya está en la biblioteca, avisa en el momento (y lo quita de la lista). También avisa al abrir la pestaña Biblioteca y al terminar de actualizarla.
+- La lista de deseos también tiene en cuenta los vídeos en RAR de la biblioteca (hay que actualizar la biblioteca una vez para que se indexen).

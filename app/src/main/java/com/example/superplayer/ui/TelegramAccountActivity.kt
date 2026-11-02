@@ -3406,7 +3406,11 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     // ---- Lista de deseos ----
 
-    private fun libNameKeys(): Set<String> = libraryMessages().map { nameKey(searchTitle(it)) }.filter { it.length >= 2 }.toSet()
+    /** Títulos disponibles para la lista de deseos: vídeos normales y también los que están en RAR. */
+    private fun libNameKeys(): Set<String> =
+        (libEntries ?: TgLibrary.load(this).also { libEntries = it }).map { it.first }
+            .filter { (isVideoMsg(it) && isMovieFile(it)) || isRarPart(it) }
+            .map { nameKey(searchTitle(it)) }.filter { it.length >= 2 }.toSet()
 
     private fun wishAvailable(w: String, keys: Set<String>): Boolean {
         val wk = nameKey(w)
