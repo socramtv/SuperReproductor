@@ -1734,3 +1734,16 @@ Los capítulos que traen etiquetas del bot («📦 [513.4MB] [1080P] - - El veci
 
 ## Buscador según dónde estés
 - Dentro de un canal, grupo o chat: busca solo en él. En la pestaña Biblioteca: busca solo en la biblioteca (títulos, series y nombres de archivo, incluidos los RAR) y muestra las mismas fichas con carátula. En el menú principal (el resto de pestañas): busca en todo Telegram (chats, canales, bots y mensajes), con sus pestañas Todo / Nombres / Mensajes.
+
+## Marcador manual de capítulos
+Escribe un mensaje tuyo en el chat (aunque sea «Mensajes guardados» o un bot) con este formato y la app coge los vídeos de al lado como capítulos de esa serie (o como esa película):
+```
+Serie
+Nombre: 1992
+Año: 2024
+Capítulos: 6 atrás
+```
+- `Capítulos: 6 atrás` = los 6 vídeos anteriores al mensaje; `Capítulos: 6 siguientes` (o sin nada) = los 6 vídeos que van después.
+- `Película` en vez de `Serie` (o `Capítulos: 1`) = esos vídeos se tratan como esa película (versiones del mismo título).
+- El nombre y el año se usan también para buscar la carátula. Si un vídeo ya trae «1x03» o «T1 E03» se respeta; si no, se numeran 1, 2, 3… por orden.
+- El marcador manda sobre el nombre que traigan los vídeos y se recuerda (también vale en la biblioteca tras actualizarla). Solo cuenta si lo has escrito tú y tiene «Nombre:» y «Capítulos:» o «Serie/Película».

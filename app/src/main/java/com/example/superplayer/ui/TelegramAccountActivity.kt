@@ -1374,7 +1374,12 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
     /** Primera línea con texto (sin enlaces) o, si no hay, el nombre del archivo. */
-    private fun titleOf(m: TgMessage): String =
+    private fun titleOf(m: TgMessage): String {
+        manualMovieTitle(m)?.let { return it }
+        return titleOfRaw(m)
+    }
+
+    private fun titleOfRaw(m: TgMessage): String =
         m.text.lineSequence().map { it.replace(reUrlInText, "").trim() }.firstOrNull { it.isNotEmpty() } ?: m.fileName.orEmpty()
 
     // ---- Series de bots que responden «por lotes»: escribes el nombre al bot y te manda todos los capítulos ----
@@ -1396,7 +1401,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         var i = 0
         while (i < asc.size) {
             val q = asc[i]
-            val isQuery = q.outgoing && q.fileId == null && q.text.isNotBlank() && !q.text.trim().startsWith("/")
+            val isQuery = q.outgoing && q.fileId == null && q.text.isNotBlank() && !q.text.trim().startsWith("/") && parseMarker(q.text) == null
             if (!isQuery) { i++; continue }
             var j = i + 1
             val vids = ArrayList<TgMessage>()
@@ -1420,13 +1425,119 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
             i = j
         }
+        // Marcadores manuales: mandan sobre todo lo demás.
+        var changed = false
+        for (idx in asc.indices) {
+            val mk0 = asc[idx]
+            if (!mk0.outgoing || mk0.fileId != null) continue
+            val mk = parseMarker(mk0.text) ?: continue
+            val vids = ArrayList<TgMessage>()
+            var steps = 0
+            if (mk.back) {
+                var j = idx - 1
+                while (j >= 0 && vids.size < mk.count && steps < 400) {
+                    val x = asc[j]
+                    if (x.outgoing && x.fileId == null && parseMarker(x.text) != null) break
+                    if (isVideoMsg(x)) vids.add(0, x)
+                    j--; steps++
+                }
+            } else {
+                var j = idx + 1
+                while (j < asc.size && vids.size < mk.count && steps < 400) {
+                    val x = asc[j]
+                    if (x.outgoing && x.fileId == null && parseMarker(x.text) != null) break
+                    if (isVideoMsg(x)) vids.add(x)
+                    j++; steps++
+                }
+            }
+            vids.forEachIndexed { k, v ->
+                val sk = "${v.chatId}:${v.messageId}"
+                val value: String
+                if (mk.movie) {
+                    value = "${mk.title}\t0\t0\tm"
+                } else {
+                    val em = reEpisode.find(epText(v))
+                    val g = em?.groupValues
+                    val season = g?.let { (it[1].ifEmpty { it[3].ifEmpty { it[5] } }).toIntOrNull() } ?: 1
+                    val episode = g?.let { (it[2].ifEmpty { it[4].ifEmpty { it[6] } }).toIntOrNull() } ?: (k + 1)
+                    value = "${mk.title}\t$season\t$episode\ts"
+                    out[v.messageId] = EpInfo(season, episode, mk.title)
+                }
+                if (manualStore[sk] != value) { manualStore[sk] = value; changed = true }
+            }
+        }
+        if (changed) saveManualStore()
         batchKey = key
         batchMap = out
         return out
     }
 
+    // ---- Marcador manual: un mensaje tuyo que dice cómo coger los capítulos ----
+    //   Serie (o Película)
+    //   Nombre: 1992
+    //   Año: 2024
+    //   Capítulos: 6 atrás      (los 6 vídeos anteriores)   ·   Capítulos: 6 siguientes   (los 6 vídeos que van después; por defecto)
+
+    private val reMkName = Regex("(?im)^\\s*(?:nombre|t[ií]tulo|name)\\s*[:=]\\s*(.+?)\\s*$")
+    private val reMkYear = Regex("(?im)^\\s*(?:a[nñ]o|year)\\s*[:=]\\s*((?:19|20)\\d{2})")
+    private val reMkCaps = Regex("(?im)^\\s*(?:cap[ií]tulos?|episodios?)\\s*[:=]\\s*(\\d{1,3})(.*)$")
+    private val reMkBack = Regex("(?i)atr[aá]s|anteriores|antes|previos")
+    private val reMkMovie = Regex("(?i)pel[ií]cula|movie")
+    private val reMkSerie = Regex("(?i)\\bserie\\b")
+
+    private class Marker(val title: String, val count: Int, val back: Boolean, val movie: Boolean)
+
+    private fun parseMarker(text: String): Marker? {
+        val name = reMkName.find(text)?.groupValues?.get(1)?.trim().orEmpty()
+        if (name.length < 1) return null
+        val caps = reMkCaps.find(text)
+        val hasMovie = reMkMovie.containsMatchIn(text)
+        val hasSerie = reMkSerie.containsMatchIn(text)
+        if (caps == null && !hasMovie && !hasSerie) return null // sin «Capítulos» ni «Serie/Película» no es un marcador
+        val count = caps?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        val year = reMkYear.find(text)?.groupValues?.get(1).orEmpty()
+        val movie = if (hasMovie && !hasSerie) true else if (hasSerie && !hasMovie) false else count <= 1
+        val back = reMkBack.containsMatchIn(caps?.groupValues?.get(2).orEmpty())
+        return Marker(if (year.isEmpty()) name else "$name ($year)", count.coerceIn(1, 300), back, movie)
+    }
+
+    /** Lo que dicen tus marcadores, guardado («chat:mensaje» -> «título\ttemporada\tcapítulo\ts|m»), para que también valga en la biblioteca. */
+    private val manualStore: HashMap<String, String> by lazy {
+        val map = HashMap<String, String>()
+        try {
+            val o = org.json.JSONObject(getSharedPreferences("tg_manual", MODE_PRIVATE).getString("map", "{}") ?: "{}")
+            for (k in o.keys()) map[k] = o.getString(k)
+        } catch (e: Exception) {
+        }
+        map
+    }
+
+    private fun saveManualStore() {
+        try {
+            if (manualStore.size > 4000) {
+                val drop = manualStore.keys.take(manualStore.size - 4000)
+                for (k in drop) manualStore.remove(k)
+            }
+            val o = org.json.JSONObject()
+            for ((k, v) in manualStore) o.put(k, v)
+            getSharedPreferences("tg_manual", MODE_PRIVATE).edit().putString("map", o.toString()).apply()
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun manualEntry(m: TgMessage): List<String>? =
+        if (manualStore.isEmpty()) null else manualStore["${m.chatId}:${m.messageId}"]?.split('\t')?.takeIf { it.size >= 4 }
+
+    private fun manualMovieTitle(m: TgMessage): String? = manualEntry(m)?.takeIf { it[3] == "m" }?.get(0)
+
+    private fun manualEp(m: TgMessage): EpInfo? {
+        val e = manualEntry(m) ?: return null
+        if (e[3] != "s") return null
+        return EpInfo(e[1].toIntOrNull() ?: 1, e[2].toIntOrNull() ?: 0, e[0])
+    }
+
     /** Capítulo de un mensaje: el que se lee en su texto o, si solo trae «2x01», el de la serie de su lote. */
-    private fun epOf(m: TgMessage): EpInfo? = parseEpisode(epText(m)) ?: batchOverrides()[m.messageId]
+    private fun epOf(m: TgMessage): EpInfo? = batchOverrides()[m.messageId] ?: manualEp(m) ?: parseEpisode(epText(m))
 
     /** Texto del que sale el capítulo: en un vídeo en RAR, el nombre del archivo sin «.part1.rar» y sin etiquetas. */
     private fun epText(m: TgMessage): String = if (isRarPart(m)) rarTitle(m) else titleOf(m)
