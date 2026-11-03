@@ -160,6 +160,10 @@ class WebActivity : AppCompatActivity() {
         binding.webReload.setOnClickListener { wv.reload() }
         binding.webVideos.setOnClickListener { showDetectedVideos() }
         binding.webMenu.setOnClickListener { showMenu(it) }
+        binding.webAppHome.setOnClickListener {
+            // A la pantalla principal de la app de una vez (sin volver atrás paso a paso).
+            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        }
         binding.webFavsBtn.setOnClickListener { toggleFavStrip() }
         binding.webSaveBtn.setOnClickListener { toggleSaveCurrent() }
         binding.webHomeBtn.setOnClickListener { goHome() }

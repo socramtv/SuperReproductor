@@ -88,6 +88,18 @@
                 android:background="@drawable/bg_tg_star" />
 
             <TextView
+                android:id="@+id/webAppHome"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:text="🏠"
+                android:textSize="20sp"
+                android:contentDescription="@string/app_home"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+
+            <TextView
                 android:id="@+id/webMenu"
                 android:layout_width="44dp"
                 android:layout_height="44dp"

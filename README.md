@@ -1747,3 +1747,6 @@ Capítulos: 6 atrás
 - `Película` en vez de `Serie` (o `Capítulos: 1`) = esos vídeos se tratan como esa película (versiones del mismo título).
 - El nombre y el año se usan también para buscar la carátula. Si un vídeo ya trae «1x03» o «T1 E03» se respeta; si no, se numeran 1, 2, 3… por orden.
 - El marcador manda sobre el nombre que traigan los vídeos y se recuerda (también vale en la biblioteca tras actualizarla). Solo cuenta si lo has escrito tú y tiene «Nombre:» y «Capítulos:» o «Serie/Película».
+
+## Botón «Pantalla principal»
+- Telegram: icono 🏠 en la barra de arriba, junto a actualizar y buscar. Web: botón 🏠 en la barra de direcciones, antes del menú ⋮ (el «Inicio» de los atajos sigue siendo la página de inicio del navegador). Ambos llevan de golpe a la pantalla principal de la app, cerrando lo que haya por el camino (sin pulsar atrás varias veces).

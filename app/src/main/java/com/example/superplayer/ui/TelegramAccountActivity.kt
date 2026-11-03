@@ -612,6 +612,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val chat = currentChat
         val inChat = chat != null && !searching
         menu.findItem(R.id.action_tgacc_refresh)?.isVisible = !searching && state == TgAuthState.READY
+        menu.findItem(R.id.action_tgacc_home)?.isVisible = !searching
         menu.findItem(R.id.action_tgacc_view)?.let {
             it.isVisible = inChat && !showingTopics
             it.title = getString(if (mediaMode) R.string.tgacc_view_all else R.string.tgacc_view_media)
@@ -670,6 +671,11 @@ class TelegramAccountActivity : AppCompatActivity() {
                 autoLoads = 0
                 invalidateOptionsMenu()
                 if (currentChat != null && !showingTopics && !searching) renderMessages()
+                return true
+            }
+            R.id.action_tgacc_home -> {
+                // A la pantalla principal de la app de una vez, cierre lo que cierre por el camino.
+                startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
                 return true
             }
             R.id.action_tgacc_refresh -> {
