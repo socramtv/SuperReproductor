@@ -121,6 +121,7 @@ class WebActivity : AppCompatActivity() {
                 currentPage = url
                 binding.webProgress.visibility = View.GONE
                 if (!binding.webUrl.hasFocus()) binding.webUrl.setText(url)
+                addHistory(url, view.title.orEmpty())
                 updateNavButtons()
                 updateSaveButton()
             }
@@ -203,7 +204,8 @@ class WebActivity : AppCompatActivity() {
         isTv = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
         if (isTv) setupTv()
         updateSaveButton()
-        val start = intent?.data?.toString() ?: savedInstanceState?.getString("url")
+        // Si se sale (p. ej. con la casita 🏠 de la app) y se vuelve, sigue donde se estaba.
+        val start = intent?.data?.toString() ?: savedInstanceState?.getString("url") ?: prefs().getString("last_url", "")
         if (start.isNullOrBlank()) goHome() else load(start)
     }
 
@@ -218,6 +220,7 @@ class WebActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        saveLastPage()
         binding.webView.onPause()
         super.onPause()
     }
@@ -229,6 +232,72 @@ class WebActivity : AppCompatActivity() {
     }
 
     private fun prefs() = getSharedPreferences("web_browser", Context.MODE_PRIVATE)
+
+    // ---- Última página y historial ----
+
+    private fun saveLastPage() {
+        val u = binding.webView.url
+        val keep = !homeVisible() && !u.isNullOrBlank() && (u.startsWith("http://") || u.startsWith("https://"))
+        prefs().edit().putString("last_url", if (keep) u else "").apply()
+    }
+
+    private class HistEntry(val url: String, val title: String, val at: Long)
+
+    private fun history(): MutableList<HistEntry> = try {
+        val arr = JSONArray(prefs().getString("history", "[]"))
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            HistEntry(o.optString("u"), o.optString("t"), o.optLong("at"))
+        }.toMutableList()
+    } catch (e: Exception) {
+        mutableListOf()
+    }
+
+    private fun saveHistory(list: List<HistEntry>) {
+        val arr = JSONArray()
+        for (e in list.take(300)) arr.put(org.json.JSONObject().put("u", e.url).put("t", e.title).put("at", e.at))
+        prefs().edit().putString("history", arr.toString()).apply()
+    }
+
+    private fun addHistory(url: String, title: String) {
+        if (!(url.startsWith("http://") || url.startsWith("https://"))) return
+        val list = history()
+        list.removeAll { it.url == url }
+        list.add(0, HistEntry(url, title.ifBlank { url }, System.currentTimeMillis()))
+        saveHistory(list)
+    }
+
+    private fun showHistory() {
+        val list = history()
+        if (list.isEmpty()) {
+            AlertDialog.Builder(this).setTitle(R.string.web_history_title).setMessage(R.string.web_history_empty)
+                .setPositiveButton(android.R.string.ok, null).show()
+            return
+        }
+        val df = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT)
+        val labels = list.map { e ->
+            e.title.take(70) + "\n" + e.url.removePrefix("https://").removePrefix("http://").take(60) + " · " + df.format(java.util.Date(e.at))
+        }.toTypedArray()
+        val dialog = AlertDialog.Builder(this).setTitle(R.string.web_history_title)
+            .setItems(labels) { _, i -> load(list[i].url) }
+            .setNeutralButton(R.string.web_history_clear) { _, _ ->
+                AlertDialog.Builder(this).setMessage(R.string.web_history_clear_confirm)
+                    .setPositiveButton(android.R.string.ok) { _, _ -> saveHistory(emptyList()) }
+                    .setNegativeButton(android.R.string.cancel, null).show()
+            }
+            .setNegativeButton(R.string.channel_check_close, null).create()
+        dialog.show()
+        // Pulsación larga: quita esa página del historial.
+        dialog.listView.setOnItemLongClickListener { _, _, pos, _ ->
+            val cur = history()
+            cur.removeAll { it.url == list[pos].url }
+            saveHistory(cur)
+            Toast.makeText(this, R.string.web_history_removed, Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+            showHistory()
+            true
+        }
+    }
 
     // ---- Navegación ----
 
@@ -699,6 +768,7 @@ class WebActivity : AppCompatActivity() {
         val menu = PopupMenu(this, anchor)
         menu.menu.add(0, 1, 0, R.string.web_bookmarks)
         menu.menu.add(0, 2, 1, R.string.web_add_bookmark)
+        menu.menu.add(0, 11, 1, R.string.web_history)
         menu.menu.add(0, 3, 2, getString(R.string.web_videos_menu, detected.size))
         menu.menu.add(0, 4, 3, R.string.web_desktop).apply { isCheckable = true; isChecked = desktop }
         menu.menu.add(0, 10, 4, getString(R.string.web_agent_menu, agentLabel()))
@@ -712,6 +782,7 @@ class WebActivity : AppCompatActivity() {
                 1 -> showBookmarks()
                 2 -> addBookmark()
                 3 -> showDetectedVideos()
+                11 -> showHistory()
                 4 -> {
                     setAgent(if (desktop) "" else "desktop", "")
                     binding.webView.reload()

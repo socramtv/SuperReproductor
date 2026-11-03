@@ -570,6 +570,12 @@
     <string name="web_bookmark_added">Página guardada</string>
     <string name="web_bookmark_exists">Ya está en tus marcadores</string>
     <string name="web_bookmark_delete">¿Borrar el marcador «%1$s»?</string>
+    <string name="web_history">🕘 Historial</string>
+    <string name="web_history_title">Historial</string>
+    <string name="web_history_empty">Aún no hay páginas en el historial.</string>
+    <string name="web_history_clear">Vaciar</string>
+    <string name="web_history_clear_confirm">¿Vaciar todo el historial?</string>
+    <string name="web_history_removed">Quitada del historial</string>
     <string name="web_agent_menu">🕵 Cambiar agente: %1$s</string>
     <string name="web_agent_title">Agente del navegador</string>
     <string name="web_agent_custom">Personalizado…</string>

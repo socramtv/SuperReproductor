@@ -1750,3 +1750,7 @@ Capítulos: 6 atrás
 
 ## Botón «Pantalla principal»
 - Telegram: icono 🏠 en la barra de arriba, junto a actualizar y buscar. Web: botón 🏠 en la barra de direcciones, antes del menú ⋮ (el «Inicio» de los atajos sigue siendo la página de inicio del navegador). Ambos llevan de golpe a la pantalla principal de la app, cerrando lo que haya por el camino (sin pulsar atrás varias veces).
+
+## Web: historial y continuar donde estabas
+- Menú ⋮ → "🕘 Historial": lista de páginas visitadas (toca para abrir, pulsación larga para quitar, "Vaciar" para borrar todo).
+- Al salir con la casita 🏠 de la app y volver a entrar en Web, se reabre la última página visitada (el botón "Inicio" sigue llevando a la portada del navegador).
