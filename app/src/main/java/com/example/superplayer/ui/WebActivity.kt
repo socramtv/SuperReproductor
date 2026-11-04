@@ -114,6 +114,7 @@ class WebActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 when {
                     customView != null -> hideCustomView()
+                    binding.webVideoBanner.visibility == View.VISIBLE -> hideBanner()
                     binding.webFindBar.visibility == View.VISIBLE -> hideFind()
                     binding.webTabsPanel.visibility == View.VISIBLE -> binding.webTabsPanel.visibility = View.GONE
                     homeVisible() && webView.url != null -> hideHome()
@@ -323,7 +324,7 @@ class WebActivity : AppCompatActivity() {
         updateSaveButton()
         updateVideosButton()
         refreshTabsUi()
-        if (isTv) t.view.post { t.view.requestFocus() }
+        if (isTv && binding.webTabsPanel.visibility != View.VISIBLE) t.view.post { t.view.requestFocus() }
     }
 
     private fun closeTab(i: Int) {
@@ -370,7 +371,6 @@ class WebActivity : AppCompatActivity() {
             val row = android.widget.LinearLayout(this).apply {
                 orientation = android.widget.LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
-                setBackgroundResource(R.drawable.bg_web_chip)
             }
             row.addView(android.widget.TextView(this).apply {
                 text = tabLabel(t)
@@ -378,7 +378,8 @@ class WebActivity : AppCompatActivity() {
                 maxLines = 1
                 setTextColor(if (i == curIdx) accent else fg)
                 if (i == curIdx) setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setPadding((14 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt())
+                setBackgroundResource(R.drawable.bg_web_chip)
+                setPadding((14 * d).toInt(), (8 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
                 isFocusable = true
                 isClickable = true
                 setOnClickListener { switchTo(i) }
@@ -387,7 +388,8 @@ class WebActivity : AppCompatActivity() {
                 text = "✕"
                 textSize = 13f
                 setTextColor(fg)
-                setPadding((6 * d).toInt(), (8 * d).toInt(), (12 * d).toInt(), (8 * d).toInt())
+                setBackgroundResource(R.drawable.bg_web_chip)
+                setPadding((10 * d).toInt(), (8 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
                 isFocusable = true
                 isClickable = true
                 setOnClickListener { closeTab(i) }
@@ -658,13 +660,17 @@ class WebActivity : AppCompatActivity() {
         binding.webVideoBanner.visibility = View.VISIBLE
         binding.webVideoBanner.removeCallbacks(hideBannerRunnable)
         binding.webVideoBanner.postDelayed(hideBannerRunnable, 15000)
+        // En la tele el botón ▶ recibe el foco: con OK se reproduce; ✕ (derecha) o Atrás lo cierra.
+        if (isTv) binding.webVideoPlay.post { binding.webVideoPlay.requestFocus() }
     }
 
     private val hideBannerRunnable = Runnable { hideBanner() }
 
     private fun hideBanner() {
         binding.webVideoBanner.removeCallbacks(hideBannerRunnable)
+        val hadFocus = binding.webVideoBanner.hasFocus()
         binding.webVideoBanner.visibility = View.GONE
+        if (isTv && hadFocus && tabs.isNotEmpty()) webView.requestFocus()
     }
 
     private fun playInApp(url: String, page: String) {
@@ -1299,6 +1305,10 @@ class WebActivity : AppCompatActivity() {
                 if (cursorX >= w - 8f * d) webView.scrollBy(step.toInt(), 0) else cursorX += step
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (cursorY >= h - zone && binding.webVideoBanner.visibility == View.VISIBLE) {
+                    binding.webVideoPlay.requestFocus()
+                    return
+                }
                 if (cursorY >= h - zone) scrollPage((step * 1.6f).toInt()) else cursorY += step
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
@@ -1317,7 +1327,7 @@ class WebActivity : AppCompatActivity() {
 
     /** Cursor en el borde de arriba y sin más página que subir: el foco pasa a los atajos, en la columna más cercana. */
     private fun leaveToBars() {
-        val btns = listOf<View>(binding.webFavsBtn, binding.webSaveBtn, binding.webHomeBtn, binding.webShareBtn)
+        val btns = listOf<View>(binding.webTabsBtn, binding.webFavsBtn, binding.webSaveBtn, binding.webHomeBtn, binding.webShareBtn)
         val w = binding.webBody.width.coerceAtLeast(1)
         val i = (cursorX / w * btns.size).toInt().coerceIn(0, btns.size - 1)
         btns[i].requestFocus()

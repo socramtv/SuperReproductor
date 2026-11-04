@@ -1772,3 +1772,7 @@ Capítulos: 6 atrás
 
 ## Web: barra en tres filas
 - Fila 1: ◀ ▶ ⟳ y a la derecha 🎬 🔍 🏠 ⋮. Fila 2: barra de direcciones a todo el ancho. Fila 3: 🗂 pestañas, Favoritos, Guardar, Inicio, Compartir.
+
+## Web en la tele: pestañas y aviso de vídeo con mando
+- El cursor, al llegar arriba del todo, también salta al botón 🗂 Pestañas. Los chips de pestañas y su ✕ se enfocan y se ven resaltados; al cambiar/cerrar pestañas el foco se queda en la cortinilla.
+- El aviso "🎬 Vídeo detectado" recibe el foco solo (OK = reproducir, derecha = ✕, Atrás = cerrar). También se llega bajando el cursor al borde inferior mientras el aviso está visible.
