@@ -42,6 +42,10 @@
         android:title="@string/tgacc_menu_kbd"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_tgacc_searchview"
+        android:title="@string/tgacc_view_files"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_tgacc_home"
         android:title="@string/app_home"
         android:icon="@drawable/ic_home_app"

@@ -126,6 +126,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private var downloadDialog: AlertDialog? = null
     private var searchResults: List<TgMessage>? = null
     private var searchQuery = ""
+    private var searchCovers = true
     private var searching = false
     /** Búsqueda global: [SM_ALL] = todo a la vez (chats y mensajes), [SM_NAMES] = solo chats/canales/bots, [SM_MSGS] = solo mensajes. */
     private var searchMode = SM_ALL
@@ -613,6 +614,10 @@ class TelegramAccountActivity : AppCompatActivity() {
         val inChat = chat != null && !searching
         menu.findItem(R.id.action_tgacc_refresh)?.isVisible = !searching && state == TgAuthState.READY
         menu.findItem(R.id.action_tgacc_home)?.isVisible = !searching
+        menu.findItem(R.id.action_tgacc_searchview)?.let {
+            it.isVisible = searching && !searchInLib
+            it.title = getString(if (searchCovers) R.string.tgacc_view_files else R.string.tgacc_view_covers)
+        }
         menu.findItem(R.id.action_tgacc_view)?.let {
             it.isVisible = inChat && !showingTopics
             it.title = getString(if (mediaMode) R.string.tgacc_view_all else R.string.tgacc_view_media)
@@ -671,6 +676,12 @@ class TelegramAccountActivity : AppCompatActivity() {
                 autoLoads = 0
                 invalidateOptionsMenu()
                 if (currentChat != null && !showingTopics && !searching) renderMessages()
+                return true
+            }
+            R.id.action_tgacc_searchview -> {
+                searchCovers = !searchCovers
+                invalidateOptionsMenu()
+                renderSearch()
                 return true
             }
             R.id.action_tgacc_home -> {
@@ -2166,8 +2177,49 @@ class TelegramAccountActivity : AppCompatActivity() {
         }.start()
     }
 
+    /** Resultados de vídeo como carátulas (agrupando versiones del mismo título). */
+    private fun renderSearchCovers(): Boolean {
+        val vids = searchResults.orEmpty().filter { isVideoMsg(it) && isMovieFile(it) && (!filtersActive() || passesFilters(searchTitle(it), it.date)) }
+        if (vids.isEmpty()) return false
+        useGrid()
+        title = getString(R.string.tgacc_search_results, searchQuery)
+        val df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+        val groups = LinkedHashMap<String, MutableList<TgMessage>>()
+        for (m in vids) {
+            val ep = epOf(m)
+            val base = nameKey(ep?.series ?: searchTitle(m))
+            val k = if (base.length >= 2) (if (ep != null) "s:$base" else base) else "id${m.messageId}"
+            groups.getOrPut(k) { ArrayList() }.add(m)
+        }
+        val items = ArrayList<MediaItem>()
+        val pool = ArrayList<String>()
+        for ((k, list) in groups) {
+            val lead = list.first()
+            val isSeries = k.startsWith("s:")
+            val options = if (isSeries) list.sortedWith(compareBy({ epOf(it)?.season ?: 0 }, { epOf(it)?.episode ?: 0 }, { it.messageId }))
+            else list.sortedBy { it.messageId }
+            val q = (epOf(lead)?.series ?: searchTitle(lead)).takeIf { it.length >= 2 }.orEmpty()
+            if (q.isNotEmpty()) pool.add(q)
+            val th = lead.thumbId
+            val badge = (if (isSeries) "📺 ×${options.size}" else if (options.size > 1) "▶ ×${options.size}" else "▶") +
+                (if (options.all { isSeen(it) }) " ✓" else "")
+            val chat = if (currentChat == null && lead.chatTitle.isNotEmpty()) lead.chatTitle + " · " else ""
+            items.add(MediaItem(key = "sr:$k", select = options, caption = q.ifEmpty { titleOf(lead) }, meta = chat + df.format(java.util.Date(lead.date * 1000L)),
+                thumbFileId = th, badge = badge, messageId = lead.messageId, query = q, options = options, pairedImage = false,
+                onLong = { toggleVideoFav(options, q, th) }) { onVideoClick(options, q, th) })
+        }
+        binding.recyclerView.visibility = View.VISIBLE
+        mediaAdapter.submit(items)
+        updateFilterRow()
+        binding.emptyView.visibility = View.GONE
+        prefetchInfo(pool.take(100))
+        focusItemIfTv()
+        return true
+    }
+
     private fun renderSearch() {
         if (searchInLib) { renderLibSearch(); return }
+        if (searchCovers && renderSearchCovers()) return
         useList()
         title = if (searchQuery.isNotEmpty()) getString(R.string.tgacc_search_results, searchQuery)
         else typeLabel(searchType) + (if (searchFormat.isNotEmpty()) " · " + searchFormat.uppercase() else "")

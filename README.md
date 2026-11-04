@@ -1758,3 +1758,7 @@ Capítulos: 6 atrás
 ## Telegram: menú más limpio
 - Quitado "Diagnóstico de llamadas (ntgcalls)" del menú.
 - "Credenciales API" y "Cerrar sesión" ahora van juntos en un único apartado "Cuenta (API y sesión)…".
+
+## Telegram: búsqueda con carátulas
+- Al buscar vídeos (en un chat, grupo o global) los resultados salen por defecto como carátulas (TMDb), agrupando versiones y capítulos de una serie.
+- Menú ⋮ → "Ver como archivos" / "Ver con carátulas" para alternar entre las dos vistas mientras se busca.
