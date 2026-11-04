@@ -573,6 +573,17 @@
     <string name="web_bookmark_added">Página guardada</string>
     <string name="web_bookmark_exists">Ya está en tus marcadores</string>
     <string name="web_bookmark_delete">¿Borrar el marcador «%1$s»?</string>
+    <string name="action_radio_mix">Radio con la TV</string>
+    <string name="radio_mix_title">📻 Radio con la TV (la TV queda en silencio)</string>
+    <string name="radio_mix_delay">⏱ Retraso de la radio: %1$d s</string>
+    <string name="radio_mix_waiting">📻 %1$s sonará en %2$d s (la TV sigue con su sonido)</string>
+    <string name="radio_mix_hint">Buscar emisora…</string>
+    <string name="radio_mix_stop">⏹ Quitar radio</string>
+    <string name="radio_mix_none">No hay lista de radio. Ábrela una vez en el apartado Radio.</string>
+    <string name="radio_mix_loading">Cargando emisoras…</string>
+    <string name="radio_mix_on">📻 %1$s · TV en silencio</string>
+    <string name="radio_mix_off">Radio quitada · vuelve el sonido de la TV</string>
+    <string name="radio_mix_error">No se pudo reproducir la emisora</string>
     <string name="menu_group_remote">📡 Control remoto</string>
     <string name="menu_group_custom">⚙ Personalizar</string>
     <string name="menu_group_backup">💾 Copia de seguridad</string>

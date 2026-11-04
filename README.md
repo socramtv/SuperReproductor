@@ -1779,3 +1779,12 @@ Capítulos: 6 atrás
 
 ## Menú principal agrupado
 - Menú ⋮ de la pantalla principal: Ahora en directo y Web arriba; submenús "📡 Control remoto", "⚙ Personalizar" (perfil, avisos por programa, pausa en directo, avisos de goles), "💾 Copia de seguridad" y "🔒 Acceso"; y "Abrir archivo…" al final.
+
+## Radio con la TV
+- En el reproductor (canales de TV) hay un botón 📻 en la barra de controles: elige una emisora de la lista del apartado Radio (con buscador) y suena la radio mientras sigues viendo el canal, con el sonido de la TV en silencio. El icono se pinta de naranja mientras está activo.
+- Para quitarla: pulsa 📻 → "⏹ Quitar radio" (vuelve el sonido de la TV). También se quita sola al salir de la pantalla del reproductor.
+- La radio es un segundo reproductor sin foco de audio, así que no pausa la TV.
+
+### Retraso de la radio
+- En el cuadro de 📻 hay una fila "⏱ Retraso de la radio: N s" con botones −5 −1 +1 +5 (0–90 s, se recuerda). La radio suele ir por delante de la TV; con el retraso la emisora se prepara en pausa, sigue descargando y empieza a sonar N segundos después, quedando N s por detrás del directo. Hasta entonces la TV conserva su sonido; al empezar la radio se silencia la TV.
+- Si cambias el retraso con una radio en marcha, se reinicia con el nuevo valor al cerrar el cuadro.

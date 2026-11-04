@@ -914,6 +914,7 @@ class PlayerActivity : AppCompatActivity() {
         binding.trackSelectionButton.visibility = visibility
         binding.subtitlesButton.visibility = if (isCastingRemote) View.GONE else visibility
         binding.sleepTimerButton.visibility = visibility
+        binding.radioMixButton.visibility = if (isCurrentStreamRadio || isCastingRemote) View.GONE else visibility
         binding.guideButton.visibility = if (channelList.size > 1) visibility else View.GONE
         // El formato de pantalla (ajustar/estirar/zoom) solo tiene sentido con
         // vídeo propio en pantalla: ni en radio ni al enviar a Chromecast.
@@ -1139,6 +1140,7 @@ class PlayerActivity : AppCompatActivity() {
         binding.sleepTimerButton.setOnClickListener { showSleepTimerDialog() }
         binding.guideButton.setOnClickListener { toggleMiniGuide() }
         binding.multiViewButton.setOnClickListener { openMultiView() }
+        binding.radioMixButton.setOnClickListener { showRadioMixDialog() }
         binding.tsBack5.setOnClickListener { timeShiftSeek(-5 * 60_000L) }
         binding.tsBack30.setOnClickListener { timeShiftSeek(-30_000L) }
         binding.tsFwd30.setOnClickListener { timeShiftSeek(30_000L) }
@@ -1300,6 +1302,7 @@ class PlayerActivity : AppCompatActivity() {
         saveContinueWatching()
         cancelAutoPlayGuard()
         val ctrl = controller
+        stopRadioMix(announce = false)
         val otherActive = activeInstance.let { it != null && it !== this }
         if (activeInstance === this) activeInstance = null
         if (ctrl != null) {
@@ -1354,6 +1357,8 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        radioPlayer?.release()
+        radioPlayer = null
         cancelAutoPlayGuard()
         if (activeInstance === this) activeInstance = null
         tsHandler.removeCallbacks(tsUiRunnable)
@@ -1440,6 +1445,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.subtitlesButton.visibility = View.GONE
             binding.videoFormatButton.visibility = View.GONE
             binding.sleepTimerButton.visibility = View.GONE
+            binding.radioMixButton.visibility = View.GONE
             binding.guideButton.visibility = View.GONE
             hideMiniGuide()
             binding.castButton.visibility = View.GONE
@@ -1994,6 +2000,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.videoFormatButton,
             binding.guideButton,
             binding.multiViewButton,
+            binding.radioMixButton,
             binding.sleepTimerButton,
             binding.pipButton
         )
@@ -2135,6 +2142,200 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /** Botón del temporizador de apagado: 30/60/90/120 minutos (o desactivarlo si ya hay uno en marcha). */
+    // -----------------------------------------------------------------
+    // Radio con la TV: se deja la TV en silencio (el vídeo sigue) y suena una emisora de la lista de Radio.
+    // Segundo reproductor propio de esta pantalla, sin gestionar el foco de audio (si no, pausaría la TV).
+    // Al salir de la pantalla se quita sola y el sonido vuelve a la TV.
+    // -----------------------------------------------------------------
+
+    private var radioPlayer: androidx.media3.exoplayer.ExoPlayer? = null
+    private var radioStream: Stream? = null
+
+    private fun updateRadioMixButton() {
+        val color = if (radioPlayer != null) ContextCompat.getColor(this, R.color.primary) else android.graphics.Color.WHITE
+        binding.radioMixButton.imageTintList = android.content.res.ColorStateList.valueOf(color)
+    }
+
+    private fun setTvMuted(muted: Boolean) {
+        val c = controller ?: return
+        if (c.isCommandAvailable(Player.COMMAND_SET_VOLUME)) c.volume = if (muted) 0f else 1f
+    }
+
+    private val radioHandler = Handler(Looper.getMainLooper())
+
+    private fun radioDelaySec(): Int = getSharedPreferences("radio_mix", MODE_PRIVATE).getInt("delay", 0).coerceIn(0, 90)
+
+    private fun setRadioDelaySec(v: Int) {
+        getSharedPreferences("radio_mix", MODE_PRIVATE).edit().putInt("delay", v.coerceIn(0, 90)).apply()
+    }
+
+    /**
+     * La radio suele ir por delante de la TV. Para retrasarla se prepara la emisora en pausa: el reproductor sigue
+     * descargando (búfer de retraso + 20 s) y a los N segundos empieza a sonar desde el principio de ese búfer,
+     * así queda N segundos por detrás del directo. La TV sigue sonando hasta ese momento y entonces se silencia.
+     */
+    @OptIn(UnstableApi::class)
+    private fun startRadioMix(stream: Stream) {
+        radioHandler.removeCallbacksAndMessages(null)
+        radioPlayer?.release()
+        val delaySec = radioDelaySec()
+        val bufMs = (delaySec + 20) * 1000
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(bufMs, bufMs, 1_500, 3_000)
+            .setTargetBufferBytes(16 * 1024 * 1024)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        val p = androidx.media3.exoplayer.ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
+            .setMediaSourceFactory(StreamMediaSourceFactory(this))
+            .build()
+        p.setAudioAttributes(
+            androidx.media3.common.AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .build(),
+            false
+        )
+        var pendingStart = true
+        p.addListener(object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                if (radioPlayer === p) {
+                    Toast.makeText(this@PlayerActivity, R.string.radio_mix_error, Toast.LENGTH_LONG).show()
+                    stopRadioMix(announce = false)
+                }
+            }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                if (radioPlayer !== p || state != Player.STATE_READY || !pendingStart) return
+                pendingStart = false
+                if (delaySec <= 0) beginRadioAudio(p, stream)
+                else radioHandler.postDelayed({ if (radioPlayer === p) beginRadioAudio(p, stream) }, delaySec * 1000L)
+            }
+        })
+        p.setMediaItem(
+            MediaItem.Builder()
+                .setUri(stream.url)
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(stream.name).setExtras(StreamMediaExtras.build(stream)).build())
+                .build()
+        )
+        p.playWhenReady = false
+        p.prepare()
+        radioPlayer = p
+        radioStream = stream
+        updateRadioMixButton()
+        if (delaySec > 0) Toast.makeText(this, getString(R.string.radio_mix_waiting, stream.name, delaySec), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun beginRadioAudio(p: androidx.media3.exoplayer.ExoPlayer, stream: Stream) {
+        p.playWhenReady = true
+        setTvMuted(true)
+        Toast.makeText(this, getString(R.string.radio_mix_on, stream.name), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopRadioMix(announce: Boolean) {
+        val p = radioPlayer ?: return
+        radioHandler.removeCallbacksAndMessages(null)
+        radioPlayer = null
+        radioStream = null
+        p.release()
+        setTvMuted(false)
+        updateRadioMixButton()
+        if (announce) Toast.makeText(this, R.string.radio_mix_off, Toast.LENGTH_SHORT).show()
+    }
+
+    /** Emisoras de la lista del apartado Radio (copia guardada; si no hay, se descarga de su dirección). */
+    private fun loadRadioStreams(onDone: (List<Stream>) -> Unit) {
+        Thread {
+            var list: List<Stream> = emptyList()
+            try {
+                var raw = com.example.superplayer.data.PlaylistCache.load(this, 5)
+                if (raw == null) {
+                    val url = AppPrefs.getListUrl(this, 5)
+                    if (!url.isNullOrBlank()) raw = com.example.superplayer.data.PlaylistRepository.downloadRaw(url)
+                }
+                if (raw != null) {
+                    list = com.example.superplayer.data.PlaylistRepository.parse(raw).categories
+                        .flatMap { c -> c.streams.map { if (it.category.isBlank()) it.copy(category = c.name) else it } }
+                }
+            } catch (e: Exception) {
+            }
+            runOnUiThread { if (!isFinishing && !isDestroyed) onDone(list) }
+        }.start()
+    }
+
+    private fun showRadioMixDialog() {
+        Toast.makeText(this, R.string.radio_mix_loading, Toast.LENGTH_SHORT).show()
+        loadRadioStreams { all ->
+            if (all.isEmpty()) {
+                Toast.makeText(this, R.string.radio_mix_none, Toast.LENGTH_LONG).show()
+                return@loadRadioStreams
+            }
+            val d = resources.displayMetrics.density
+            val col = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding((16 * d).toInt(), (8 * d).toInt(), (16 * d).toInt(), 0)
+            }
+            // Retraso de la radio respecto a la TV (la radio suele ir por delante): se aplica al cerrar el cuadro.
+            var delay = radioDelaySec()
+            val startDelay = delay
+            val delayLabel = android.widget.TextView(this).apply { textSize = 14f }
+            fun showDelay() { delayLabel.text = getString(R.string.radio_mix_delay, delay) }
+            showDelay()
+            val delayRow = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            delayRow.addView(delayLabel, android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            for (step in intArrayOf(-5, -1, 1, 5)) {
+                delayRow.addView(android.widget.Button(this).apply {
+                    text = if (step > 0) "+$step" else "$step"
+                    minWidth = 0
+                    minimumWidth = 0
+                    setPadding((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+                    setOnClickListener { delay = (delay + step).coerceIn(0, 90); setRadioDelaySec(delay); showDelay() }
+                }, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, (40 * d).toInt()))
+            }
+            col.addView(delayRow)
+            val filter = android.widget.EditText(this).apply { hint = getString(R.string.radio_mix_hint); setSingleLine() }
+            val list = android.widget.ListView(this)
+            col.addView(filter)
+            col.addView(list, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (300 * d).toInt()))
+            var shown: List<Stream> = all
+            val adapter = android.widget.ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, ArrayList())
+            fun refresh() {
+                val q = filter.text.toString().trim().lowercase()
+                shown = if (q.isEmpty()) all else all.filter { it.name.lowercase().contains(q) || it.category.lowercase().contains(q) }
+                adapter.clear()
+                adapter.addAll(shown.take(300).map { if (it.category.isNotBlank()) "${it.name}  ·  ${it.category}" else it.name })
+                adapter.notifyDataSetChanged()
+            }
+            list.adapter = adapter
+            refresh()
+            filter.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(a: CharSequence?, st: Int, c: Int, af: Int) {}
+                override fun onTextChanged(a: CharSequence?, st: Int, b: Int, c: Int) { refresh() }
+                override fun afterTextChanged(e: android.text.Editable?) {}
+            })
+            val b = androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.radio_mix_title)
+                .setView(col)
+                .setNegativeButton(android.R.string.cancel, null)
+            if (radioPlayer != null) b.setNeutralButton(R.string.radio_mix_stop) { _, _ -> stopRadioMix(announce = true) }
+            val dialog = b.create()
+            var chose = false
+            list.setOnItemClickListener { _, _, pos, _ ->
+                shown.getOrNull(pos)?.let { chose = true; startRadioMix(it) }
+                dialog.dismiss()
+            }
+            dialog.setOnDismissListener {
+                // Si solo se cambió el retraso con una radio en marcha, se reinicia con el nuevo.
+                val cur = radioStream
+                if (!chose && delay != startDelay && cur != null && radioPlayer != null) startRadioMix(cur)
+            }
+            dialog.show()
+        }
+    }
+
     private fun showSleepTimerDialog() {
         val options = ArrayList<Int>()
         val labels = ArrayList<String>()
