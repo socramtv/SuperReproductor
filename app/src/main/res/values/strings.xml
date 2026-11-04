@@ -573,6 +573,10 @@
     <string name="web_bookmark_added">Página guardada</string>
     <string name="web_bookmark_exists">Ya está en tus marcadores</string>
     <string name="web_bookmark_delete">¿Borrar el marcador «%1$s»?</string>
+    <string name="menu_group_remote">📡 Control remoto</string>
+    <string name="menu_group_custom">⚙ Personalizar</string>
+    <string name="menu_group_backup">💾 Copia de seguridad</string>
+    <string name="menu_group_access">🔒 Acceso</string>
     <string name="web_find_hint">Buscar en la página</string>
     <string name="web_new_tab">➕ Nueva pestaña</string>
     <string name="web_tab_new_chip">＋ Nueva</string>

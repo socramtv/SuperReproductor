@@ -45,79 +45,89 @@
         app:showAsAction="always" />
 
 
-    <!-- Copia de seguridad (ver BackupManager): en el menú de los tres
-         puntos para no recargar la barra. -->
-    <!-- Mosaico de favoritos con lo que emiten ahora (ver NowLiveActivity) -->
+    <!-- Menú de los tres puntos, agrupado por apartados -->
     <item
         android:id="@+id/action_now_live"
         android:title="@string/action_now_live"
         app:showAsAction="never" />
 
-    <!-- Navegador web dentro de la app (ver ui/WebActivity) -->
     <item
         android:id="@+id/action_web"
         android:title="@string/action_web"
         app:showAsAction="never" />
 
-    <!-- Móvil como mando de la tele (ver ui/RemoteActivity) y ajustes de control remoto de esta pantalla (ver remote/RemoteServer) -->
     <item
-        android:id="@+id/action_remote_control"
-        android:title="@string/action_remote_control"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/action_remote_settings"
-        android:title="@string/action_remote_settings"
-        app:showAsAction="never" />
-
-    <!-- Cine: carátulas y sinopsis de las películas (ver ui/CineActivity) -->
-
-    <!-- Perfiles (ver data/Profiles); el título lleva el perfil activo (lo pone MainActivity) -->
-    <item
-        android:id="@+id/action_profiles"
-        android:title="@string/action_profiles"
-        app:showAsAction="never" />
-
-    <!-- Avisos cuando la guía trae un programa o serie (ver reminder/ProgramAlerts) -->
-    <item
-        android:id="@+id/action_program_alerts"
-        android:title="@string/action_program_alerts"
-        app:showAsAction="never" />
-
-    <!-- Pausa en directo: cuántos minutos se guardan (ver player/TimeShiftSession) -->
-    <item
-        android:id="@+id/action_timeshift"
-        android:title="@string/timeshift_menu_item"
-        app:showAsAction="never" />
-
-    <!-- Avisos de goles y eventos de tus equipos (ver sports/GoalAlerts) -->
-    <item
-        android:id="@+id/action_goal_alerts"
-        android:title="@string/action_goal_alerts"
-        app:showAsAction="never" />
+        android:id="@+id/group_remote"
+        android:title="@string/menu_group_remote"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_remote_control"
+                android:title="@string/action_remote_control"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_remote_settings"
+                android:title="@string/action_remote_settings"
+                app:showAsAction="never" />
+        </menu>
+    </item>
 
     <item
-        android:id="@+id/action_backup_export"
-        android:title="@string/action_backup_export"
-        app:showAsAction="never" />
+        android:id="@+id/group_custom"
+        android:title="@string/menu_group_custom"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_profiles"
+                android:title="@string/action_profiles"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_program_alerts"
+                android:title="@string/action_program_alerts"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_timeshift"
+                android:title="@string/timeshift_menu_item"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_goal_alerts"
+                android:title="@string/action_goal_alerts"
+                app:showAsAction="never" />
+        </menu>
+    </item>
 
     <item
-        android:id="@+id/action_backup_import"
-        android:title="@string/action_backup_import"
-        app:showAsAction="never" />
+        android:id="@+id/group_backup"
+        android:title="@string/menu_group_backup"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_backup_export"
+                android:title="@string/action_backup_export"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_backup_import"
+                android:title="@string/action_backup_import"
+                app:showAsAction="never" />
+        </menu>
+    </item>
 
-    <!-- Bloqueo con PIN gestionado a distancia (ver data/AccessControl) -->
     <item
-        android:id="@+id/action_access"
-        android:title="@string/action_access"
-        app:showAsAction="never" />
+        android:id="@+id/group_access"
+        android:title="@string/menu_group_access"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_access"
+                android:title="@string/action_access"
+                app:showAsAction="never" />
+            <item
+                android:id="@+id/action_access_log"
+                android:title="@string/action_access_log"
+                app:showAsAction="never" />
+        </menu>
+    </item>
 
-    <item
-        android:id="@+id/action_access_log"
-        android:title="@string/action_access_log"
-        app:showAsAction="never" />
-
-    <!-- Elegir un archivo JSON/M3U del propio dispositivo (antes era un botón de la pantalla principal) -->
     <item
         android:id="@+id/action_load_file"
         android:title="@string/action_load_file_menu"

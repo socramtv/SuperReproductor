@@ -1776,3 +1776,6 @@ Capítulos: 6 atrás
 ## Web en la tele: pestañas y aviso de vídeo con mando
 - El cursor, al llegar arriba del todo, también salta al botón 🗂 Pestañas. Los chips de pestañas y su ✕ se enfocan y se ven resaltados; al cambiar/cerrar pestañas el foco se queda en la cortinilla.
 - El aviso "🎬 Vídeo detectado" recibe el foco solo (OK = reproducir, derecha = ✕, Atrás = cerrar). También se llega bajando el cursor al borde inferior mientras el aviso está visible.
+
+## Menú principal agrupado
+- Menú ⋮ de la pantalla principal: Ahora en directo y Web arriba; submenús "📡 Control remoto", "⚙ Personalizar" (perfil, avisos por programa, pausa en directo, avisos de goles), "💾 Copia de seguridad" y "🔒 Acceso"; y "Abrir archivo…" al final.
