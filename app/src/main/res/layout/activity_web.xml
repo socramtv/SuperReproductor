@@ -76,6 +76,18 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/webFind"
+                android:layout_width="40dp"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:text="🔍"
+                android:textSize="18sp"
+                android:contentDescription="@string/web_find_hint"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+
+            <TextView
                 android:id="@+id/webVideos"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
@@ -122,6 +134,20 @@
             android:paddingHorizontal="4dp"
             android:paddingBottom="6dp"
             android:background="@color/surface_dark">
+            <TextView
+                android:id="@+id/webTabsBtn"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="3dp"
+                android:gravity="center"
+                android:text="🗂 1"
+                android:textSize="13sp"
+                android:textColor="@color/on_background"
+                android:singleLine="true"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_web_chip" />
             <TextView
                 android:id="@+id/webFavsBtn"
                 android:layout_width="0dp"
@@ -180,6 +206,97 @@
                 android:background="@drawable/bg_web_chip" />
         </LinearLayout>
 
+        <!-- Buscar en la página -->
+        <LinearLayout
+            android:id="@+id/webFindBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="6dp"
+            android:paddingBottom="6dp"
+            android:visibility="gone"
+            android:background="@color/surface_dark">
+
+            <EditText
+                android:id="@+id/webFindEt"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="@string/web_find_hint"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:maxLines="1"
+                android:background="@drawable/bg_web_url"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="8dp"
+                android:textColor="@color/on_background"
+                android:textColorHint="@color/on_surface_muted"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/webFindCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="8dp"
+                android:textColor="@color/on_surface_muted"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/webFindPrev"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:text="▲"
+                android:textSize="16sp"
+                android:textColor="@color/on_background"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+
+            <TextView
+                android:id="@+id/webFindNext"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:text="▼"
+                android:textSize="16sp"
+                android:textColor="@color/on_background"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+
+            <TextView
+                android:id="@+id/webFindClose"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:text="✕"
+                android:textSize="16sp"
+                android:textColor="@color/on_background"
+                android:focusable="true"
+                android:clickable="true"
+                android:background="@drawable/bg_tg_star" />
+        </LinearLayout>
+
+        <!-- Pestañas abiertas: cortinilla que se abre y se cierra con el botón 🗂 -->
+        <HorizontalScrollView
+            android:id="@+id/webTabsPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:visibility="gone"
+            android:background="@color/surface_dark">
+
+            <LinearLayout
+                android:id="@+id/webTabsStrip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="6dp"
+                android:paddingBottom="6dp" />
+        </HorizontalScrollView>
+
         <!-- Tira de favoritos (se muestra / oculta con el botón Favoritos) -->
         <HorizontalScrollView
             android:id="@+id/webFavScroll"
@@ -212,10 +329,55 @@
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <WebView
-                android:id="@+id/webView"
+            <!-- Los WebView de cada pestaña se añaden aquí desde WebActivity -->
+
+            <!-- Aviso al detectar un vídeo en la página -->
+            <LinearLayout
+                android:id="@+id/webVideoBanner"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_margin="12dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="6dp"
+                android:visibility="gone"
+                android:elevation="8dp"
+                android:background="@drawable/bg_web_chip">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/web_video_found"
+                    android:textColor="@color/on_background"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/webVideoPlay"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:paddingHorizontal="14dp"
+                    android:text="@string/web_video_play"
+                    android:textColor="@color/primary"
+                    android:textStyle="bold"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:background="@drawable/bg_tg_star" />
+
+                <TextView
+                    android:id="@+id/webVideoClose"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="✕"
+                    android:textColor="@color/on_background"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:background="@drawable/bg_tg_star" />
+            </LinearLayout>
 
             <!-- Página de inicio: cuadrícula de favoritos -->
             <ScrollView

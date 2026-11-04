@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -50,10 +51,21 @@ class WebActivity : AppCompatActivity() {
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var desktop = false
     private var defaultUa = ""
-    /** Página actual, guardada desde el hilo principal: shouldInterceptRequest corre en otro hilo y no puede preguntarle la URL al WebView. */
-    @Volatile private var currentPage = ""
-    private val detected: MutableMap<String, String> =
-        java.util.Collections.synchronizedMap(LinkedHashMap<String, String>()) // url -> página en la que apareció
+    /** Una pestaña: su WebView, la página actual (guardada desde el hilo principal: shouldInterceptRequest corre en otro hilo) y sus vídeos detectados. */
+    private class Tab(val view: WebView) {
+        @Volatile var page = ""
+        /** Dirección que aún no se ha cargado (pestañas restauradas: se cargan al abrirlas). */
+        var pending: String? = null
+        var bannerShown = false
+        val detected: MutableMap<String, String> =
+            java.util.Collections.synchronizedMap(LinkedHashMap<String, String>()) // url -> página en la que apareció
+    }
+
+    private val tabs = ArrayList<Tab>()
+    private var curIdx = 0
+    private val curTab: Tab get() = tabs[curIdx]
+    private val webView: WebView get() = tabs[curIdx].view
+    private val detected: MutableMap<String, String> get() = tabs[curIdx].detected
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,7 +77,92 @@ class WebActivity : AppCompatActivity() {
         applySystemBarInsets(top = binding.webBar, bottom = binding.webBody)
         title = getString(R.string.web_title)
 
-        val wv = binding.webView
+        isTv = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+
+        binding.webBack.setOnClickListener { if (webView.canGoBack()) webView.goBack() }
+        binding.webForward.setOnClickListener { if (webView.canGoForward()) webView.goForward() }
+        binding.webReload.setOnClickListener { webView.reload() }
+        binding.webVideos.setOnClickListener { showDetectedVideos() }
+        binding.webMenu.setOnClickListener { showMenu(it) }
+        binding.webAppHome.setOnClickListener {
+            // A la pantalla principal de la app de una vez (sin volver atrás paso a paso).
+            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        }
+        binding.webFavsBtn.setOnClickListener { toggleFavStrip() }
+        binding.webSaveBtn.setOnClickListener { toggleSaveCurrent() }
+        binding.webHomeBtn.setOnClickListener { goHome() }
+        binding.webShareBtn.setOnClickListener { shareCurrent() }
+        binding.webHomeSearch.setOnClickListener {
+            binding.webUrl.requestFocus()
+            (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                .showSoftInput(binding.webUrl, 0)
+        }
+        binding.webUrl.setOnEditorActionListener { v, actionId, event ->
+            val go = actionId == EditorInfo.IME_ACTION_GO ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
+            if (go) {
+                load(v.text.toString())
+                v.clearFocus()
+                webView.requestFocus()
+                (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                    .hideSoftInputFromWindow(v.windowToken, 0)
+            }
+            go
+        }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    customView != null -> hideCustomView()
+                    binding.webFindBar.visibility == View.VISIBLE -> hideFind()
+                    binding.webTabsPanel.visibility == View.VISIBLE -> binding.webTabsPanel.visibility = View.GONE
+                    homeVisible() && webView.url != null -> hideHome()
+                    homeVisible() -> finish()
+                    binding.webFavScroll.visibility == View.VISIBLE -> binding.webFavScroll.visibility = View.GONE
+                    webView.canGoBack() -> webView.goBack()
+                    else -> finish()
+                }
+            }
+        })
+
+        binding.webFind.setOnClickListener { if (binding.webFindBar.visibility == View.VISIBLE) hideFind() else showFind() }
+        binding.webFindClose.setOnClickListener { hideFind() }
+        binding.webFindNext.setOnClickListener { webView.findNext(true) }
+        binding.webFindPrev.setOnClickListener { webView.findNext(false) }
+        binding.webFindEt.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(a: CharSequence?, st: Int, c: Int, af: Int) {}
+            override fun onTextChanged(a: CharSequence?, st: Int, b: Int, c: Int) {
+                val q = a?.toString().orEmpty()
+                if (q.isEmpty()) { webView.clearMatches(); binding.webFindCount.text = "" } else webView.findAllAsync(q)
+            }
+            override fun afterTextChanged(e: android.text.Editable?) {}
+        })
+        binding.webFindEt.setOnEditorActionListener { _, _, _ -> webView.findNext(true); true }
+        binding.webTabsBtn.setOnClickListener { toggleTabs() }
+        binding.webVideoClose.setOnClickListener { hideBanner() }
+        binding.webVideoPlay.setOnClickListener {
+            hideBanner()
+            val urls = synchronized(detected) { detected.keys.toList() }
+            if (urls.size == 1) playInApp(urls[0], detected[urls[0]] ?: urls[0]) else showDetectedVideos()
+        }
+
+        if (isTv) setupTv()
+        // Pestañas de la vez anterior (se cargan al abrirlas); si se sale (p. ej. con la casita 🏠 de la app) y se vuelve, sigue donde se estaba.
+        val saved = loadSavedTabs()
+        for (u in saved.first) newTab(u.ifBlank { null }, select = false)
+        val explicit = intent?.data?.toString()
+        if (!explicit.isNullOrBlank()) newTab(explicit)
+        else if (tabs.isNotEmpty()) switchTo(saved.second.coerceIn(0, tabs.size - 1))
+        else { newTab(null); goHome() }
+        updateNavButtons()
+        updateSaveButton()
+    }
+
+    // ---- Pestañas ----
+
+    @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
+    private fun configure(t: Tab) {
+        val wv = t.view
         val s = wv.settings
         s.javaScriptEnabled = true
         s.domStorageEnabled = true
@@ -77,9 +174,16 @@ class WebActivity : AppCompatActivity() {
         s.useWideViewPort = true
         s.loadWithOverviewMode = true
         s.allowFileAccess = false
-        defaultUa = s.userAgentString
-        applySavedAgent()
+        if (defaultUa.isEmpty()) defaultUa = s.userAgentString
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+        wv.addJavascriptInterface(Scout(t), "SocramScout")
+        if (isTv) {
+            wv.isFocusable = true
+            wv.isFocusableInTouchMode = true
+            wv.setOnFocusChangeListener { _, has ->
+                if (has && cursorEnabled()) showCursor() else cursorView?.visibility = View.GONE
+            }
+        }
 
         wv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -98,36 +202,40 @@ class WebActivity : AppCompatActivity() {
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url.toString()
-                if (isMediaUrl(url)) {
-                    val page = currentPage.ifEmpty { url }
-                    val added = synchronized(detected) {
-                        if (detected.size < 30 && !detected.containsKey(url)) { detected[url] = page; true } else false
-                    }
-                    if (added) runOnUiThread { updateVideosButton() }
-                }
+                if (looksLikeMedia(url)) addDetected(t, url)
                 return null
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                currentPage = url
-                hideHome()
-                detected.clear()
-                updateVideosButton()
-                binding.webProgress.visibility = View.VISIBLE
-                if (!binding.webUrl.hasFocus()) binding.webUrl.setText(url)
+                t.page = url
+                t.bannerShown = false
+                t.detected.clear()
+                if (t === curTab) {
+                    hideHome()
+                    updateVideosButton()
+                    hideBanner()
+                    binding.webProgress.visibility = View.VISIBLE
+                    if (!binding.webUrl.hasFocus()) binding.webUrl.setText(url)
+                }
+                view.evaluateJavascript(SCOUT_JS, null)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                currentPage = url
-                binding.webProgress.visibility = View.GONE
-                if (!binding.webUrl.hasFocus()) binding.webUrl.setText(url)
+                t.page = url
+                view.evaluateJavascript(SCOUT_JS, null)
                 addHistory(url, view.title.orEmpty())
-                updateNavButtons()
-                updateSaveButton()
+                if (t === curTab) {
+                    binding.webProgress.visibility = View.GONE
+                    if (!binding.webUrl.hasFocus()) binding.webUrl.setText(url)
+                    updateNavButtons()
+                    updateSaveButton()
+                }
+                refreshTabsUi()
             }
         }
         wv.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, newProgress: Int) {
+                if (t !== curTab) return
                 binding.webProgress.progress = newProgress
                 binding.webProgress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
             }
@@ -155,91 +263,218 @@ class WebActivity : AppCompatActivity() {
         wv.setDownloadListener { url, _, _, _, _ ->
             if (isMediaUrl(url)) askPlay(url, wv.url ?: url) else openUri(url)
         }
-
-        binding.webBack.setOnClickListener { if (wv.canGoBack()) wv.goBack() }
-        binding.webForward.setOnClickListener { if (wv.canGoForward()) wv.goForward() }
-        binding.webReload.setOnClickListener { wv.reload() }
-        binding.webVideos.setOnClickListener { showDetectedVideos() }
-        binding.webMenu.setOnClickListener { showMenu(it) }
-        binding.webAppHome.setOnClickListener {
-            // A la pantalla principal de la app de una vez (sin volver atrás paso a paso).
-            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        wv.setFindListener { active, total, _ ->
+            if (t === curTab) binding.webFindCount.text = if (total == 0) "0/0" else "${active + 1}/$total"
         }
-        binding.webFavsBtn.setOnClickListener { toggleFavStrip() }
-        binding.webSaveBtn.setOnClickListener { toggleSaveCurrent() }
-        binding.webHomeBtn.setOnClickListener { goHome() }
-        binding.webShareBtn.setOnClickListener { shareCurrent() }
-        binding.webHomeSearch.setOnClickListener {
-            binding.webUrl.requestFocus()
-            (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
-                .showSoftInput(binding.webUrl, 0)
+        // Pulsación larga en un enlace: abrirlo en otra pestaña o copiarlo.
+        wv.setOnLongClickListener {
+            val r = wv.hitTestResult
+            val link = r.extra
+            if ((r.type == WebView.HitTestResult.SRC_ANCHOR_TYPE || r.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) && !link.isNullOrBlank()) {
+                AlertDialog.Builder(this)
+                    .setTitle(link.take(80))
+                    .setItems(arrayOf(getString(R.string.web_link_newtab), getString(R.string.web_link_here), getString(R.string.web_link_copy))) { _, i ->
+                        when (i) {
+                            0 -> newTab(link)
+                            1 -> load(link)
+                            else -> copyText(link, R.string.web_link_copied)
+                        }
+                    }.show()
+                true
+            } else false
         }
-        binding.webUrl.setOnEditorActionListener { v, actionId, event ->
-            val go = actionId == EditorInfo.IME_ACTION_GO ||
-                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
-            if (go) {
-                load(v.text.toString())
-                v.clearFocus()
-                wv.requestFocus()
-                (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
-                    .hideSoftInputFromWindow(v.windowToken, 0)
-            }
-            go
-        }
+        applySavedAgent()
+    }
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                when {
-                    customView != null -> hideCustomView()
-                    homeVisible() && wv.url != null -> hideHome()
-                    homeVisible() -> finish()
-                    binding.webFavScroll.visibility == View.VISIBLE -> binding.webFavScroll.visibility = View.GONE
-                    wv.canGoBack() -> wv.goBack()
-                    else -> finish()
-                }
-            }
-        })
+    private fun copyText(text: String, msg: Int) {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("url", text))
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
 
+    private fun newTab(url: String?, select: Boolean = true) {
+        val wv = WebView(this)
+        wv.visibility = View.GONE
+        binding.webBody.addView(wv, 0, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val t = Tab(wv)
+        t.pending = url
+        tabs.add(t)
+        configure(t)
+        if (select) switchTo(tabs.size - 1) else refreshTabsUi()
+    }
+
+    private fun switchTo(i: Int) {
+        if (i !in tabs.indices) return
+        hideFind()
+        hideBanner()
+        tabs.forEachIndexed { j, x -> if (j != i) { x.view.visibility = View.GONE; x.view.onPause() } }
+        curIdx = i
+        val t = tabs[i]
+        binding.webHome.visibility = View.GONE
+        t.view.visibility = View.VISIBLE
+        t.view.onResume()
+        val p = t.pending
+        t.pending = null
+        if (p != null) t.view.loadUrl(p)
+        if (t.view.url == null && p == null) showHome()
+        else if (!binding.webUrl.hasFocus()) binding.webUrl.setText(t.view.url ?: p.orEmpty())
+        binding.webProgress.visibility = View.GONE
         updateNavButtons()
-        isTv = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
-        if (isTv) setupTv()
         updateSaveButton()
-        // Si se sale (p. ej. con la casita 🏠 de la app) y se vuelve, sigue donde se estaba.
-        val start = intent?.data?.toString() ?: savedInstanceState?.getString("url") ?: prefs().getString("last_url", "")
-        if (start.isNullOrBlank()) goHome() else load(start)
+        updateVideosButton()
+        refreshTabsUi()
+        if (isTv) t.view.post { t.view.requestFocus() }
+    }
+
+    private fun closeTab(i: Int) {
+        if (i !in tabs.indices) return
+        val t = tabs.removeAt(i)
+        binding.webBody.removeView(t.view)
+        t.view.destroy()
+        if (tabs.isEmpty()) { curIdx = 0; newTab(null); return }
+        curIdx = curIdx.coerceIn(0, tabs.size - 1)
+        val ni = when {
+            i < curIdx -> curIdx - 1
+            else -> minOf(i, tabs.size - 1).let { if (i == curIdx) it else curIdx }
+        }
+        switchTo(ni.coerceIn(0, tabs.size - 1))
+    }
+
+    private fun toggleTabs() {
+        val sc = binding.webTabsPanel
+        if (sc.visibility == View.VISIBLE) sc.visibility = View.GONE
+        else { renderTabs(); sc.visibility = View.VISIBLE }
+    }
+
+    private fun refreshTabsUi() {
+        binding.webTabsBtn.text = "🗂 ${tabs.size}"
+        if (binding.webTabsPanel.visibility == View.VISIBLE) renderTabs()
+    }
+
+    private fun tabLabel(t: Tab): String {
+        val u = t.view.url ?: t.pending
+        if (u == null) return getString(R.string.web_tab_blank)
+        return (t.view.title?.takeIf { it.isNotBlank() && !it.startsWith("http") } ?: Uri.parse(u).host?.removePrefix("www.") ?: u).take(22)
+    }
+
+    private fun renderTabs() {
+        val strip = binding.webTabsStrip
+        strip.removeAllViews()
+        val d = resources.displayMetrics.density
+        val fg = androidx.core.content.ContextCompat.getColor(this, R.color.on_background)
+        val accent = androidx.core.content.ContextCompat.getColor(this, R.color.primary)
+        fun lp() = android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0) }
+        tabs.forEachIndexed { i, t ->
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setBackgroundResource(R.drawable.bg_web_chip)
+            }
+            row.addView(android.widget.TextView(this).apply {
+                text = tabLabel(t)
+                textSize = 13f
+                maxLines = 1
+                setTextColor(if (i == curIdx) accent else fg)
+                if (i == curIdx) setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setPadding((14 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt())
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { switchTo(i) }
+            })
+            row.addView(android.widget.TextView(this).apply {
+                text = "✕"
+                textSize = 13f
+                setTextColor(fg)
+                setPadding((6 * d).toInt(), (8 * d).toInt(), (12 * d).toInt(), (8 * d).toInt())
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { closeTab(i) }
+            })
+            strip.addView(row, lp())
+        }
+        strip.addView(android.widget.TextView(this).apply {
+            setText(R.string.web_tab_new_chip)
+            textSize = 13f
+            setTextColor(accent)
+            setBackgroundResource(R.drawable.bg_web_chip)
+            setPadding((14 * d).toInt(), (8 * d).toInt(), (14 * d).toInt(), (8 * d).toInt())
+            isFocusable = true
+            isClickable = true
+            setOnClickListener { newTab(null) }
+        }, lp())
+    }
+
+    /** Guarda las pestañas abiertas para reabrirlas al volver a Web. */
+    private fun saveTabs() {
+        val arr = JSONArray()
+        for (t in tabs) {
+            val u = t.view.url ?: t.pending
+            arr.put(if (!u.isNullOrBlank() && (u.startsWith("http://") || u.startsWith("https://"))) u else "")
+        }
+        val cur = tabs.getOrNull(curIdx)
+        val keep = cur != null && !homeVisible() && !cur.view.url.isNullOrBlank()
+        prefs().edit().putString("tabs", arr.toString()).putInt("tab_cur", curIdx)
+            .putString("last_url", if (keep) cur!!.view.url else "").apply()
+    }
+
+    private fun loadSavedTabs(): Pair<List<String>, Int> {
+        val list = ArrayList<String>()
+        try {
+            val arr = JSONArray(prefs().getString("tabs", "[]"))
+            for (i in 0 until arr.length()) list.add(arr.optString(i))
+        } catch (e: Exception) { }
+        if (list.isEmpty()) prefs().getString("last_url", "")?.takeIf { it.isNotBlank() }?.let { list.add(it) }
+        return list.take(12) to prefs().getInt("tab_cur", 0)
+    }
+
+    // ---- Buscar en la página ----
+
+    private fun showFind() {
+        binding.webFindBar.visibility = View.VISIBLE
+        binding.webFindEt.requestFocus()
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+            .showSoftInput(binding.webFindEt, 0)
+    }
+
+    private fun hideFind() {
+        if (binding.webFindBar.visibility != View.VISIBLE) return
+        if (tabs.isNotEmpty()) webView.clearMatches()
+        binding.webFindBar.visibility = View.GONE
+        binding.webFindCount.text = ""
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+            .hideSoftInputFromWindow(binding.webFindEt.windowToken, 0)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        binding.webView.url?.let { outState.putString("url", it) }
+        webView.url?.let { outState.putString("url", it) }
     }
 
     override fun onResume() {
         super.onResume()
-        if (!homeVisible()) binding.webView.onResume()
+        if (!homeVisible()) webView.onResume()
     }
 
     override fun onPause() {
-        saveLastPage()
-        binding.webView.onPause()
+        saveTabs()
+        webView.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
-        (binding.webView.parent as? ViewGroup)?.removeView(binding.webView)
-        binding.webView.destroy()
+        for (t in tabs) {
+            (t.view.parent as? ViewGroup)?.removeView(t.view)
+            t.view.destroy()
+        }
+        tabs.clear()
         super.onDestroy()
     }
 
     private fun prefs() = getSharedPreferences("web_browser", Context.MODE_PRIVATE)
 
     // ---- Última página y historial ----
-
-    private fun saveLastPage() {
-        val u = binding.webView.url
-        val keep = !homeVisible() && !u.isNullOrBlank() && (u.startsWith("http://") || u.startsWith("https://"))
-        prefs().edit().putString("last_url", if (keep) u else "").apply()
-    }
 
     private class HistEntry(val url: String, val title: String, val at: Long)
 
@@ -311,12 +546,12 @@ class WebActivity : AppCompatActivity() {
             !t.contains(' ') && t.contains('.') -> "https://$t"
             else -> "https://www.google.com/search?q=" + URLEncoder.encode(t, "UTF-8")
         }
-        binding.webView.loadUrl(url)
+        webView.loadUrl(url)
     }
 
     private fun updateNavButtons() {
-        binding.webBack.alpha = if (binding.webView.canGoBack()) 1f else 0.35f
-        binding.webForward.alpha = if (binding.webView.canGoForward()) 1f else 0.35f
+        binding.webBack.alpha = if (webView.canGoBack()) 1f else 0.35f
+        binding.webForward.alpha = if (webView.canGoForward()) 1f else 0.35f
     }
 
     private fun hideCustomView() {
@@ -354,23 +589,86 @@ class WebActivity : AppCompatActivity() {
 
     // ---- Vídeos de la página ----
 
+    /** Enlace directo a un vídeo/audio por su ruta: al tocarlo se ofrece reproducirlo en vez de descargarlo. */
     private fun isMediaUrl(url: String): Boolean {
         val path = url.substringBefore('?').substringBefore('#').lowercase()
         return MEDIA_EXT.any { path.endsWith(it) }
     }
 
+    /** Detección más amplia: extensión en cualquier parte de la dirección (también en parámetros), sin trozos .ts/.m4s de HLS. */
+    private fun looksLikeMedia(url: String): Boolean {
+        if (url.length > 2000) return false
+        val u = url.lowercase()
+        if (!u.startsWith("http")) return false
+        return MEDIA_RE.containsMatchIn(u) || u.contains("m3u8") || u.contains("mime=video") || u.contains("mime_type=video")
+    }
+
     private fun streamTypeFor(url: String): String {
-        val path = url.substringBefore('?').lowercase()
+        val l = url.lowercase()
+        val path = l.substringBefore('?')
         return when {
-            path.endsWith(".m3u8") -> "HLS"
-            path.endsWith(".mpd") -> "DASH"
-            path.endsWith(".mp3") || path.endsWith(".aac") -> "MP3"
+            l.contains("m3u8") -> "HLS"
+            path.endsWith(".mpd") || l.contains(".mpd?") || l.contains(".mpd/") -> "DASH"
+            path.endsWith(".mp3") || path.endsWith(".aac") || path.endsWith(".m4a") || path.endsWith(".ogg") -> "MP3"
             else -> "MP4"
         }
     }
 
+    private fun qualityOf(url: String): String =
+        Regex("(2160|1440|1080|720|576|480|360|240)p?", RegexOption.IGNORE_CASE).find(url.substringAfterLast('/'))?.let { " · ${it.groupValues[1]}p" }.orEmpty()
+
+    /** Los vídeos que encuentra el escáner de JavaScript (etiquetas video/source, fetch y XHR de la página). */
+    private inner class Scout(private val tab: Tab) {
+        @JavascriptInterface
+        fun found(u: String?) {
+            if (u == null || u.length > 2000 || !(u.startsWith("http://") || u.startsWith("https://"))) return
+            addDetected(tab, u)
+        }
+    }
+
+    private fun addDetected(tab: Tab, url: String) {
+        val added = synchronized(tab.detected) {
+            if (tab.detected.size < 40 && !tab.detected.containsKey(url)) { tab.detected[url] = tab.page.ifEmpty { url }; true } else false
+        }
+        if (added) runOnUiThread {
+            if (isFinishing || isDestroyed || tab !== curTab) return@runOnUiThread
+            updateVideosButton()
+            onVideoDetected(tab, url)
+        }
+    }
+
+    private fun alertMode() = prefs().getInt("video_alert", 0)
+
+    private fun alertModeLabel() = getString(when (alertMode()) { 1 -> R.string.web_alert_short_auto; 2 -> R.string.web_alert_short_off; else -> R.string.web_alert_short_ask })
+
+    private fun chooseAlertMode() {
+        val names = arrayOf(getString(R.string.web_alert_ask), getString(R.string.web_alert_auto), getString(R.string.web_alert_off))
+        AlertDialog.Builder(this).setTitle(R.string.web_alert_title)
+            .setSingleChoiceItems(names, alertMode()) { d, i -> prefs().edit().putInt("video_alert", i).apply(); d.dismiss() }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    /** Primer vídeo de la página: aviso con botón para reproducirlo (o reproducción directa, según el ajuste). */
+    private fun onVideoDetected(tab: Tab, url: String) {
+        val mode = alertMode()
+        if (mode == 2 || tab.bannerShown || customView != null) return
+        if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return
+        tab.bannerShown = true
+        if (mode == 1) { playInApp(url, tab.detected[url] ?: url); return }
+        binding.webVideoBanner.visibility = View.VISIBLE
+        binding.webVideoBanner.removeCallbacks(hideBannerRunnable)
+        binding.webVideoBanner.postDelayed(hideBannerRunnable, 15000)
+    }
+
+    private val hideBannerRunnable = Runnable { hideBanner() }
+
+    private fun hideBanner() {
+        binding.webVideoBanner.removeCallbacks(hideBannerRunnable)
+        binding.webVideoBanner.visibility = View.GONE
+    }
+
     private fun playInApp(url: String, page: String) {
-        val name = (binding.webView.title?.takeIf { it.isNotBlank() } ?: Uri.parse(url).lastPathSegment ?: url).take(80)
+        val name = (webView.title?.takeIf { it.isNotBlank() } ?: Uri.parse(url).lastPathSegment ?: url).take(80)
         val headers = HashMap<String, String>()
         if (page.startsWith("http")) {
             headers["Referer"] = page
@@ -379,7 +677,7 @@ class WebActivity : AppCompatActivity() {
                 headers["Origin"] = "${u.scheme}://${u.host}"
             } catch (e: Exception) { }
         }
-        headers["User-Agent"] = binding.webView.settings.userAgentString
+        headers["User-Agent"] = webView.settings.userAgentString
         PlayerActivity.pendingStream = Stream(name = name, type = streamTypeFor(url), url = url, icon = null, category = "Web", headers = headers)
         PlayerActivity.pendingChannelList = emptyList()
         startActivity(Intent(this, PlayerActivity::class.java))
@@ -406,13 +704,19 @@ class WebActivity : AppCompatActivity() {
         val urls = synchronized(detected) { detected.keys.toList() }
         val labels = urls.map { u ->
             val file = Uri.parse(u).lastPathSegment ?: u
-            "${streamTypeFor(u)} · ${Uri.parse(u).host.orEmpty()} · ${file.take(40)}"
+            "${streamTypeFor(u)}${qualityOf(u)} · ${Uri.parse(u).host.orEmpty()} · ${file.take(40)}"
         }
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.web_videos_title)
             .setItems(labels.toTypedArray()) { _, which -> playInApp(urls[which], detected[urls[which]] ?: urls[which]) }
             .setNegativeButton(R.string.channel_check_close, null)
-            .show()
+            .create()
+        dialog.show()
+        // Pulsación larga: copia el enlace del vídeo.
+        dialog.listView.setOnItemLongClickListener { _, _, pos, _ ->
+            copyText(urls[pos], R.string.web_video_copied)
+            true
+        }
     }
 
     // ---- Marcadores ----
@@ -444,16 +748,14 @@ class WebActivity : AppCompatActivity() {
 
     private fun addBookmark() {
         if (homeVisible()) { editBookmark(null); return }
-        val url = binding.webView.url ?: return
+        val url = webView.url ?: return
         val list = bookmarks()
         if (list.any { it.second == url }) {
             Toast.makeText(this, R.string.web_bookmark_exists, Toast.LENGTH_SHORT).show()
             return
         }
-        list.add(0, (binding.webView.title?.takeIf { it.isNotBlank() } ?: url) to url)
-        saveBookmarks(list)
-        Toast.makeText(this, R.string.web_bookmark_added, Toast.LENGTH_SHORT).show()
-        refreshFavUi()
+        // Se pregunta el nombre para reconocerla más rápido (viene rellenado con el título de la página).
+        editBookmark(null, (webView.title?.takeIf { it.isNotBlank() } ?: Uri.parse(url).host?.removePrefix("www.") ?: url) to url)
     }
 
     // ---- Favoritos: atajos, tira y página de inicio ----
@@ -467,13 +769,13 @@ class WebActivity : AppCompatActivity() {
     }
 
     private fun updateSaveButton() {
-        val url = if (homeVisible()) null else binding.webView.url
+        val url = if (homeVisible()) null else webView.url
         val saved = url != null && bookmarks().any { it.second == url }
         binding.webSaveBtn.setText(if (saved) R.string.web_saved_btn else R.string.web_save_btn)
     }
 
     private fun toggleSaveCurrent() {
-        val url = if (homeVisible()) null else binding.webView.url
+        val url = if (homeVisible()) null else webView.url
         if (url == null) { editBookmark(null); return }
         val list = bookmarks()
         if (list.any { it.second == url }) {
@@ -535,22 +837,22 @@ class WebActivity : AppCompatActivity() {
     }
 
     /** Añade un favorito a mano (old = null) o edita su nombre y dirección. */
-    private fun editBookmark(old: Pair<String, String>?) {
+    private fun editBookmark(old: Pair<String, String>?, prefill: Pair<String, String>? = null) {
         val d = resources.displayMetrics.density
         val col = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding((20 * d).toInt(), (8 * d).toInt(), (20 * d).toInt(), 0)
         }
-        val nameEt = android.widget.EditText(this).apply { hint = getString(R.string.web_fav_name); setText(old?.first ?: ""); setSingleLine() }
+        val nameEt = android.widget.EditText(this).apply { hint = getString(R.string.web_fav_name); setText(old?.first ?: prefill?.first ?: ""); setSingleLine(); selectAll() }
         val urlEt = android.widget.EditText(this).apply {
             hint = getString(R.string.web_fav_url)
-            setText(old?.second ?: "")
+            setText(old?.second ?: prefill?.second ?: "")
             inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine()
         }
         col.addView(nameEt)
         col.addView(urlEt)
-        AlertDialog.Builder(this)
+        val favDialog = AlertDialog.Builder(this)
             .setTitle(if (old == null) R.string.web_fav_add else R.string.web_fav_edit)
             .setView(col)
             .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -560,18 +862,21 @@ class WebActivity : AppCompatActivity() {
                 val n = nameEt.text.toString().trim().ifEmpty { Uri.parse(u).host?.removePrefix("www.") ?: u }
                 val list = bookmarks()
                 val i = if (old == null) -1 else list.indexOfFirst { it.second == old.second }
-                if (i >= 0) list[i] = n to u else list.add(n to u)
+                if (i >= 0) list[i] = n to u else list.add(0, n to u)
                 saveBookmarks(list)
                 refreshFavUi()
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+        favDialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        favDialog.show()
+        nameEt.requestFocus()
     }
 
     private fun shareCurrent() {
-        val url = (if (homeVisible()) null else binding.webView.url) ?: return
+        val url = (if (homeVisible()) null else webView.url) ?: return
         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-            .putExtra(Intent.EXTRA_SUBJECT, binding.webView.title ?: url)
+            .putExtra(Intent.EXTRA_SUBJECT, webView.title ?: url)
             .putExtra(Intent.EXTRA_TEXT, url)
         try { startActivity(Intent.createChooser(send, null)) } catch (e: Exception) { }
     }
@@ -589,8 +894,8 @@ class WebActivity : AppCompatActivity() {
     private fun showHome() {
         binding.webFavScroll.visibility = View.GONE
         binding.webHome.visibility = View.VISIBLE
-        binding.webView.visibility = View.INVISIBLE // así el mando no puede enfocar el navegador oculto
-        binding.webView.onPause()
+        webView.visibility = View.INVISIBLE // así el mando no puede enfocar el navegador oculto
+        webView.onPause()
         binding.webUrl.setText("")
         binding.webUrl.clearFocus()
         renderHome()
@@ -601,10 +906,10 @@ class WebActivity : AppCompatActivity() {
     private fun hideHome() {
         if (!homeVisible()) return
         binding.webHome.visibility = View.GONE
-        binding.webView.visibility = View.VISIBLE
-        binding.webView.onResume()
+        webView.visibility = View.VISIBLE
+        webView.onResume()
         updateSaveButton()
-        if (isTv) binding.webView.post { binding.webView.requestFocus() }
+        if (isTv) webView.post { webView.requestFocus() }
     }
 
     private fun tileColor(seed: String): Int {
@@ -686,7 +991,7 @@ class WebActivity : AppCompatActivity() {
 
     /** Elegir qué se abre como página de inicio: la cuadrícula de favoritos, una web de la lista o la dirección que quieras. */
     private fun chooseHomePage() {
-        val current = binding.webView.url?.takeIf { !homeVisible() }
+        val current = webView.url?.takeIf { !homeVisible() }
         val labels = ArrayList<String>()
         labels.add(getString(R.string.web_home_grid))
         labels.add("Google")
@@ -769,6 +1074,8 @@ class WebActivity : AppCompatActivity() {
         menu.menu.add(0, 1, 0, R.string.web_bookmarks)
         menu.menu.add(0, 2, 1, R.string.web_add_bookmark)
         menu.menu.add(0, 11, 1, R.string.web_history)
+        menu.menu.add(0, 12, 1, R.string.web_new_tab)
+        menu.menu.add(0, 13, 2, getString(R.string.web_alert_menu, alertModeLabel()))
         menu.menu.add(0, 3, 2, getString(R.string.web_videos_menu, detected.size))
         menu.menu.add(0, 4, 3, R.string.web_desktop).apply { isCheckable = true; isChecked = desktop }
         menu.menu.add(0, 10, 4, getString(R.string.web_agent_menu, agentLabel()))
@@ -783,9 +1090,11 @@ class WebActivity : AppCompatActivity() {
                 2 -> addBookmark()
                 3 -> showDetectedVideos()
                 11 -> showHistory()
+                12 -> newTab(null)
+                13 -> chooseAlertMode()
                 4 -> {
                     setAgent(if (desktop) "" else "desktop", "")
-                    binding.webView.reload()
+                    webView.reload()
                     hideHome()
                 }
                 10 -> chooseAgent()
@@ -795,12 +1104,11 @@ class WebActivity : AppCompatActivity() {
                     prefs().edit().putBoolean("cursor", !cursorEnabled()).apply()
                     if (cursorEnabled()) showCursor() else cursorView?.visibility = View.GONE
                 }
-                6 -> (if (homeVisible()) null else binding.webView.url)?.let { openUri(it) }
+                6 -> (if (homeVisible()) null else webView.url)?.let { openUri(it) }
                 7 -> AlertDialog.Builder(this)
                     .setMessage(R.string.web_clear_confirm)
                     .setPositiveButton(android.R.string.ok) { _, _ ->
-                        binding.webView.clearCache(true)
-                        binding.webView.clearHistory()
+                        for (t in tabs) { t.view.clearCache(true); t.view.clearHistory() }
                         CookieManager.getInstance().removeAllCookies(null)
                         WebStorage.getInstance().deleteAllData()
                         Toast.makeText(this, R.string.web_cleared, Toast.LENGTH_SHORT).show()
@@ -899,7 +1207,7 @@ class WebActivity : AppCompatActivity() {
             else -> agents.firstOrNull { it.first == k }?.third?.ifEmpty { defaultUa } ?: defaultUa
         }
         desktop = k.isNotEmpty() && k != "iphone" && k != "ipad" && k != "tv"
-        binding.webView.settings.userAgentString = ua
+        for (t in tabs) t.view.settings.userAgentString = ua
     }
 
     private fun chooseAgent() {
@@ -911,7 +1219,7 @@ class WebActivity : AppCompatActivity() {
                 d.dismiss()
                 if (i < agents.size) {
                     setAgent(agents[i].first, "")
-                    binding.webView.reload()
+                    webView.reload()
                     hideHome()
                 } else {
                     val et = android.widget.EditText(this).apply {
@@ -923,7 +1231,7 @@ class WebActivity : AppCompatActivity() {
                         .setPositiveButton(android.R.string.ok) { _, _ ->
                             val v = et.text.toString().trim()
                             setAgent(if (v.isEmpty()) "" else "custom", v)
-                            binding.webView.reload()
+                            webView.reload()
                             hideHome()
                         }
                         .setNegativeButton(android.R.string.cancel, null).show()
@@ -940,12 +1248,6 @@ class WebActivity : AppCompatActivity() {
         cv.isFocusable = false
         binding.webBody.addView(cv, android.widget.FrameLayout.LayoutParams(size, size))
         cursorView = cv
-        val wv = binding.webView
-        wv.isFocusable = true
-        wv.isFocusableInTouchMode = true
-        wv.setOnFocusChangeListener { _, has ->
-            if (has && cursorEnabled()) showCursor() else cv.visibility = View.GONE
-        }
         binding.webUrl.setOnClickListener {
             (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
                 .showSoftInput(binding.webUrl, 0)
@@ -982,7 +1284,7 @@ class WebActivity : AppCompatActivity() {
     }
 
     private fun scrollPage(dy: Int) {
-        binding.webView.scrollBy(0, dy)
+        webView.scrollBy(0, dy)
     }
 
     private fun moveCursorKey(code: Int, repeat: Int) {
@@ -994,14 +1296,14 @@ class WebActivity : AppCompatActivity() {
         when (code) {
             KeyEvent.KEYCODE_DPAD_LEFT -> cursorX -= step
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (cursorX >= w - 8f * d) binding.webView.scrollBy(step.toInt(), 0) else cursorX += step
+                if (cursorX >= w - 8f * d) webView.scrollBy(step.toInt(), 0) else cursorX += step
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (cursorY >= h - zone) scrollPage((step * 1.6f).toInt()) else cursorY += step
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (cursorY <= zone) {
-                    if (binding.webView.scrollY > 0) scrollPage(-(step * 1.6f).toInt())
+                    if (webView.scrollY > 0) scrollPage(-(step * 1.6f).toInt())
                     else if (cursorY <= 10f * d) {
                         leaveToBars()
                         return
@@ -1009,7 +1311,7 @@ class WebActivity : AppCompatActivity() {
                 } else cursorY -= step
             }
         }
-        if (code == KeyEvent.KEYCODE_DPAD_LEFT && cursorX <= 0f && binding.webView.scrollX > 0) binding.webView.scrollBy(-step.toInt(), 0)
+        if (code == KeyEvent.KEYCODE_DPAD_LEFT && cursorX <= 0f && webView.scrollX > 0) webView.scrollBy(-step.toInt(), 0)
         showCursor()
     }
 
@@ -1022,7 +1324,7 @@ class WebActivity : AppCompatActivity() {
     }
 
     private fun clickAtCursor(long: Boolean) {
-        val wv = binding.webView
+        val wv = webView
         val x = cursorX
         val y = cursorY
         val t = SystemClock.uptimeMillis()
@@ -1059,19 +1361,19 @@ class WebActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                if (down) scrollPage(-(binding.webView.height * 0.8f).toInt())
+                if (down) scrollPage(-(webView.height * 0.8f).toInt())
                 return true
             }
             KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                if (down) scrollPage((binding.webView.height * 0.8f).toInt())
+                if (down) scrollPage((webView.height * 0.8f).toInt())
                 return true
             }
             KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                if (down && binding.webView.canGoBack()) binding.webView.goBack()
+                if (down && webView.canGoBack()) webView.goBack()
                 return true
             }
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                if (down && binding.webView.canGoForward()) binding.webView.goForward()
+                if (down && webView.canGoForward()) webView.goForward()
                 return true
             }
             KeyEvent.KEYCODE_MENU -> {
@@ -1084,13 +1386,25 @@ class WebActivity : AppCompatActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (isTv && customView == null && !homeVisible() && cursorEnabled() &&
-            binding.webView.hasFocus() && handleCursorKey(event)
+            webView.hasFocus() && handleCursorKey(event)
         ) return true
         return super.dispatchKeyEvent(event)
     }
 
     companion object {
-        private val MEDIA_EXT = listOf(".m3u8", ".mpd", ".mp4", ".mkv", ".m4v", ".mp3", ".aac", ".ts")
+        private val MEDIA_EXT = listOf(".m3u8", ".mpd", ".mp4", ".mkv", ".m4v", ".mp3", ".aac", ".ts", ".webm", ".mov", ".m4a")
+        private val MEDIA_RE = Regex("\\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|flv|avi|wmv|3gp|mp3|m4a|aac|ogg)(\\?|#|/|&|$)")
+        /** Escáner dentro de la página: etiquetas video/audio/source, fetch y XMLHttpRequest. */
+        private const val SCOUT_JS = "(function(){if(window.__sc)return;window.__sc=1;var seen={};" +
+            "function rep(u){try{if(!u||typeof u!=='string'||u.indexOf('blob:')===0||u.indexOf('data:')===0)return;" +
+            "u=new URL(u,location.href).href;if(seen[u])return;seen[u]=1;SocramScout.found(u);}catch(e){}}" +
+            "var ok=/\\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|flv|mp3|m4a|aac|ogg)(\\?|#|\\/|&|$)|m3u8/i;" +
+            "function chk(u){try{if(u&&ok.test(String(u)))rep(String(u));}catch(e){}}" +
+            "var of=window.fetch;if(of)window.fetch=function(){try{var a=arguments[0];chk(a&&a.url?a.url:a);}catch(e){}return of.apply(this,arguments);};" +
+            "var oo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){try{chk(u);}catch(e){}return oo.apply(this,arguments);};" +
+            "function scan(){var n=document.querySelectorAll('video,audio');for(var i=0;i<n.length;i++){rep(n[i].currentSrc||n[i].src);}" +
+            "var q=document.querySelectorAll('source');for(var j=0;j<q.length;j++){chk(q[j].src);}}" +
+            "scan();setInterval(scan,2500);})();"
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }

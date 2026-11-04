@@ -1762,3 +1762,10 @@ Capítulos: 6 atrás
 ## Telegram: búsqueda con carátulas
 - Al buscar vídeos (en un chat, grupo o global) los resultados salen por defecto como carátulas (TMDb), agrupando versiones y capítulos de una serie.
 - Menú ⋮ → "Ver como archivos" / "Ver con carátulas" para alternar entre las dos vistas mientras se busca.
+
+## Web: pestañas, búsqueda en página, marcadores con nombre y vídeos
+- **Pestañas**: botón "🗂 N" bajo la barra (cortinilla que se abre/cierra) con chips de cada pestaña (toca para cambiar, ✕ para cerrar, "＋ Nueva"). Pulsación larga en un enlace: abrir en pestaña nueva / aquí / copiar. Las pestañas se recuerdan al volver (se cargan al abrirlas).
+- **🔍 Buscar en la página**: lupa en la barra superior, con contador y flechas ▲▼.
+- **Guardar** pide el nombre del marcador (viene con el título de la página) para reconocerlo rápido.
+- **Detección de vídeos más completa**: además de interceptar peticiones (m3u8, mpd, mp4, webm, mkv, mov, mp3, m4a…, también en parámetros de la URL), un escáner dentro de la página mira las etiquetas video/audio/source y las llamadas fetch/XHR. La lista muestra tipo y calidad; pulsación larga copia el enlace.
+- **Aviso al detectar un vídeo**: banner "🎬 Vídeo detectado · ▶ Reproducir" (una vez por página). Menú ⋮ → "🔔 Aviso de vídeos": avisar con botón / reproducir directamente / no avisar.
