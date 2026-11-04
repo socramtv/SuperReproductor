@@ -57,23 +57,10 @@
                 android:clickable="true"
                 android:background="@drawable/bg_tg_star" />
 
-            <EditText
-                android:id="@+id/webUrl"
+            <View
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="@string/web_url_hint"
-                android:imeOptions="actionGo"
-                android:inputType="textUri"
-                android:maxLines="1"
-                android:background="@drawable/bg_web_url"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="10dp"
-                android:layout_marginHorizontal="4dp"
-                android:selectAllOnFocus="true"
-                android:textColor="@color/on_background"
-                android:textColorHint="@color/on_surface_muted"
-                android:textSize="14sp" />
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/webFind"
@@ -125,7 +112,34 @@
                 android:background="@drawable/bg_tg_star" />
         </LinearLayout>
 
-        <!-- Atajos bajo la barra de direcciones -->
+        <!-- Fila 2: barra de direcciones -->
+        <LinearLayout
+            android:id="@+id/webUrlRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingBottom="6dp"
+            android:background="@color/surface_dark">
+            <EditText
+                android:id="@+id/webUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/web_url_hint"
+                android:imeOptions="actionGo"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:background="@drawable/bg_web_url"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
+                android:layout_marginHorizontal="2dp"
+                android:selectAllOnFocus="true"
+                android:textColor="@color/on_background"
+                android:textColorHint="@color/on_surface_muted"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Fila 3: atajos -->
         <LinearLayout
             android:id="@+id/webShortcuts"
             android:layout_width="match_parent"

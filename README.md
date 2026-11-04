@@ -1769,3 +1769,6 @@ Capítulos: 6 atrás
 - **Guardar** pide el nombre del marcador (viene con el título de la página) para reconocerlo rápido.
 - **Detección de vídeos más completa**: además de interceptar peticiones (m3u8, mpd, mp4, webm, mkv, mov, mp3, m4a…, también en parámetros de la URL), un escáner dentro de la página mira las etiquetas video/audio/source y las llamadas fetch/XHR. La lista muestra tipo y calidad; pulsación larga copia el enlace.
 - **Aviso al detectar un vídeo**: banner "🎬 Vídeo detectado · ▶ Reproducir" (una vez por página). Menú ⋮ → "🔔 Aviso de vídeos": avisar con botón / reproducir directamente / no avisar.
+
+## Web: barra en tres filas
+- Fila 1: ◀ ▶ ⟳ y a la derecha 🎬 🔍 🏠 ⋮. Fila 2: barra de direcciones a todo el ancho. Fila 3: 🗂 pestañas, Favoritos, Guardar, Inicio, Compartir.
