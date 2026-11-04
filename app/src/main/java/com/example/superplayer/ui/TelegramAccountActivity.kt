@@ -707,27 +707,6 @@ class TelegramAccountActivity : AppCompatActivity() {
                 }
                 return true
             }
-            R.id.action_tgacc_ntg -> {
-                val text = com.example.superplayer.telegram.NtgProbe.dump()
-                val tv = android.widget.TextView(this).apply {
-                    this.text = text
-                    textSize = 11f
-                    typeface = android.graphics.Typeface.MONOSPACE
-                    setTextIsSelectable(true)
-                    setPadding(dpPx(12), dpPx(8), dpPx(12), dpPx(8))
-                }
-                val sv = android.widget.ScrollView(this).apply { addView(tv) }
-                androidx.appcompat.app.AlertDialog.Builder(this)
-                    .setTitle(R.string.tgacc_menu_ntg)
-                    .setView(sv)
-                    .setPositiveButton(android.R.string.copy) { _, _ ->
-                        val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("ntgcalls", text))
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
-                return true
-            }
             R.id.action_tgacc_watch -> {
                 currentChat?.let {
                     startActivity(Intent(this, LiveActivity::class.java).putExtra("chatId", it.id).putExtra("title", it.title))
@@ -762,14 +741,16 @@ class TelegramAccountActivity : AppCompatActivity() {
                     .show()
                 return true
             }
-            R.id.action_tgacc_api -> {
-                showApiDialog()
-                return true
-            }
-            R.id.action_tgacc_logout -> {
+            R.id.action_tgacc_account -> {
                 AlertDialog.Builder(this)
-                    .setMessage(R.string.tgacc_logout_confirm)
-                    .setPositiveButton(android.R.string.ok) { _, _ -> backend?.logOut() }
+                    .setTitle(R.string.tgacc_menu_account)
+                    .setItems(arrayOf(getString(R.string.tgacc_menu_api), getString(R.string.tgacc_menu_logout))) { _, i ->
+                        if (i == 0) showApiDialog() else AlertDialog.Builder(this)
+                            .setMessage(R.string.tgacc_logout_confirm)
+                            .setPositiveButton(android.R.string.ok) { _, _ -> backend?.logOut() }
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show()
+                    }
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
                 return true

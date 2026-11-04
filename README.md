@@ -1754,3 +1754,7 @@ Capítulos: 6 atrás
 ## Web: historial y continuar donde estabas
 - Menú ⋮ → "🕘 Historial": lista de páginas visitadas (toca para abrir, pulsación larga para quitar, "Vaciar" para borrar todo).
 - Al salir con la casita 🏠 de la app y volver a entrar en Web, se reabre la última página visitada (el botón "Inicio" sigue llevando a la portada del navegador).
+
+## Telegram: menú más limpio
+- Quitado "Diagnóstico de llamadas (ntgcalls)" del menú.
+- "Credenciales API" y "Cerrar sesión" ahora van juntos en un único apartado "Cuenta (API y sesión)…".

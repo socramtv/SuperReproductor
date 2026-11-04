@@ -394,6 +394,7 @@
     <string name="tg_playlist_error">no se pudo leer la lista</string>
     <string name="tg_playlist_title">Lista (%1$d canales)</string>
     <string name="tgacc_title">Telegram</string>
+    <string name="tgacc_menu_account">Cuenta (API y sesión)…</string>
     <string name="tgacc_menu_api">Credenciales API…</string>
     <string name="tgacc_menu_logout">Cerrar sesión</string>
     <string name="tgacc_logout_confirm">¿Cerrar la sesión de Telegram en este dispositivo?</string>
