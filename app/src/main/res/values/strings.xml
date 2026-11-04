@@ -577,6 +577,9 @@
     <string name="radio_mix_title">📻 Radio con la TV (la TV queda en silencio)</string>
     <string name="radio_mix_delay">⏱ Retraso de la radio: %1$d s</string>
     <string name="radio_mix_waiting">📻 %1$s sonará en %2$d s (la TV sigue con su sonido)</string>
+    <string name="radio_mix_favs_off">☆ Ver solo mis favoritas (%1$d)</string>
+    <string name="radio_mix_favs_on">⭐ Solo favoritas (%1$d) · toca para ver todas</string>
+    <string name="radio_mix_no_favs">No tienes radios en favoritos todavía</string>
     <string name="radio_mix_hint">Buscar emisora…</string>
     <string name="radio_mix_stop">⏹ Quitar radio</string>
     <string name="radio_mix_none">No hay lista de radio. Ábrela una vez en el apartado Radio.</string>

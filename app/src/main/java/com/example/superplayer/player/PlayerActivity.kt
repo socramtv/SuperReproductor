@@ -2300,15 +2300,38 @@ class PlayerActivity : AppCompatActivity() {
             val list = android.widget.ListView(this)
             col.addView(filter)
             col.addView(list, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (300 * d).toInt()))
+            // Solo las radios marcadas como favoritas (los favoritos son los mismos de la lista principal).
+            val store = com.example.superplayer.data.FavoritesStore(this)
+            val favs = all.filter { store.isFavorite(it) }
+            var onlyFavs = false
+            val favToggle = android.widget.TextView(this).apply {
+                textSize = 14f
+                setPadding(0, (8 * d).toInt(), 0, (8 * d).toInt())
+                isFocusable = true
+                isClickable = true
+            }
+            fun showFavToggle() { favToggle.text = getString(if (onlyFavs) R.string.radio_mix_favs_on else R.string.radio_mix_favs_off, favs.size) }
+            showFavToggle()
             var shown: List<Stream> = all
             val adapter = android.widget.ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, ArrayList())
             fun refresh() {
                 val q = filter.text.toString().trim().lowercase()
-                shown = if (q.isEmpty()) all else all.filter { it.name.lowercase().contains(q) || it.category.lowercase().contains(q) }
+                val base = if (onlyFavs) favs else all
+                shown = if (q.isEmpty()) base else base.filter { it.name.lowercase().contains(q) || it.category.lowercase().contains(q) }
                 adapter.clear()
                 adapter.addAll(shown.take(300).map { if (it.category.isNotBlank()) "${it.name}  ·  ${it.category}" else it.name })
                 adapter.notifyDataSetChanged()
             }
+            favToggle.setOnClickListener {
+                if (!onlyFavs && favs.isEmpty()) {
+                    Toast.makeText(this, R.string.radio_mix_no_favs, Toast.LENGTH_SHORT).show()
+                } else {
+                    onlyFavs = !onlyFavs
+                    showFavToggle()
+                    refresh()
+                }
+            }
+            col.addView(favToggle, col.indexOfChild(filter))
             list.adapter = adapter
             refresh()
             filter.addTextChangedListener(object : android.text.TextWatcher {

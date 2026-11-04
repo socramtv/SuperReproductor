@@ -1788,3 +1788,7 @@ Capítulos: 6 atrás
 ### Retraso de la radio
 - En el cuadro de 📻 hay una fila "⏱ Retraso de la radio: N s" con botones −5 −1 +1 +5 (0–90 s, se recuerda). La radio suele ir por delante de la TV; con el retraso la emisora se prepara en pausa, sigue descargando y empieza a sonar N segundos después, quedando N s por detrás del directo. Hasta entonces la TV conserva su sonido; al empezar la radio se silencia la TV.
 - Si cambias el retraso con una radio en marcha, se reinicia con el nuevo valor al cerrar el cuadro.
+
+### Radio con la TV: icono y favoritas
+- El botón 📻 usa ahora un icono de 24 dp (`ic_radio_small`), igual de grande que los demás de la barra.
+- En el cuadro de emisoras, "☆ Ver solo mis favoritas (N)" filtra a las radios marcadas como favoritas (mismos favoritos que la lista principal); se combina con el buscador.

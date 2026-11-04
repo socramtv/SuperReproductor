@@ -175,7 +175,7 @@
             android:layout_height="48dp"
             android:padding="12dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_radio"
+            android:src="@drawable/ic_radio_small"
             android:tint="@android:color/white"
             android:contentDescription="@string/action_radio_mix" />
 
