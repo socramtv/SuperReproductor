@@ -1506,8 +1506,8 @@ class WebActivity : AppCompatActivity() {
             "scan();setInterval(scan,2500);})();"
         /** Oculta los huecos típicos de publicidad (el resto lo corta el bloqueo de peticiones). */
         private const val HIDE_ADS_JS = "(function(){if(window.__ab)return;window.__ab=1;var s=document.createElement('style');" +
-            "s.textContent='ins.adsbygoogle,.adsbygoogle,iframe[src*=\\"doubleclick\\"],iframe[src*=\\"googlesyndication\\"],iframe[src*=\\"adservice\\"]," +
-            "div[id^=\\"google_ads\\"],div[id^=\\"taboola\\"],div[id^=\\"outbrain\\"],[class*=\\"popunder\\"]{display:none!important}';" +
+            "s.textContent='ins.adsbygoogle,.adsbygoogle,iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=adservice]," +
+            "div[id^=google_ads],div[id^=taboola],div[id^=outbrain],[class*=popunder]{display:none!important}';" +
             "(document.head||document.documentElement).appendChild(s);})();"
         private val AD_HOSTS = hashSetOf(
             "doubleclick.net", "googlesyndication.com", "googleadservices.com", "adservice.google.com", "pagead2.googlesyndication.com",
