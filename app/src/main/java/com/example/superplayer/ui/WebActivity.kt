@@ -63,6 +63,8 @@ class WebActivity : AppCompatActivity() {
         /** Últimas peticiones de la página (sin imágenes/estilos/fuentes ni anuncios), para el diagnóstico. */
         val requests: MutableList<String> = java.util.Collections.synchronizedList(ArrayList<String>())
         @Volatile var lastTouch = 0L
+        /** Cabeceras reales (Referer/Origin) con que la página pidió cada vídeo. */
+        val hdrs: MutableMap<String, Map<String, String>> = java.util.concurrent.ConcurrentHashMap()
         val detected: MutableMap<String, String> =
             java.util.Collections.synchronizedMap(LinkedHashMap<String, String>()) // url -> página en la que apareció
     }
@@ -233,8 +235,14 @@ class WebActivity : AppCompatActivity() {
                         t.requests.add("${request.method} ${url.take(300)}" + (if (request.requestHeaders?.containsKey("Range") == true) "  [Range]" else ""))
                     }
                 }
-                if (looksLikeMedia(url)) addDetected(t, url)
-                else if (!request.isForMainFrame && request.requestHeaders?.containsKey("Range") == true &&
+                if (looksLikeMedia(url)) {
+                    request.requestHeaders?.let { h ->
+                        val keep = HashMap<String, String>()
+                        for ((k, v) in h) if (k.equals("Referer", true) || k.equals("Origin", true)) keep[k] = v
+                        if (keep.isNotEmpty() && t.hdrs.size < 200) t.hdrs[url] = keep
+                    }
+                    addDetected(t, url)
+                } else if (!request.isForMainFrame && request.requestHeaders?.containsKey("Range") == true &&
                     url.startsWith("http") && !STATIC_RE.containsMatchIn(url.substringBefore('?').lowercase())
                 ) addDetected(t, url) // los reproductores piden el vídeo por tramos (cabecera Range) aunque la dirección no tenga extensión
                 return null
@@ -244,7 +252,7 @@ class WebActivity : AppCompatActivity() {
                 t.page = url
                 t.bannerShown = false
                 t.popup = false
-                t.detected.clear()
+                t.detected.clear(); t.hdrs.clear()
                 if (t === curTab) {
                     hideHome()
                     updateVideosButton()
@@ -820,6 +828,12 @@ class WebActivity : AppCompatActivity() {
                 headers["Origin"] = "${u.scheme}://${u.host}"
             } catch (e: Exception) { }
         }
+        // Lo que de verdad envió la página (el reproductor suele ir en un iframe con otro origen) manda sobre lo supuesto.
+        tabs.firstNotNullOfOrNull { it.hdrs[url] }?.forEach { (k, v) -> headers[if (k.equals("Origin", true)) "Origin" else "Referer"] = v }
+        try {
+            val ck = android.webkit.CookieManager.getInstance().getCookie(url)
+            if (!ck.isNullOrEmpty()) headers["Cookie"] = ck
+        } catch (e: Exception) { }
         headers["User-Agent"] = webView.settings.userAgentString
         PlayerActivity.pendingStream = Stream(name = name, type = streamTypeFor(url), url = url, icon = null, category = "Web", headers = headers)
         PlayerActivity.pendingChannelList = emptyList()

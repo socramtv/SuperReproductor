@@ -1814,3 +1814,6 @@ Capítulos: 6 atrás
 ### Web: diagnóstico con el cuerpo de las respuestas "stream"
 - "🧪 Peticiones de la página" ahora incluye, con el prefijo "↳ RESPUESTA", el principio (1200 caracteres) de las respuestas JSON/texto de las llamadas cuya dirección contenga "stream" o cuyo contenido mencione m3u8/mpd/flv/mp4, para ver de dónde sale la dirección del vídeo.
 - También se interceptan las peticiones de los Service Workers de la página.
+
+## Web: el vídeo detectado se reproduce con las cabeceras reales de la página
+Al pasar un vídeo detectado al reproductor se envían el `Referer` y el `Origin` exactos con que la página (o su iframe) lo pidió, y las cookies del WebView. Antes se suponía el de la página principal y algunos servidores con token rechazaban la petición.
