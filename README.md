@@ -1823,3 +1823,6 @@ Al pasar un vídeo detectado al reproductor se envían el `Referer` y el `Origin
 
 ## Web: Referer reducido al host del iframe, sin Origin ni cookies
 Al reproducir un vídeo detectado se envía solo `Referer: https://host-del-iframe/` y el `User-Agent` del WebView (igual que las apps que sí lo reproducen). Se quitan `Origin` y `Cookie`, que hacían que algunos servidores con token respondieran con error.
+
+## Reproductor: sin `Icy-MetaData` en HLS/DASH
+La cabecera `Icy-MetaData: 1` (títulos de radios Shoutcast) ya no se envía en listas HLS/DASH, donde no sirve y algunos servidores con token respondían con error. Sigue enviándose en audio/vídeo progresivo.

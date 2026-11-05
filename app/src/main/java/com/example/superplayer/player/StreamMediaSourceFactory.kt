@@ -62,7 +62,10 @@ class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) :
         // y no hay nada que ExoPlayer pueda mostrar en onMediaMetadataChanged
         // (aunque el canal sí suene bien). Va primero para que unas cabeceras
         // propias del canal que definan esta misma clave la puedan pisar.
-        val requestProperties = linkedMapOf("Icy-MetaData" to "1")
+        // Solo para audio/vídeo progresivo: en HLS/DASH no hace falta y algunos servidores con token lo rechazan.
+        val isAdaptive = type.trim().uppercase() in setOf("DASH", "MPD", "HLS", "M3U8")
+        val requestProperties = linkedMapOf<String, String>()
+        if (!isAdaptive) requestProperties["Icy-MetaData"] = "1"
         requestProperties.putAll(headers)
 
         // Archivos locales (p. ej. un vídeo de Telegram ya descargado): sin red.
