@@ -1810,3 +1810,7 @@ Capítulos: 6 atrás
 ## Web: direcciones de vídeo dentro de las respuestas de la página
 - El escáner de la página ahora también lee las respuestas JSON/texto de `fetch` y `XMLHttpRequest` (hasta 400 KB) y marca como vídeo cualquier dirección que contenga m3u8/mpd/mp4/flv… (con `\/` y `/` ya normalizados). Así se detectan reproductores que piden primero un `api/stream/detail` y reciben ahí la dirección del vídeo.
 - Limitación: si el vídeo va por WebRTC (p. ej. un `POST …/channel` con SDP) o con DRM, no hay dirección que reproducir.
+
+### Web: diagnóstico con el cuerpo de las respuestas "stream"
+- "🧪 Peticiones de la página" ahora incluye, con el prefijo "↳ RESPUESTA", el principio (1200 caracteres) de las respuestas JSON/texto de las llamadas cuya dirección contenga "stream" o cuyo contenido mencione m3u8/mpd/flv/mp4, para ver de dónde sale la dirección del vídeo.
+- También se interceptan las peticiones de los Service Workers de la página.

@@ -85,6 +85,19 @@ class WebActivity : AppCompatActivity() {
 
         isTv = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
 
+        // Peticiones que hacen los Service Workers de la página (algunos reproductores cargan el vídeo desde ahí).
+        if (android.os.Build.VERSION.SDK_INT >= 24) {
+            try {
+                android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(object : android.webkit.ServiceWorkerClient() {
+                    override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? {
+                        val url = request.url.toString()
+                        if (looksLikeMedia(url) && tabs.isNotEmpty()) addDetected(tabs[curIdx.coerceIn(0, tabs.size - 1)], url)
+                        return null
+                    }
+                })
+            } catch (e: Exception) { }
+        }
+
         binding.webBack.setOnClickListener { if (webView.canGoBack()) webView.goBack() }
         binding.webForward.setOnClickListener { if (webView.canGoForward()) webView.goForward() }
         binding.webReload.setOnClickListener { webView.reload() }
@@ -735,6 +748,16 @@ class WebActivity : AppCompatActivity() {
 
     /** Los vídeos que encuentra el escáner de JavaScript (etiquetas video/source, fetch y XHR de la página). */
     private inner class Scout(private val tab: Tab) {
+        /** Respuesta de una API de la página (para el diagnóstico de peticiones). */
+        @JavascriptInterface
+        fun log(u: String?, body: String?) {
+            if (u == null || body == null) return
+            synchronized(tab.requests) {
+                if (tab.requests.size >= 150) tab.requests.removeAt(0)
+                tab.requests.add("↳ RESPUESTA ${u.take(200)}\n${body.take(1200)}")
+            }
+        }
+
         @JavascriptInterface
         fun found(u: String?) {
             if (u == null || u.length > 2000 || !(u.startsWith("http://") || u.startsWith("https://"))) return
@@ -1526,14 +1549,15 @@ class WebActivity : AppCompatActivity() {
     companion object {
         private val MEDIA_EXT = listOf(".m3u8", ".mpd", ".mp4", ".mkv", ".m4v", ".mp3", ".aac", ".ts", ".webm", ".mov", ".m4a")
         private val MEDIA_RE = Regex("\\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|flv|avi|wmv|3gp|mp3|m4a|aac|ogg)(\\?|#|/|&|$)")
-        /** Escáner dentro de la página: etiquetas video/audio/source, fetch y XMLHttpRequest, y las direcciones de vídeo que vengan dentro de sus respuestas JSON/texto. */
-        private const val SCOUT_JS = "(function(){if(window.__sc)return;window.__sc=1;var seen={};" +
+        /** Escáner dentro de la página: etiquetas video/audio/source, fetch y XMLHttpRequest, las direcciones de vídeo que vengan dentro de sus respuestas y, para el diagnóstico, el cuerpo de las respuestas de las APIs de "stream". */
+        private const val SCOUT_JS = "(function(){if(window.__sc)return;window.__sc=1;var seen={};var sl={};" +
             "function rep(u){try{if(!u||typeof u!=='string'||u.indexOf('blob:')===0||u.indexOf('data:')===0)return;u=new URL(u,location.href).href;if(seen[u])return;seen[u]=1;SocramScout.found(u);}catch(e){}}" +
             "var ok=/\\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|flv|mp3|m4a|aac|ogg)(\\?|#|\\/|&|\$)|m3u8/i;" +
             "function chk(u){try{if(u&&ok.test(String(u)))rep(String(u));}catch(e){}}" +
             "function hunt(t){try{if(!t||t.length>400000)return;t=t.replace(/\\\\\\//g,'/').replace(/\\\\u002f/gi,'/').replace(/\\\\u0026/gi,'&');var m=t.match(/https?:\\/\\/[^\\s'\"<>\\\\]+/g);if(m)for(var i=0;i<m.length;i++)chk(m[i]);}catch(e){}}" +
-            "var of=window.fetch;if(of)window.fetch=function(){try{var a=arguments[0];chk(a&&a.url?a.url:a);}catch(e){}var p=of.apply(this,arguments);try{p.then(function(r){try{var ct=r.headers.get('content-type')||'';if(/json|text|mpegurl|xml/i.test(ct))r.clone().text().then(hunt).catch(function(){});}catch(e){}}).catch(function(){});}catch(e){}return p;};" +
-            "var oo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){try{chk(u);this.addEventListener('load',function(){try{var rt=this.responseType;if(rt===''||rt==='text'){var ct=this.getResponseHeader('content-type')||'';if(/json|text|mpegurl|xml/i.test(ct))hunt(this.responseText);}}catch(e){}});}catch(e){}return oo.apply(this,arguments);};" +
+            "function slog(u,t){try{u=String(u);if(!t||t.length>30000)return;if(!(/stream/i.test(u)||/m3u8|\\.mpd|\\.flv|\\.mp4/i.test(t)))return;sl[u]=(sl[u]||0)+1;if(sl[u]>2)return;SocramScout.log(u,t.substring(0,1200));}catch(e){}}" +
+            "var of=window.fetch;if(of)window.fetch=function(){var a=arguments[0];var u=a&&a.url?a.url:a;try{chk(u);}catch(e){}var p=of.apply(this,arguments);try{p.then(function(r){try{var ct=r.headers.get('content-type')||'';if(/json|text|mpegurl|xml/i.test(ct))r.clone().text().then(function(t){hunt(t);slog(u,t);}).catch(function(){});}catch(e){}}).catch(function(){});}catch(e){}return p;};" +
+            "var oo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){try{chk(u);this.addEventListener('load',function(){try{var rt=this.responseType;if(rt===''||rt==='text'){var ct=this.getResponseHeader('content-type')||'';if(/json|text|mpegurl|xml/i.test(ct)){hunt(this.responseText);slog(u,this.responseText);}}}catch(e){}});}catch(e){}return oo.apply(this,arguments);};" +
             "function scan(){var n=document.querySelectorAll('video,audio');for(var i=0;i<n.length;i++){rep(n[i].currentSrc||n[i].src);}var q=document.querySelectorAll('source');for(var j=0;j<q.length;j++){chk(q[j].src);}}" +
             "scan();setInterval(scan,2500);})();"
         /** Oculta los huecos típicos de publicidad (el resto lo corta el bloqueo de peticiones). */
