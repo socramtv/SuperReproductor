@@ -1817,3 +1817,6 @@ Capítulos: 6 atrás
 
 ## Web: el vídeo detectado se reproduce con las cabeceras reales de la página
 Al pasar un vídeo detectado al reproductor se envían el `Referer` y el `Origin` exactos con que la página (o su iframe) lo pidió, y las cookies del WebView. Antes se suponía el de la página principal y algunos servidores con token rechazaban la petición.
+
+## Web: diagnóstico de peticiones más limpio
+"🧪 Peticiones de la página" muestra primero las respuestas de las APIs de stream (guardadas aparte) y deja de listar el ruido repetido (estadísticas, analítica, logos, cgi-trace), para que no desplace lo importante.

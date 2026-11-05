@@ -63,6 +63,8 @@ class WebActivity : AppCompatActivity() {
         /** Últimas peticiones de la página (sin imágenes/estilos/fuentes ni anuncios), para el diagnóstico. */
         val requests: MutableList<String> = java.util.Collections.synchronizedList(ArrayList<String>())
         @Volatile var lastTouch = 0L
+        /** Cuerpos de respuestas de APIs de stream (diagnóstico), aparte para que el ruido no los desplace. */
+        val resp: MutableList<String> = java.util.Collections.synchronizedList(ArrayList<String>())
         /** Cabeceras reales (Referer/Origin) con que la página pidió cada vídeo. */
         val hdrs: MutableMap<String, Map<String, String>> = java.util.concurrent.ConcurrentHashMap()
         val detected: MutableMap<String, String> =
@@ -229,7 +231,8 @@ class WebActivity : AppCompatActivity() {
                     t.blocked++
                     return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                 }
-                if (!request.isForMainFrame && !STATIC_RE.containsMatchIn(url.substringBefore('?').lowercase())) {
+                if (!request.isForMainFrame && !STATIC_RE.containsMatchIn(url.substringBefore('?').lowercase()) &&
+                    !NOISE_RE.containsMatchIn(url)) {
                     synchronized(t.requests) {
                         if (t.requests.size >= 150) t.requests.removeAt(0)
                         t.requests.add("${request.method} ${url.take(300)}" + (if (request.requestHeaders?.containsKey("Range") == true) "  [Range]" else ""))
@@ -494,7 +497,7 @@ class WebActivity : AppCompatActivity() {
 
     /** Diagnóstico: qué pide la página (para ver de dónde sale el vídeo cuando no se detecta solo). */
     private fun showRequests() {
-        val list = synchronized(curTab.requests) { curTab.requests.toList() }
+        val list = synchronized(curTab.resp) { curTab.resp.toList() } + synchronized(curTab.requests) { curTab.requests.toList() }
         val text = if (list.isEmpty()) getString(R.string.web_requests_none) else list.joinToString("\n\n")
         val tv = android.widget.TextView(this).apply {
             this.text = text
@@ -762,7 +765,7 @@ class WebActivity : AppCompatActivity() {
             if (u == null || body == null) return
             synchronized(tab.requests) {
                 if (tab.requests.size >= 150) tab.requests.removeAt(0)
-                tab.requests.add("↳ RESPUESTA ${u.take(200)}\n${body.take(1200)}")
+                synchronized(tab.resp) { if (tab.resp.size >= 20) tab.resp.removeAt(0); tab.resp.add("↳ RESPUESTA ${u.take(200)}\n${body.take(1200)}") }
             }
         }
 
@@ -1562,6 +1565,7 @@ class WebActivity : AppCompatActivity() {
 
     companion object {
         private val MEDIA_EXT = listOf(".m3u8", ".mpd", ".mp4", ".mkv", ".m4v", ".mp3", ".aac", ".ts", ".webm", ".mov", ".m4a")
+        private val NOISE_RE = Regex("googletagmanager|/api/match/|/api/common/|/api-cf/|logos\\d*\\.|/cgi-trace|/stats$")
         private val MEDIA_RE = Regex("\\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|flv|avi|wmv|3gp|mp3|m4a|aac|ogg)(\\?|#|/|&|$)")
         /** Escáner dentro de la página: etiquetas video/audio/source, fetch y XMLHttpRequest, las direcciones de vídeo que vengan dentro de sus respuestas y, para el diagnóstico, el cuerpo de las respuestas de las APIs de "stream". */
         private const val SCOUT_JS = "(function(){if(window.__sc)return;window.__sc=1;var seen={};var sl={};" +
