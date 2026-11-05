@@ -2271,44 +2271,44 @@ class PlayerActivity : AppCompatActivity() {
                 return@loadRadioStreams
             }
             val d = resources.displayMetrics.density
+            // En horizontal (poca altura, p. ej. el móvil tumbado) los controles van a la izquierda y la lista a la derecha;
+            // en vertical, los controles arriba y la lista debajo. Todos los controles son botones normales (se enfocan con el mando).
+            val land = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            val screenH = resources.displayMetrics.heightPixels
+            val MATCH = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            val WRAP = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             val col = android.widget.LinearLayout(this).apply {
-                orientation = android.widget.LinearLayout.VERTICAL
+                orientation = if (land) android.widget.LinearLayout.HORIZONTAL else android.widget.LinearLayout.VERTICAL
                 setPadding((16 * d).toInt(), (8 * d).toInt(), (16 * d).toInt(), 0)
             }
+            val controls = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
             // Retraso de la radio respecto a la TV (la radio suele ir por delante): se aplica al cerrar el cuadro.
             var delay = radioDelaySec()
             val startDelay = delay
             val delayLabel = android.widget.TextView(this).apply { textSize = 14f }
             fun showDelay() { delayLabel.text = getString(R.string.radio_mix_delay, delay) }
             showDelay()
-            val delayRow = android.widget.LinearLayout(this).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-            }
-            delayRow.addView(delayLabel, android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            controls.addView(delayLabel)
+            val delayRow = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
             for (step in intArrayOf(-5, -1, 1, 5)) {
                 delayRow.addView(android.widget.Button(this).apply {
                     text = if (step > 0) "+$step" else "$step"
                     minWidth = 0
                     minimumWidth = 0
-                    setPadding((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+                    setPadding(0, 0, 0, 0)
                     setOnClickListener { delay = (delay + step).coerceIn(0, 90); setRadioDelaySec(delay); showDelay() }
-                }, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, (40 * d).toInt()))
+                }, android.widget.LinearLayout.LayoutParams(0, (44 * d).toInt(), 1f))
             }
-            col.addView(delayRow)
+            controls.addView(delayRow)
             val filter = android.widget.EditText(this).apply { hint = getString(R.string.radio_mix_hint); setSingleLine() }
             val list = android.widget.ListView(this)
-            col.addView(filter)
-            col.addView(list, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (300 * d).toInt()))
             // Solo las radios marcadas como favoritas (los favoritos son los mismos de la lista principal).
             val store = com.example.superplayer.data.FavoritesStore(this)
             val favs = all.filter { store.isFavorite(it) }
             var onlyFavs = false
-            val favToggle = android.widget.TextView(this).apply {
-                textSize = 14f
-                setPadding(0, (8 * d).toInt(), 0, (8 * d).toInt())
-                isFocusable = true
-                isClickable = true
+            val favToggle = android.widget.Button(this).apply {
+                textSize = 13f
+                isAllCaps = false
             }
             fun showFavToggle() { favToggle.text = getString(if (onlyFavs) R.string.radio_mix_favs_on else R.string.radio_mix_favs_off, favs.size) }
             showFavToggle()
@@ -2331,7 +2331,15 @@ class PlayerActivity : AppCompatActivity() {
                     refresh()
                 }
             }
-            col.addView(favToggle, col.indexOfChild(filter))
+            controls.addView(favToggle, android.widget.LinearLayout.LayoutParams(MATCH, WRAP))
+            controls.addView(filter, android.widget.LinearLayout.LayoutParams(MATCH, WRAP))
+            if (land) {
+                col.addView(controls, android.widget.LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = (12 * d).toInt() })
+                col.addView(list, android.widget.LinearLayout.LayoutParams(0, (screenH * 0.55f).toInt(), 1.2f))
+            } else {
+                col.addView(controls, android.widget.LinearLayout.LayoutParams(MATCH, WRAP))
+                col.addView(list, android.widget.LinearLayout.LayoutParams(MATCH, (screenH * 0.33f).toInt()))
+            }
             list.adapter = adapter
             refresh()
             filter.addTextChangedListener(object : android.text.TextWatcher {
@@ -2356,6 +2364,7 @@ class PlayerActivity : AppCompatActivity() {
                 if (!chose && delay != startDelay && cur != null && radioPlayer != null) startRadioMix(cur)
             }
             dialog.show()
+            if (isTvDevice) favToggle.requestFocus()
         }
     }
 

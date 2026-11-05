@@ -1792,3 +1792,9 @@ Capítulos: 6 atrás
 ### Radio con la TV: icono y favoritas
 - El botón 📻 usa ahora un icono de 24 dp (`ic_radio_small`), igual de grande que los demás de la barra.
 - En el cuadro de emisoras, "☆ Ver solo mis favoritas (N)" filtra a las radios marcadas como favoritas (mismos favoritos que la lista principal); se combina con el buscador.
+
+### Radio con la TV: lista completa en horizontal
+- El retraso, "solo favoritas" y el buscador pasan a ser la cabecera de la lista de emisoras: todo el cuadro se desplaza y, con el móvil en horizontal, se ven todas las emisoras (antes la lista quedaba en una ventana pequeña y parecía que faltaban).
+
+### Radio con la TV: cuadro manejable con mando
+- Sustituida la cabecera por una disposición fija: en horizontal, controles (retraso −5 −1 +1 +5, "Ver solo mis favoritas" y buscador) a la izquierda y lista de emisoras a la derecha; en vertical, controles arriba y lista debajo. "Favoritas" y los botones de retraso son botones normales, así que reciben el foco del mando (en la tele el foco empieza en "Favoritas").
