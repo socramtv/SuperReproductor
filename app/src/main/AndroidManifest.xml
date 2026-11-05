@@ -115,9 +115,17 @@
         <!-- Navegador web con marcadores y detección de vídeos (ver WebActivity) -->
         <activity
             android:name=".ui.WebActivity"
-            android:exported="false"
+            android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout">
+            <!-- "Compartir → Socram TV+" desde otras apps: abre el enlace (o busca el texto) en el navegador de la app -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
 
         <!-- Ver directos de Telegram dentro de la app (ver LiveActivity) -->
         <activity

@@ -591,6 +591,12 @@
     <string name="menu_group_custom">⚙ Personalizar</string>
     <string name="menu_group_backup">💾 Copia de seguridad</string>
     <string name="menu_group_access">🔒 Acceso</string>
+    <string name="web_adblock_on">🛡 Bloqueador de anuncios: activo (%1$d bloqueados)</string>
+    <string name="web_adblock_off">🛡 Bloqueador de anuncios: desactivado</string>
+    <string name="web_adblock_enabled">Bloqueador activado</string>
+    <string name="web_adblock_disabled">Bloqueador desactivado</string>
+    <string name="web_tabs_max">Máximo de pestañas abiertas</string>
+    <string name="web_shared_opened">Abierto en una pestaña nueva</string>
     <string name="web_find_hint">Buscar en la página</string>
     <string name="web_new_tab">➕ Nueva pestaña</string>
     <string name="web_tab_new_chip">＋ Nueva</string>

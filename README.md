@@ -1798,3 +1798,7 @@ Capítulos: 6 atrás
 
 ### Radio con la TV: cuadro manejable con mando
 - Sustituida la cabecera por una disposición fija: en horizontal, controles (retraso −5 −1 +1 +5, "Ver solo mis favoritas" y buscador) a la izquierda y lista de emisoras a la derecha; en vertical, controles arriba y lista debajo. "Favoritas" y los botones de retraso son botones normales, así que reciben el foco del mando (en la tele el foco empieza en "Favoritas").
+
+## Web: bloqueador de anuncios y "Compartir → Socram TV+"
+- **Bloqueador** (menú ⋮ → "🛡 Bloqueador de anuncios", activo por defecto; muestra cuántos ha bloqueado en la pestaña): corta las peticiones a ~90 dominios de publicidad y rastreo, oculta los huecos típicos de anuncios, bloquea ventanas emergentes que no ha abierto el usuario y redirecciones a otro sitio sin toque previo (popunders). Las ventanas que sí abre un toque (enlaces target=_blank) se abren en una pestaña nueva. Si una web deja de funcionar, se puede desactivar desde el mismo menú (recarga la página).
+- **Compartir**: desde cualquier app, "Compartir → Socram TV+" abre el primer enlace del texto compartido en una pestaña nueva de Web (si no hay enlace, busca el texto).

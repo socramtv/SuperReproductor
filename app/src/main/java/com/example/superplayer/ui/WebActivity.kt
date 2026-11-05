@@ -57,6 +57,10 @@ class WebActivity : AppCompatActivity() {
         /** Dirección que aún no se ha cargado (pestañas restauradas: se cargan al abrirlas). */
         var pending: String? = null
         var bannerShown = false
+        /** Abierta por una ventana emergente pedida por la página: no es una pestaña en blanco. */
+        var popup = false
+        @Volatile var blocked = 0
+        @Volatile var lastTouch = 0L
         val detected: MutableMap<String, String> =
             java.util.Collections.synchronizedMap(LinkedHashMap<String, String>()) // url -> página en la que apareció
     }
@@ -151,8 +155,8 @@ class WebActivity : AppCompatActivity() {
         // Pestañas de la vez anterior (se cargan al abrirlas); si se sale (p. ej. con la casita 🏠 de la app) y se vuelve, sigue donde se estaba.
         val saved = loadSavedTabs()
         for (u in saved.first) newTab(u.ifBlank { null }, select = false)
-        val explicit = intent?.data?.toString()
-        if (!explicit.isNullOrBlank()) newTab(explicit)
+        val explicit = sharedTarget(intent)
+        if (!explicit.isNullOrBlank()) { newTab(null); load(explicit) }
         else if (tabs.isNotEmpty()) switchTo(saved.second.coerceIn(0, tabs.size - 1))
         else { newTab(null); goHome() }
         updateNavButtons()
@@ -191,6 +195,7 @@ class WebActivity : AppCompatActivity() {
                 val url = request.url.toString()
                 val scheme = request.url.scheme ?: ""
                 if (scheme == "http" || scheme == "https") {
+                    if (request.isForMainFrame && shouldBlockNavigation(t, request)) return true
                     if (isMediaUrl(url)) {
                         askPlay(url, view.url ?: url)
                         return true
@@ -203,6 +208,10 @@ class WebActivity : AppCompatActivity() {
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url.toString()
+                if (adBlockOn() && !request.isForMainFrame && isAdHost(request.url.host)) {
+                    t.blocked++
+                    return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
+                }
                 if (looksLikeMedia(url)) addDetected(t, url)
                 return null
             }
@@ -210,6 +219,7 @@ class WebActivity : AppCompatActivity() {
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 t.page = url
                 t.bannerShown = false
+                t.popup = false
                 t.detected.clear()
                 if (t === curTab) {
                     hideHome()
@@ -224,6 +234,7 @@ class WebActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 t.page = url
                 view.evaluateJavascript(SCOUT_JS, null)
+                if (adBlockOn()) view.evaluateJavascript(HIDE_ADS_JS, null)
                 addHistory(url, view.title.orEmpty())
                 if (t === curTab) {
                     binding.webProgress.visibility = View.GONE
@@ -234,7 +245,22 @@ class WebActivity : AppCompatActivity() {
                 refreshTabsUi()
             }
         }
+        wv.settings.setSupportMultipleWindows(true)
+        wv.setOnTouchListener { _, ev ->
+            if (ev.action == android.view.MotionEvent.ACTION_DOWN || ev.action == android.view.MotionEvent.ACTION_UP) t.lastTouch = SystemClock.uptimeMillis()
+            false
+        }
         wv.webChromeClient = object : WebChromeClient() {
+            /** window.open / target=_blank: con el bloqueador, solo si lo ha tocado el usuario (y se abre en una pestaña nueva). */
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
+                if (adBlockOn() && !isUserGesture) { t.blocked++; return false }
+                val nt = newTab(null, popup = true) ?: return false
+                val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+                transport.webView = nt.view
+                resultMsg.sendToTarget()
+                return true
+            }
+
             override fun onProgressChanged(view: WebView, newProgress: Int) {
                 if (t !== curTab) return
                 binding.webProgress.progress = newProgress
@@ -293,15 +319,18 @@ class WebActivity : AppCompatActivity() {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
     }
 
-    private fun newTab(url: String?, select: Boolean = true) {
+    private fun newTab(url: String?, select: Boolean = true, popup: Boolean = false): Tab? {
+        if (tabs.size >= 20) { Toast.makeText(this, R.string.web_tabs_max, Toast.LENGTH_SHORT).show(); return null }
         val wv = WebView(this)
         wv.visibility = View.GONE
         binding.webBody.addView(wv, 0, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val t = Tab(wv)
         t.pending = url
+        t.popup = popup
         tabs.add(t)
         configure(t)
         if (select) switchTo(tabs.size - 1) else refreshTabsUi()
+        return t
     }
 
     private fun switchTo(i: Int) {
@@ -317,7 +346,7 @@ class WebActivity : AppCompatActivity() {
         val p = t.pending
         t.pending = null
         if (p != null) t.view.loadUrl(p)
-        if (t.view.url == null && p == null) showHome()
+        if (t.view.url == null && p == null && !t.popup) showHome()
         else if (!binding.webUrl.hasFocus()) binding.webUrl.setText(t.view.url ?: p.orEmpty())
         binding.webProgress.visibility = View.GONE
         updateNavButtons()
@@ -431,6 +460,39 @@ class WebActivity : AppCompatActivity() {
         return list.take(12) to prefs().getInt("tab_cur", 0)
     }
 
+    // ---- Bloqueador de anuncios y ventanas emergentes ----
+
+    private fun adBlockOn() = prefs().getBoolean("adblock", true)
+
+    /** El anfitrión es (o cuelga de) uno de los dominios de anuncios/rastreo conocidos. */
+    private fun isAdHost(host: String?): Boolean {
+        var h = host?.lowercase() ?: return false
+        while (true) {
+            if (h in AD_HOSTS) return true
+            val dot = h.indexOf('.')
+            if (dot < 0 || h.indexOf('.', dot + 1) < 0) return false
+            h = h.substring(dot + 1)
+        }
+    }
+
+    private fun siteOf(host: String?): String {
+        val parts = host.orEmpty().lowercase().split('.')
+        return if (parts.size <= 2) parts.joinToString(".") else parts.takeLast(2).joinToString(".")
+    }
+
+    /** Navegaciones a las que la página nos lleva sola (popunders, redirecciones de anuncios): sin toque del usuario y a otro sitio. */
+    private fun shouldBlockNavigation(t: Tab, request: WebResourceRequest): Boolean {
+        if (!adBlockOn()) return false
+        val host = request.url.host
+        if (isAdHost(host)) { t.blocked++; return true }
+        if (request.hasGesture() || request.isRedirect) return false
+        val cur = Uri.parse(t.page.ifEmpty { return false }).host
+        if (cur == null || siteOf(cur) == siteOf(host)) return false
+        if (SystemClock.uptimeMillis() - t.lastTouch < 1500) return false
+        t.blocked++
+        return true
+    }
+
     // ---- Buscar en la página ----
 
     private fun showFind() {
@@ -447,6 +509,27 @@ class WebActivity : AppCompatActivity() {
         binding.webFindCount.text = ""
         (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
             .hideSoftInputFromWindow(binding.webFindEt.windowToken, 0)
+    }
+
+    /** Texto compartido desde otra app: el primer enlace que lleve, o si no, se busca el texto. */
+    private fun sharedTarget(i: Intent?): String? {
+        if (i == null) return null
+        i.data?.toString()?.takeIf { it.isNotBlank() }?.let { return it }
+        if (i.action != Intent.ACTION_SEND) return null
+        val text = i.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
+        if (text.isEmpty()) return null
+        return Regex("https?://\\S+").find(text)?.value?.trimEnd('.', ',', ')', ']') ?: text.take(200)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val target = sharedTarget(intent) ?: return
+        if (tabs.isEmpty()) return
+        // Se abre en una pestaña nueva para no perder lo que se estuviera viendo.
+        newTab(null) ?: return
+        load(target)
+        Toast.makeText(this, R.string.web_shared_opened, Toast.LENGTH_SHORT).show()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -1082,6 +1165,7 @@ class WebActivity : AppCompatActivity() {
         menu.menu.add(0, 11, 1, R.string.web_history)
         menu.menu.add(0, 12, 1, R.string.web_new_tab)
         menu.menu.add(0, 13, 2, getString(R.string.web_alert_menu, alertModeLabel()))
+        menu.menu.add(0, 14, 2, getString(if (adBlockOn()) R.string.web_adblock_on else R.string.web_adblock_off, curTab.blocked))
         menu.menu.add(0, 3, 2, getString(R.string.web_videos_menu, detected.size))
         menu.menu.add(0, 4, 3, R.string.web_desktop).apply { isCheckable = true; isChecked = desktop }
         menu.menu.add(0, 10, 4, getString(R.string.web_agent_menu, agentLabel()))
@@ -1098,6 +1182,11 @@ class WebActivity : AppCompatActivity() {
                 11 -> showHistory()
                 12 -> newTab(null)
                 13 -> chooseAlertMode()
+                14 -> {
+                    prefs().edit().putBoolean("adblock", !adBlockOn()).apply()
+                    Toast.makeText(this, if (adBlockOn()) R.string.web_adblock_enabled else R.string.web_adblock_disabled, Toast.LENGTH_SHORT).show()
+                    webView.reload()
+                }
                 4 -> {
                     setAgent(if (desktop) "" else "desktop", "")
                     webView.reload()
@@ -1415,6 +1504,25 @@ class WebActivity : AppCompatActivity() {
             "function scan(){var n=document.querySelectorAll('video,audio');for(var i=0;i<n.length;i++){rep(n[i].currentSrc||n[i].src);}" +
             "var q=document.querySelectorAll('source');for(var j=0;j<q.length;j++){chk(q[j].src);}}" +
             "scan();setInterval(scan,2500);})();"
+        /** Oculta los huecos típicos de publicidad (el resto lo corta el bloqueo de peticiones). */
+        private const val HIDE_ADS_JS = "(function(){if(window.__ab)return;window.__ab=1;var s=document.createElement('style');" +
+            "s.textContent='ins.adsbygoogle,.adsbygoogle,iframe[src*=\\"doubleclick\\"],iframe[src*=\\"googlesyndication\\"],iframe[src*=\\"adservice\\"]," +
+            "div[id^=\\"google_ads\\"],div[id^=\\"taboola\\"],div[id^=\\"outbrain\\"],[class*=\\"popunder\\"]{display:none!important}';" +
+            "(document.head||document.documentElement).appendChild(s);})();"
+        private val AD_HOSTS = hashSetOf(
+            "doubleclick.net", "googlesyndication.com", "googleadservices.com", "adservice.google.com", "pagead2.googlesyndication.com",
+            "google-analytics.com", "adnxs.com", "taboola.com", "outbrain.com", "popads.net", "popcash.net", "propellerads.com",
+            "onclickads.net", "exoclick.com", "exosrv.com", "juicyads.com", "trafficjunky.net", "adsterra.com", "hilltopads.net",
+            "clickadu.com", "mgid.com", "revcontent.com", "zedo.com", "adform.net", "criteo.com", "criteo.net", "amazon-adsystem.com",
+            "scorecardresearch.com", "quantserve.com", "moatads.com", "yieldmo.com", "smartadserver.com", "rubiconproject.com",
+            "pubmatic.com", "openx.net", "adcolony.com", "popunder.net", "a-ads.com", "ad-maven.com", "admaven.com", "bidvertiser.com",
+            "tsyndicate.com", "realsrv.com", "notix.io", "pushprofit.net", "adskeeper.com", "adspyglass.com", "ero-advertising.com",
+            "trafficfactory.biz", "trafficstars.com", "tsyndicate.com", "richpush.co", "evadav.com", "monetag.com", "pushame.com",
+            "adtng.com", "adxpansion.com", "cpmstar.com", "adcash.com", "adsco.re", "profitablegatecpm.com", "highperformanceformat.com",
+            "mc.yandex.ru", "ads.yahoo.com", "advertising.com", "casalemedia.com", "contextweb.com", "sharethrough.com", "teads.tv",
+            "smaato.net", "inmobi.com", "mopub.com", "applovin.com", "unityads.unity3d.com", "ads.twitter.com", "static.ads-twitter.com",
+            "facebook.net", "connect.facebook.net", "hotjar.com", "mouseflow.com", "bat.bing.com", "ads.linkedin.com"
+        )
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }
