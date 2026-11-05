@@ -1802,3 +1802,7 @@ Capítulos: 6 atrás
 ## Web: bloqueador de anuncios y "Compartir → Socram TV+"
 - **Bloqueador** (menú ⋮ → "🛡 Bloqueador de anuncios", activo por defecto; muestra cuántos ha bloqueado en la pestaña): corta las peticiones a ~90 dominios de publicidad y rastreo, oculta los huecos típicos de anuncios, bloquea ventanas emergentes que no ha abierto el usuario y redirecciones a otro sitio sin toque previo (popunders). Las ventanas que sí abre un toque (enlaces target=_blank) se abren en una pestaña nueva. Si una web deja de funcionar, se puede desactivar desde el mismo menú (recarga la página).
 - **Compartir**: desde cualquier app, "Compartir → Socram TV+" abre el primer enlace del texto compartido en una pestaña nueva de Web (si no hay enlace, busca el texto).
+
+## Web: detección por cabecera Range y diagnóstico de peticiones
+- Además de la extensión (.m3u8, .mp4…), se marca como posible vídeo cualquier petición de subrecurso con cabecera `Range` (así piden el vídeo los reproductores) aunque la dirección no tenga extensión.
+- Menú ⋮ → "🧪 Peticiones de la página": lista las últimas 150 peticiones (sin imágenes, estilos, scripts ni anuncios) y permite copiarlas, para ver de dónde sale el vídeo cuando no se detecta solo.

@@ -60,6 +60,8 @@ class WebActivity : AppCompatActivity() {
         /** Abierta por una ventana emergente pedida por la página: no es una pestaña en blanco. */
         var popup = false
         @Volatile var blocked = 0
+        /** Últimas peticiones de la página (sin imágenes/estilos/fuentes ni anuncios), para el diagnóstico. */
+        val requests: MutableList<String> = java.util.Collections.synchronizedList(ArrayList<String>())
         @Volatile var lastTouch = 0L
         val detected: MutableMap<String, String> =
             java.util.Collections.synchronizedMap(LinkedHashMap<String, String>()) // url -> página en la que apareció
@@ -212,7 +214,16 @@ class WebActivity : AppCompatActivity() {
                     t.blocked++
                     return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                 }
+                if (!request.isForMainFrame && !STATIC_RE.containsMatchIn(url.substringBefore('?').lowercase())) {
+                    synchronized(t.requests) {
+                        if (t.requests.size >= 150) t.requests.removeAt(0)
+                        t.requests.add("${request.method} ${url.take(300)}" + (if (request.requestHeaders?.containsKey("Range") == true) "  [Range]" else ""))
+                    }
+                }
                 if (looksLikeMedia(url)) addDetected(t, url)
+                else if (!request.isForMainFrame && request.requestHeaders?.containsKey("Range") == true &&
+                    url.startsWith("http") && !STATIC_RE.containsMatchIn(url.substringBefore('?').lowercase())
+                ) addDetected(t, url) // los reproductores piden el vídeo por tramos (cabecera Range) aunque la dirección no tenga extensión
                 return null
             }
 
@@ -458,6 +469,26 @@ class WebActivity : AppCompatActivity() {
         } catch (e: Exception) { }
         if (list.isEmpty()) prefs().getString("last_url", "")?.takeIf { it.isNotBlank() }?.let { list.add(it) }
         return list.take(12) to prefs().getInt("tab_cur", 0)
+    }
+
+    /** Diagnóstico: qué pide la página (para ver de dónde sale el vídeo cuando no se detecta solo). */
+    private fun showRequests() {
+        val list = synchronized(curTab.requests) { curTab.requests.toList() }
+        val text = if (list.isEmpty()) getString(R.string.web_requests_none) else list.joinToString("\n\n")
+        val tv = android.widget.TextView(this).apply {
+            this.text = text
+            textSize = 11f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextIsSelectable(true)
+            val d = resources.displayMetrics.density
+            setPadding((12 * d).toInt(), (8 * d).toInt(), (12 * d).toInt(), (8 * d).toInt())
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_requests_menu)
+            .setView(android.widget.ScrollView(this).apply { addView(tv) })
+            .setPositiveButton(R.string.web_requests_copy) { _, _ -> copyText(text, R.string.web_requests_copied) }
+            .setNegativeButton(R.string.channel_check_close, null)
+            .show()
     }
 
     // ---- Bloqueador de anuncios y ventanas emergentes ----
@@ -1165,6 +1196,7 @@ class WebActivity : AppCompatActivity() {
         menu.menu.add(0, 11, 1, R.string.web_history)
         menu.menu.add(0, 12, 1, R.string.web_new_tab)
         menu.menu.add(0, 13, 2, getString(R.string.web_alert_menu, alertModeLabel()))
+        menu.menu.add(0, 15, 9, R.string.web_requests_menu)
         menu.menu.add(0, 14, 2, getString(if (adBlockOn()) R.string.web_adblock_on else R.string.web_adblock_off, curTab.blocked))
         menu.menu.add(0, 3, 2, getString(R.string.web_videos_menu, detected.size))
         menu.menu.add(0, 4, 3, R.string.web_desktop).apply { isCheckable = true; isChecked = desktop }
@@ -1182,6 +1214,7 @@ class WebActivity : AppCompatActivity() {
                 11 -> showHistory()
                 12 -> newTab(null)
                 13 -> chooseAlertMode()
+                15 -> showRequests()
                 14 -> {
                     prefs().edit().putBoolean("adblock", !adBlockOn()).apply()
                     Toast.makeText(this, if (adBlockOn()) R.string.web_adblock_enabled else R.string.web_adblock_disabled, Toast.LENGTH_SHORT).show()
@@ -1509,6 +1542,7 @@ class WebActivity : AppCompatActivity() {
             "s.textContent='ins.adsbygoogle,.adsbygoogle,iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=adservice]," +
             "div[id^=google_ads],div[id^=taboola],div[id^=outbrain],[class*=popunder]{display:none!important}';" +
             "(document.head||document.documentElement).appendChild(s);})();"
+        private val STATIC_RE = Regex("\\.(png|jpe?g|gif|webp|svg|ico|css|woff2?|ttf|otf|js|json|html?|map|pdf|zip|apk)$")
         private val AD_HOSTS = hashSetOf(
             "doubleclick.net", "googlesyndication.com", "googleadservices.com", "adservice.google.com", "pagead2.googlesyndication.com",
             "google-analytics.com", "adnxs.com", "taboola.com", "outbrain.com", "popads.net", "popcash.net", "propellerads.com",

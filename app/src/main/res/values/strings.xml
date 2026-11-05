@@ -597,6 +597,10 @@
     <string name="web_adblock_disabled">Bloqueador desactivado</string>
     <string name="web_tabs_max">Máximo de pestañas abiertas</string>
     <string name="web_shared_opened">Abierto en una pestaña nueva</string>
+    <string name="web_requests_menu">🧪 Peticiones de la página</string>
+    <string name="web_requests_none">Aún no hay peticiones (carga una página primero).</string>
+    <string name="web_requests_copy">Copiar</string>
+    <string name="web_requests_copied">Peticiones copiadas</string>
     <string name="web_find_hint">Buscar en la página</string>
     <string name="web_new_tab">➕ Nueva pestaña</string>
     <string name="web_tab_new_chip">＋ Nueva</string>
