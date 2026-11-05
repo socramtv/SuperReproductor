@@ -67,6 +67,8 @@ class WebActivity : AppCompatActivity() {
         val resp: MutableList<String> = java.util.Collections.synchronizedList(ArrayList<String>())
         /** Cabeceras reales (Referer/Origin) con que la página pidió cada vídeo. */
         val hdrs: MutableMap<String, Map<String, String>> = java.util.concurrent.ConcurrentHashMap()
+        /** Último Referer visto en peticiones a cada host (el del iframe del reproductor suele coincidir con el de su CDN). */
+        val hostRef: MutableMap<String, String> = java.util.concurrent.ConcurrentHashMap()
         val detected: MutableMap<String, String> =
             java.util.Collections.synchronizedMap(LinkedHashMap<String, String>()) // url -> página en la que apareció
     }
@@ -230,6 +232,11 @@ class WebActivity : AppCompatActivity() {
                 if (adBlockOn() && !request.isForMainFrame && isAdHost(request.url.host)) {
                     t.blocked++
                     return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
+                }
+                if (!request.isForMainFrame && t.hostRef.size < 100) {
+                    val r = request.requestHeaders?.get("Referer")
+                    val h = request.url.host
+                    if (!r.isNullOrEmpty() && !h.isNullOrEmpty() && r.startsWith("http")) t.hostRef[h] = r
                 }
                 if (!request.isForMainFrame && !STATIC_RE.containsMatchIn(url.substringBefore('?').lowercase()) &&
                     !NOISE_RE.containsMatchIn(url)) {
@@ -826,7 +833,9 @@ class WebActivity : AppCompatActivity() {
         val headers = HashMap<String, String>()
         // Referer: el del iframe del reproductor (el que de verdad envió la página), reducido a "https://host/" como
         // hacen las apps que sí lo reproducen. Sin Origin ni cookies: algunos servidores rechazan la petición si sobran.
+        val host = Uri.parse(url).host.orEmpty()
         val ref = tabs.firstNotNullOfOrNull { it.hdrs[url]?.get("Referer") }
+            ?: tabs.firstNotNullOfOrNull { it.hostRef[host] }
             ?: tabs.asReversed().firstNotNullOfOrNull { t -> t.hdrs.values.firstNotNullOfOrNull { it["Referer"] } }
             ?: page
         if (ref.startsWith("http")) {
@@ -836,6 +845,7 @@ class WebActivity : AppCompatActivity() {
             } catch (e: Exception) { headers["Referer"] = ref }
         }
         headers["User-Agent"] = webView.settings.userAgentString
+        Toast.makeText(this, "Referer: ${headers["Referer"] ?: "—"}", Toast.LENGTH_SHORT).show()
         PlayerActivity.pendingStream = Stream(name = name, type = streamTypeFor(url), url = url, icon = null, category = "Web", headers = headers)
         PlayerActivity.pendingChannelList = emptyList()
         startActivity(Intent(this, PlayerActivity::class.java))

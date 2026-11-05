@@ -1829,3 +1829,6 @@ La cabecera `Icy-MetaData: 1` (títulos de radios Shoutcast) ya no se envía en 
 
 ## Reproductor: el aviso de reconexión incluye el motivo
 "Canal cortado, reconectando…" ahora añade el código de error de ExoPlayer (p. ej. `ERROR_CODE_IO_BAD_HTTP_STATUS · Response code: 403`) para saber por qué falla un canal.
+
+## Web: Referer según el host del vídeo
+Si no se conoce el Referer con que se pidió el vídeo, se usa el último visto en peticiones a ese mismo host (el reproductor y su CDN comparten iframe). Al pulsar un vídeo sale un aviso con el Referer que se va a enviar, para diagnosticar.
