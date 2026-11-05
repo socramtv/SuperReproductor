@@ -1526,16 +1526,15 @@ class WebActivity : AppCompatActivity() {
     companion object {
         private val MEDIA_EXT = listOf(".m3u8", ".mpd", ".mp4", ".mkv", ".m4v", ".mp3", ".aac", ".ts", ".webm", ".mov", ".m4a")
         private val MEDIA_RE = Regex("\\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|flv|avi|wmv|3gp|mp3|m4a|aac|ogg)(\\?|#|/|&|$)")
-        /** Escáner dentro de la página: etiquetas video/audio/source, fetch y XMLHttpRequest. */
+        /** Escáner dentro de la página: etiquetas video/audio/source, fetch y XMLHttpRequest, y las direcciones de vídeo que vengan dentro de sus respuestas JSON/texto. */
         private const val SCOUT_JS = "(function(){if(window.__sc)return;window.__sc=1;var seen={};" +
-            "function rep(u){try{if(!u||typeof u!=='string'||u.indexOf('blob:')===0||u.indexOf('data:')===0)return;" +
-            "u=new URL(u,location.href).href;if(seen[u])return;seen[u]=1;SocramScout.found(u);}catch(e){}}" +
-            "var ok=/\\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|flv|mp3|m4a|aac|ogg)(\\?|#|\\/|&|$)|m3u8/i;" +
+            "function rep(u){try{if(!u||typeof u!=='string'||u.indexOf('blob:')===0||u.indexOf('data:')===0)return;u=new URL(u,location.href).href;if(seen[u])return;seen[u]=1;SocramScout.found(u);}catch(e){}}" +
+            "var ok=/\\.(m3u8|mpd|mp4|webm|mkv|m4v|mov|flv|mp3|m4a|aac|ogg)(\\?|#|\\/|&|\$)|m3u8/i;" +
             "function chk(u){try{if(u&&ok.test(String(u)))rep(String(u));}catch(e){}}" +
-            "var of=window.fetch;if(of)window.fetch=function(){try{var a=arguments[0];chk(a&&a.url?a.url:a);}catch(e){}return of.apply(this,arguments);};" +
-            "var oo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){try{chk(u);}catch(e){}return oo.apply(this,arguments);};" +
-            "function scan(){var n=document.querySelectorAll('video,audio');for(var i=0;i<n.length;i++){rep(n[i].currentSrc||n[i].src);}" +
-            "var q=document.querySelectorAll('source');for(var j=0;j<q.length;j++){chk(q[j].src);}}" +
+            "function hunt(t){try{if(!t||t.length>400000)return;t=t.replace(/\\\\\\//g,'/').replace(/\\\\u002f/gi,'/').replace(/\\\\u0026/gi,'&');var m=t.match(/https?:\\/\\/[^\\s'\"<>\\\\]+/g);if(m)for(var i=0;i<m.length;i++)chk(m[i]);}catch(e){}}" +
+            "var of=window.fetch;if(of)window.fetch=function(){try{var a=arguments[0];chk(a&&a.url?a.url:a);}catch(e){}var p=of.apply(this,arguments);try{p.then(function(r){try{var ct=r.headers.get('content-type')||'';if(/json|text|mpegurl|xml/i.test(ct))r.clone().text().then(hunt).catch(function(){});}catch(e){}}).catch(function(){});}catch(e){}return p;};" +
+            "var oo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){try{chk(u);this.addEventListener('load',function(){try{var rt=this.responseType;if(rt===''||rt==='text'){var ct=this.getResponseHeader('content-type')||'';if(/json|text|mpegurl|xml/i.test(ct))hunt(this.responseText);}}catch(e){}});}catch(e){}return oo.apply(this,arguments);};" +
+            "function scan(){var n=document.querySelectorAll('video,audio');for(var i=0;i<n.length;i++){rep(n[i].currentSrc||n[i].src);}var q=document.querySelectorAll('source');for(var j=0;j<q.length;j++){chk(q[j].src);}}" +
             "scan();setInterval(scan,2500);})();"
         /** Oculta los huecos típicos de publicidad (el resto lo corta el bloqueo de peticiones). */
         private const val HIDE_ADS_JS = "(function(){if(window.__ab)return;window.__ab=1;var s=document.createElement('style');" +

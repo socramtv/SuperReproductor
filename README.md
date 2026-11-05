@@ -1806,3 +1806,7 @@ Capítulos: 6 atrás
 ## Web: detección por cabecera Range y diagnóstico de peticiones
 - Además de la extensión (.m3u8, .mp4…), se marca como posible vídeo cualquier petición de subrecurso con cabecera `Range` (así piden el vídeo los reproductores) aunque la dirección no tenga extensión.
 - Menú ⋮ → "🧪 Peticiones de la página": lista las últimas 150 peticiones (sin imágenes, estilos, scripts ni anuncios) y permite copiarlas, para ver de dónde sale el vídeo cuando no se detecta solo.
+
+## Web: direcciones de vídeo dentro de las respuestas de la página
+- El escáner de la página ahora también lee las respuestas JSON/texto de `fetch` y `XMLHttpRequest` (hasta 400 KB) y marca como vídeo cualquier dirección que contenga m3u8/mpd/mp4/flv… (con `\/` y `/` ya normalizados). Así se detectan reproductores que piden primero un `api/stream/detail` y reciben ahí la dirección del vídeo.
+- Limitación: si el vídeo va por WebRTC (p. ej. un `POST …/channel` con SDP) o con DRM, no hay dirección que reproducir.
