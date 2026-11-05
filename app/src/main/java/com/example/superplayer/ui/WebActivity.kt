@@ -824,19 +824,17 @@ class WebActivity : AppCompatActivity() {
     private fun playInApp(url: String, page: String) {
         val name = (webView.title?.takeIf { it.isNotBlank() } ?: Uri.parse(url).lastPathSegment ?: url).take(80)
         val headers = HashMap<String, String>()
-        if (page.startsWith("http")) {
-            headers["Referer"] = page
+        // Referer: el del iframe del reproductor (el que de verdad envió la página), reducido a "https://host/" como
+        // hacen las apps que sí lo reproducen. Sin Origin ni cookies: algunos servidores rechazan la petición si sobran.
+        val ref = tabs.firstNotNullOfOrNull { it.hdrs[url]?.get("Referer") }
+            ?: tabs.asReversed().firstNotNullOfOrNull { t -> t.hdrs.values.firstNotNullOfOrNull { it["Referer"] } }
+            ?: page
+        if (ref.startsWith("http")) {
             try {
-                val u = Uri.parse(page)
-                headers["Origin"] = "${u.scheme}://${u.host}"
-            } catch (e: Exception) { }
+                val u = Uri.parse(ref)
+                headers["Referer"] = "${u.scheme}://${u.host}/"
+            } catch (e: Exception) { headers["Referer"] = ref }
         }
-        // Lo que de verdad envió la página (el reproductor suele ir en un iframe con otro origen) manda sobre lo supuesto.
-        tabs.firstNotNullOfOrNull { it.hdrs[url] }?.forEach { (k, v) -> headers[if (k.equals("Origin", true)) "Origin" else "Referer"] = v }
-        try {
-            val ck = android.webkit.CookieManager.getInstance().getCookie(url)
-            if (!ck.isNullOrEmpty()) headers["Cookie"] = ck
-        } catch (e: Exception) { }
         headers["User-Agent"] = webView.settings.userAgentString
         PlayerActivity.pendingStream = Stream(name = name, type = streamTypeFor(url), url = url, icon = null, category = "Web", headers = headers)
         PlayerActivity.pendingChannelList = emptyList()

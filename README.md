@@ -1820,3 +1820,6 @@ Al pasar un vídeo detectado al reproductor se envían el `Referer` y el `Origin
 
 ## Web: diagnóstico de peticiones más limpio
 "🧪 Peticiones de la página" muestra primero las respuestas de las APIs de stream (guardadas aparte) y deja de listar el ruido repetido (estadísticas, analítica, logos, cgi-trace), para que no desplace lo importante.
+
+## Web: Referer reducido al host del iframe, sin Origin ni cookies
+Al reproducir un vídeo detectado se envía solo `Referer: https://host-del-iframe/` y el `User-Agent` del WebView (igual que las apps que sí lo reproducen). Se quitan `Origin` y `Cookie`, que hacían que algunos servidores con token respondieran con error.
