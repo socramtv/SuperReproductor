@@ -454,7 +454,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         val delayMs = RECONNECT_DELAYS_MS[autoReconnectAttempts]
         autoReconnectAttempts++
-        Toast.makeText(this, getString(R.string.player_reconnecting), Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.player_reconnecting) + "\n" + error.errorCodeName + (error.message?.let { " · " + it.take(120) } ?: ""), Toast.LENGTH_LONG).show()
         val runnable = Runnable {
             pendingReconnectRunnable = null
             if (isFinishing || isDestroyed) return@Runnable

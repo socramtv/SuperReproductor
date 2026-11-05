@@ -1826,3 +1826,6 @@ Al reproducir un vídeo detectado se envía solo `Referer: https://host-del-ifra
 
 ## Reproductor: sin `Icy-MetaData` en HLS/DASH
 La cabecera `Icy-MetaData: 1` (títulos de radios Shoutcast) ya no se envía en listas HLS/DASH, donde no sirve y algunos servidores con token respondían con error. Sigue enviándose en audio/vídeo progresivo.
+
+## Reproductor: el aviso de reconexión incluye el motivo
+"Canal cortado, reconectando…" ahora añade el código de error de ExoPlayer (p. ej. `ERROR_CODE_IO_BAD_HTTP_STATUS · Response code: 403`) para saber por qué falla un canal.
