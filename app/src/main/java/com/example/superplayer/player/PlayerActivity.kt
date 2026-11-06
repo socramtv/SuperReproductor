@@ -1595,6 +1595,26 @@ class PlayerActivity : AppCompatActivity() {
         val adapter = RadioCarouselAdapter(channelList, { currentStream?.id }) { index -> switchToIndex(index) }
         radioCarouselAdapter = adapter
         rv.adapter = adapter
+        // La emisora que queda en el centro es la que suena: se gira el carrusel y, al soltarlo, se cambia sola.
+        val snap = androidx.recyclerview.widget.LinearSnapHelper()
+        snap.attachToRecyclerView(rv)
+        rv.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: androidx.recyclerview.widget.RecyclerView, newState: Int) {
+                if (newState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) return
+                val lm = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
+                val centered = snap.findSnapView(lm) ?: return
+                val pos = lm.getPosition(centered)
+                if (pos in channelList.indices && pos != currentIndex) switchToIndex(pos)
+            }
+        })
+        // Márgenes laterales para que la primera y la última emisora también puedan quedar en el centro.
+        rv.addOnLayoutChangeListener { v, l, _, r, _, oldL, _, oldR, _ ->
+            if (r - l != oldR - oldL) {
+                val itemW = (92 * resources.displayMetrics.density).toInt()
+                val pad = ((r - l - itemW) / 2).coerceAtLeast(0)
+                if (v.paddingStart != pad) v.setPaddingRelative(pad, v.paddingTop, pad, v.paddingBottom)
+            }
+        }
     }
 
     /** Marca la emisora actual y la centra en el carrusel. */
@@ -1606,7 +1626,9 @@ class PlayerActivity : AppCompatActivity() {
         rv.post {
             val lm = rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return@post
             val itemW = (92 * resources.displayMetrics.density).toInt()
-            lm.scrollToPositionWithOffset(idx, ((rv.width - itemW) / 2).coerceAtLeast(0))
+            val pad = ((rv.width - itemW) / 2).coerceAtLeast(0)
+            if (rv.paddingStart != pad) rv.setPaddingRelative(pad, rv.paddingTop, pad, rv.paddingBottom)
+            lm.scrollToPositionWithOffset(idx, 0)
         }
     }
 

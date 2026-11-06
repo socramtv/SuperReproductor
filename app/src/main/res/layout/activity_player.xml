@@ -126,7 +126,7 @@
         android:layout_gravity="bottom"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingBottom="36dp"
+        android:paddingBottom="96dp"
         android:visibility="gone">
 
         <TextView

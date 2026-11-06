@@ -1839,3 +1839,6 @@ Si no se conoce el Referer con que se pidió el vídeo, se usa el último visto 
 
 ## Radio: carrusel de emisoras
 En la pantalla de radio, arriba, sale un carrusel horizontal con el logo y el nombre de las emisoras de la lista actual. Se desliza a izquierda y derecha, la que suena queda marcada y centrada, y al tocar otra se cambia de emisora al instante. En horizontal el logo se hace más pequeño para dejar sitio. Si la lista solo tiene una emisora, no aparece.
+
+## Radio: el carrusel cambia de emisora al girarlo
+La emisora que queda en el centro del carrusel es la que suena: se desliza a izquierda o derecha, el carrusel se ajusta solo al centro y, al soltarlo, cambia de emisora. Además, los controles de abajo se han subido para que no los tape la barra del sistema.
