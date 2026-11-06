@@ -144,6 +144,9 @@ class PlayerActivity : AppCompatActivity() {
     private var pendingMediaItem: MediaItem? = null
     private var playbackStarted = false
     private var isCurrentStreamRadio = false
+    // Radio en móvil: pantalla vertical fija; el botón ⟳ de los controles de radio la gira a horizontal y de vuelta.
+    private var radioLandscape = false
+    private var lastOrientationRadio: Boolean? = null
 
     // Lista de canales de la categoría/favoritos/búsqueda desde la que se
     // abrió este canal (ver companion.pendingChannelList) y la posición de
@@ -670,6 +673,7 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            updateRadioControls()
             // De verdad está sonando/viéndose: lo que sea que haya fallado
             // antes se ha recuperado, así que el canal actual vuelve a tener
             // su cupo completo de reintentos para la próxima vez que se corte.
@@ -681,7 +685,14 @@ class PlayerActivity : AppCompatActivity() {
         override fun onTracksChanged(tracks: Tracks) {
             val hasVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.length > 0 }
             isCurrentStreamRadio = !hasVideo
+            // Con las pistas aún vacías (arranque) no se sabe si es radio: no tocar la orientación todavía.
+            if (tracks.groups.isNotEmpty()) applyRadioOrientation(isCurrentStreamRadio)
             updateNowPlayingOverlayVisibility()
+            updateRadioControls()
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            updateRadioControls()
         }
 
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
@@ -922,7 +933,7 @@ class PlayerActivity : AppCompatActivity() {
         // En Android TV, o si el framework de Cast no está disponible en
         // este dispositivo, el botón se queda oculto del todo (ver
         // isCastButtonUsable).
-        binding.castButton.visibility = if (isTvDevice || !isCastButtonUsable) View.GONE else visibility
+        binding.castButton.visibility = if (isTvDevice || !isCastButtonUsable || (isCurrentStreamRadio && !isCastingRemote)) View.GONE else visibility
         // PiP no tiene sentido para radio (ya suena en segundo plano sola),
         // en Android TV (ver isTvDevice), ni mientras se envía a un
         // Chromecast (no hay vídeo propio del teléfono que flotar: el de
@@ -1187,6 +1198,7 @@ class PlayerActivity : AppCompatActivity() {
         // real de los controles (ocultos al abrir), eso ya no puede pasar.
         applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
         applyVideoFormat()
+        setupRadioControls()
         binding.playerView.keepScreenOn = true
         binding.playerView.setOnTouchListener { _, event -> playerTapGestureDetector.onTouchEvent(event) }
 
@@ -1527,6 +1539,47 @@ class PlayerActivity : AppCompatActivity() {
         applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
     }
 
+    /** Radio: vertical (y sin girar sola); vídeo: horizontal como siempre. En la tele no se toca. */
+    private fun applyRadioOrientation(radio: Boolean) {
+        if (isTvDevice || lastOrientationRadio == radio) return
+        lastOrientationRadio = radio
+        requestedOrientation = when {
+            !radio -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+            radioLandscape -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
+
+    private fun toggleRadioRotation() {
+        if (isTvDevice) return
+        radioLandscape = !radioLandscape
+        requestedOrientation = if (radioLandscape) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+
+    /** Icono de play/pausa y botón de calidad (solo si el stream ofrece varias pistas de audio). */
+    private fun updateRadioControls() {
+        if (!::binding.isInitialized) return
+        val ctrl = controller ?: return
+        binding.radioPlayPause.text = if (ctrl.playWhenReady) "⏸" else "▶"
+        val audioTracks = ctrl.currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }.sumOf { it.length }
+        binding.radioQualityBtn.visibility = if (audioTracks > 1) View.VISIBLE else View.GONE
+    }
+
+    private fun setupRadioControls() {
+        binding.radioPlayPause.setOnClickListener {
+            val ctrl = controller ?: return@setOnClickListener
+            if (ctrl.playWhenReady) ctrl.pause() else ctrl.play()
+            updateRadioControls()
+        }
+        binding.radioRotateBtn.setOnClickListener { toggleRadioRotation() }
+        if (isTvDevice) binding.radioRotateBtn.visibility = View.GONE
+        binding.radioQualityBtn.setOnClickListener {
+            val ctrl = controller ?: return@setOnClickListener
+            TrackSelectionDialogBuilder(this, getString(R.string.radio_quality_title), ctrl, C.TRACK_TYPE_AUDIO).build().show()
+        }
+    }
+
     /**
      * El overlay negro de "radio" (logo + texto centrado) también sirve
      * para avisar de que se está enviando a un Chromecast: en los dos casos
@@ -1538,6 +1591,8 @@ class PlayerActivity : AppCompatActivity() {
         // cambia el canal; aquí solo hace falta decidir si el overlay se ve
         // o no (el texto de dentro lo decide refreshNowPlayingDisplay).
         binding.nowPlayingOverlay.visibility = if (isCurrentStreamRadio || isCastingRemote) View.VISIBLE else View.GONE
+        binding.radioControls.visibility = if (isCurrentStreamRadio && !isInPictureInPictureMode) View.VISIBLE else View.GONE
+        if (isCurrentStreamRadio && !isCastingRemote) binding.castButton.visibility = View.GONE
     }
 
     // -----------------------------------------------------------------

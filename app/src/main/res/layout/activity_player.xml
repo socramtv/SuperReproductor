@@ -102,6 +102,74 @@
         android:contentDescription="@string/action_cast" />
 
     <!--
+        Controles básicos de RADIO (solo visibles cuando el stream no tiene vídeo, ver
+        PlayerActivity.updateNowPlayingOverlayVisibility): girar pantalla, play/pausa y calidad
+        de audio (solo si el stream ofrece varias). Van encima del overlay negro porque los
+        controles nativos de Media3 quedan tapados por él.
+    -->
+    <LinearLayout
+        android:id="@+id/radioControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingBottom="36dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/radioRotateBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:minWidth="52dp"
+            android:layout_marginEnd="14dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:gravity="center"
+            android:background="@drawable/bg_web_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:text="⟳"
+            android:textColor="@android:color/white"
+            android:textSize="22sp"
+            android:contentDescription="@string/radio_rotate" />
+
+        <TextView
+            android:id="@+id/radioPlayPause"
+            android:layout_width="wrap_content"
+            android:layout_height="68dp"
+            android:minWidth="88dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:gravity="center"
+            android:background="@drawable/bg_web_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:text="⏸"
+            android:textColor="@android:color/white"
+            android:textSize="30sp"
+            android:contentDescription="@string/radio_play_pause" />
+
+        <TextView
+            android:id="@+id/radioQualityBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:minWidth="52dp"
+            android:layout_marginStart="14dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:gravity="center"
+            android:background="@drawable/bg_web_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:text="@string/radio_quality_btn"
+            android:textColor="@android:color/white"
+            android:textSize="15sp"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!--
         Fila de acciones del reproductor: vídeo+audio (un solo botón),
         subtítulos, formato de pantalla e imagen en imagen. En
         PlayerActivity.onCreate se MUEVEN a la fila de abajo de los controles

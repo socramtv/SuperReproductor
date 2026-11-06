@@ -982,4 +982,8 @@
     <string name="person_not_in_lib">Este título no está en tu biblioteca.</string>
     <string name="info_director_label">🎬 Director</string>
     <string name="tgw_warn_desc">Sin ficha: elegir carátula y nombre</string>
+    <string name="radio_rotate">Girar pantalla</string>
+    <string name="radio_play_pause">Reproducir / pausar</string>
+    <string name="radio_quality_btn">🎚 Calidad</string>
+    <string name="radio_quality_title">Calidad de audio</string>
 </resources>

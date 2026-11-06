@@ -1832,3 +1832,7 @@ La cabecera `Icy-MetaData: 1` (títulos de radios Shoutcast) ya no se envía en 
 
 ## Web: Referer según el host del vídeo
 Si no se conoce el Referer con que se pidió el vídeo, se usa el último visto en peticiones a ese mismo host (el reproductor y su CDN comparten iframe). Al pulsar un vídeo sale un aviso con el Referer que se va a enviar, para diagnosticar.
+
+## Radio: controles básicos y pantalla vertical
+- En el reproductor, cuando el stream es solo audio (radio): se quita el botón de enviar a Chromecast y salen abajo ⟳ (girar), ⏸/▶ (play/pausa) y 🎚 Calidad (solo si el stream ofrece varias calidades de audio).
+- En el móvil la radio se abre en vertical y no gira sola; el botón ⟳ la pasa a horizontal y de vuelta. Los vídeos siguen en horizontal. En la tele no cambia nada.
