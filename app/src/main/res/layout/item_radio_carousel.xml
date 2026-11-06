@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una emisora del carrusel de acceso rápido de la pantalla de radio (ver RadioCarouselAdapter) -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="84dp"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    android:padding="6dp"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:background="@drawable/bg_web_chip"
+    android:clickable="true"
+    android:focusable="true">
+
+    <ImageView
+        android:id="@+id/radioItemLogo"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:scaleType="fitCenter"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_radio_small" />
+
+    <TextView
+        android:id="@+id/radioItemName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:textColor="@color/player_text"
+        android:textSize="11sp" />
+</LinearLayout>

@@ -1836,3 +1836,6 @@ Si no se conoce el Referer con que se pidió el vídeo, se usa el último visto 
 ## Radio: controles básicos y pantalla vertical
 - En el reproductor, cuando el stream es solo audio (radio): se quita el botón de enviar a Chromecast y salen abajo ⟳ (girar), ⏸/▶ (play/pausa) y 🎚 Calidad (solo si el stream ofrece varias calidades de audio).
 - En el móvil la radio se abre en vertical y no gira sola; el botón ⟳ la pasa a horizontal y de vuelta. Los vídeos siguen en horizontal. En la tele no cambia nada.
+
+## Radio: carrusel de emisoras
+En la pantalla de radio, arriba, sale un carrusel horizontal con el logo y el nombre de las emisoras de la lista actual. Se desliza a izquierda y derecha, la que suena queda marcada y centrada, y al tocar otra se cambia de emisora al instante. En horizontal el logo se hace más pequeño para dejar sitio. Si la lista solo tiene una emisora, no aparece.

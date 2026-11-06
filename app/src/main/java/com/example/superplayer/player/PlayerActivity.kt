@@ -981,6 +981,7 @@ class PlayerActivity : AppCompatActivity() {
             error(R.drawable.ic_radio)
         }
         refreshNowPlayingDisplay()
+        if (binding.radioCarousel.visibility == View.VISIBLE) refreshRadioCarousel()
         stopTimeShift()
         resolveAndPlay(newStream)
     }
@@ -1199,6 +1200,8 @@ class PlayerActivity : AppCompatActivity() {
         applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
         applyVideoFormat()
         setupRadioControls()
+        setupRadioCarousel()
+        fitRadioOverlay()
         binding.playerView.keepScreenOn = true
         binding.playerView.setOnTouchListener { _, event -> playerTapGestureDetector.onTouchEvent(event) }
 
@@ -1566,6 +1569,47 @@ class PlayerActivity : AppCompatActivity() {
         binding.radioQualityBtn.visibility = if (audioTracks > 1) View.VISIBLE else View.GONE
     }
 
+    /** En horizontal el logo de la radio se hace más pequeño para dejar sitio al carrusel de arriba y a los botones de abajo. */
+    private fun fitRadioOverlay() {
+        val land = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val d = resources.displayMetrics.density
+        val size = ((if (land) 80 else 160) * d).toInt()
+        binding.nowPlayingLogo.layoutParams = binding.nowPlayingLogo.layoutParams.apply { width = size; height = size }
+        binding.radioCarousel.layoutParams = (binding.radioCarousel.layoutParams as android.widget.FrameLayout.LayoutParams).apply {
+            topMargin = ((if (land) 8 else 40) * d).toInt()
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        fitRadioOverlay()
+        if (binding.radioCarousel.visibility == View.VISIBLE) refreshRadioCarousel()
+    }
+
+    private var radioCarouselAdapter: RadioCarouselAdapter? = null
+
+    /** Carrusel de emisoras: se crea una vez (la lista de canales no cambia mientras esta pantalla vive). */
+    private fun setupRadioCarousel() {
+        val rv = binding.radioCarousel
+        rv.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false)
+        val adapter = RadioCarouselAdapter(channelList, { currentStream?.id }) { index -> switchToIndex(index) }
+        radioCarouselAdapter = adapter
+        rv.adapter = adapter
+    }
+
+    /** Marca la emisora actual y la centra en el carrusel. */
+    private fun refreshRadioCarousel() {
+        val rv = binding.radioCarousel
+        radioCarouselAdapter?.notifyDataSetChanged()
+        val idx = currentIndex
+        if (idx < 0) return
+        rv.post {
+            val lm = rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return@post
+            val itemW = (92 * resources.displayMetrics.density).toInt()
+            lm.scrollToPositionWithOffset(idx, ((rv.width - itemW) / 2).coerceAtLeast(0))
+        }
+    }
+
     private fun setupRadioControls() {
         binding.radioPlayPause.setOnClickListener {
             val ctrl = controller ?: return@setOnClickListener
@@ -1592,6 +1636,8 @@ class PlayerActivity : AppCompatActivity() {
         // o no (el texto de dentro lo decide refreshNowPlayingDisplay).
         binding.nowPlayingOverlay.visibility = if (isCurrentStreamRadio || isCastingRemote) View.VISIBLE else View.GONE
         binding.radioControls.visibility = if (isCurrentStreamRadio && !isInPictureInPictureMode) View.VISIBLE else View.GONE
+        binding.radioCarousel.visibility = if (isCurrentStreamRadio && !isInPictureInPictureMode && channelList.size > 1) View.VISIBLE else View.GONE
+        if (binding.radioCarousel.visibility == View.VISIBLE) refreshRadioCarousel()
         if (isCurrentStreamRadio && !isCastingRemote) binding.castButton.visibility = View.GONE
     }
 

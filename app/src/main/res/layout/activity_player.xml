@@ -101,6 +101,18 @@
         app:mediaRouteButtonTint="@android:color/white"
         android:contentDescription="@string/action_cast" />
 
+    <!-- Carrusel de emisoras de la radio (ver PlayerActivity.setupRadioCarousel): arriba, solo en radio con lista -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/radioCarousel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginTop="40dp"
+        android:clipToPadding="false"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:visibility="gone" />
+
     <!--
         Controles básicos de RADIO (solo visibles cuando el stream no tiene vídeo, ver
         PlayerActivity.updateNowPlayingOverlayVisibility): girar pantalla, play/pausa y calidad
