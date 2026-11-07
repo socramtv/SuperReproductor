@@ -1548,8 +1548,13 @@ class PlayerActivity : AppCompatActivity() {
 
     /** Radio: vertical (y sin girar sola); vídeo: horizontal como siempre. En la tele no se toca. */
     private fun applyRadioOrientation(radio: Boolean) {
-        if (isTvDevice || lastOrientationRadio == radio) return
+        if (isTvDevice) return
+        val before = lastOrientationRadio
+        if (before == radio) return
         lastOrientationRadio = radio
+        // Un canal de TV (nunca fue radio) se queda como lo deja el manifiesto: tocar la orientación en tiempo de ejecución
+        // reorganizaba la ventana y dejaba una línea blanca en el borde izquierdo hasta tocar la pantalla.
+        if (!radio && before != true) return
         requestedOrientation = when {
             !radio -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
             radioLandscape -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE

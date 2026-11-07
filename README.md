@@ -1856,3 +1856,6 @@ La pantalla de radio (carrusel de emisoras, botones de play/calidad/girar, verti
 Al pulsar «📺 Reproducir en TV» (tras elegir la tele) se escoge cómo:
 - **Desde este móvil (por la wifi):** como antes, pero ahora mientras emite hay un servicio en primer plano con notificación («Emitiendo a la tele», con botón «Parar») que mantiene viva la app, la wifi y la CPU con la pantalla apagada. Si se desliza la app fuera de las recientes, se para.
 - **Desde Telegram en la tele:** el móvil solo manda a la tele el chat y el mensaje; la tele lo abre en SU Telegram y lo reproduce directamente, así que el móvil se puede cerrar. Necesita que la tele tenga la sesión de Telegram iniciada y acceso a ese chat.
+
+## Reproductor: sin línea blanca al abrir un canal de TV
+Al abrir un canal de TV ya no se cambia la orientación en tiempo de ejecución (solo se toca al entrar o salir de una radio de la lista de Radio). Eso reorganizaba la ventana y dejaba una línea blanca en el borde izquierdo hasta tocar la pantalla.
