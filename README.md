@@ -1848,3 +1848,6 @@ En canales que numeran cada estreno (la foto con la sinopsis termina en `url=116
 
 ## Telegram: «Reproducir en TV» desde la ficha
 La ficha de una película o serie tiene un botón «📺 Reproducir en TV» bajo «Reproducir». El móvil emite el vídeo de Telegram por la wifi (segundo servidor local, solo para la red local y con una clave distinta en cada sesión) y se lo manda a la tele guardada en el «Mando de tele», que lo reproduce con la app. Si hay varias teles, se elige; si no hay ninguna, abre el «Mando de tele» para elegirla. Hay que dejar la app abierta en el móvil mientras se ve. No vale aún para vídeos en RAR ni enlaces. En la propia tele el botón no sale.
+
+## Radio: el carrusel y los controles solo en la lista de Radio
+La pantalla de radio (carrusel de emisoras, botones de play/calidad/girar, vertical fijo y sin botón de enviar) solo se activa si lo que suena es de la lista de Radio. Los canales de TV que de vez en cuando no traen vídeo ya no la muestran.

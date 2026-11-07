@@ -144,6 +144,9 @@ class PlayerActivity : AppCompatActivity() {
     private var pendingMediaItem: MediaItem? = null
     private var playbackStarted = false
     private var isCurrentStreamRadio = false
+    // Direcciones de la lista de Radio (hueco 5): la pantalla de radio (carrusel, controles, vertical) solo es para ellas.
+    @Volatile private var radioUrls: Set<String> = emptySet()
+    private val radioUi: Boolean get() = isCurrentStreamRadio && currentStream?.url?.let { it in radioUrls } == true
     // Radio en móvil: pantalla vertical fija; el botón ⟳ de los controles de radio la gira a horizontal y de vuelta.
     private var radioLandscape = false
     private var lastOrientationRadio: Boolean? = null
@@ -686,7 +689,7 @@ class PlayerActivity : AppCompatActivity() {
             val hasVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.length > 0 }
             isCurrentStreamRadio = !hasVideo
             // Con las pistas aún vacías (arranque) no se sabe si es radio: no tocar la orientación todavía.
-            if (tracks.groups.isNotEmpty()) applyRadioOrientation(isCurrentStreamRadio)
+            if (tracks.groups.isNotEmpty()) applyRadioOrientation(radioUi)
             updateNowPlayingOverlayVisibility()
             updateRadioControls()
         }
@@ -933,7 +936,7 @@ class PlayerActivity : AppCompatActivity() {
         // En Android TV, o si el framework de Cast no está disponible en
         // este dispositivo, el botón se queda oculto del todo (ver
         // isCastButtonUsable).
-        binding.castButton.visibility = if (isTvDevice || !isCastButtonUsable || (isCurrentStreamRadio && !isCastingRemote)) View.GONE else visibility
+        binding.castButton.visibility = if (isTvDevice || !isCastButtonUsable || (radioUi && !isCastingRemote)) View.GONE else visibility
         // PiP no tiene sentido para radio (ya suena en segundo plano sola),
         // en Android TV (ver isTvDevice), ni mientras se envía a un
         // Chromecast (no hay vídeo propio del teléfono que flotar: el de
@@ -1200,6 +1203,7 @@ class PlayerActivity : AppCompatActivity() {
         applyControlsVisibility(if (binding.playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
         applyVideoFormat()
         setupRadioControls()
+        loadRadioUrls()
         setupRadioCarousel()
         fitRadioOverlay()
         binding.playerView.keepScreenOn = true
@@ -1632,6 +1636,24 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    /** Carga (sin red: solo la copia guardada) las direcciones de la lista de Radio para saber si lo que suena es de ahí. */
+    private fun loadRadioUrls() {
+        Thread {
+            val urls = try {
+                val raw = com.example.superplayer.data.PlaylistCache.load(this, 5)
+                if (raw == null) emptySet() else com.example.superplayer.data.PlaylistRepository.parse(raw).categories
+                    .flatMap { c -> c.streams.map { it.url } }.toHashSet()
+            } catch (e: Exception) { emptySet<String>() }
+            radioUrls = urls
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (isCurrentStreamRadio) applyRadioOrientation(radioUi)
+                updateNowPlayingOverlayVisibility()
+                updateRadioControls()
+            }
+        }.start()
+    }
+
     private fun setupRadioControls() {
         binding.radioPlayPause.setOnClickListener {
             val ctrl = controller ?: return@setOnClickListener
@@ -1657,10 +1679,10 @@ class PlayerActivity : AppCompatActivity() {
         // cambia el canal; aquí solo hace falta decidir si el overlay se ve
         // o no (el texto de dentro lo decide refreshNowPlayingDisplay).
         binding.nowPlayingOverlay.visibility = if (isCurrentStreamRadio || isCastingRemote) View.VISIBLE else View.GONE
-        binding.radioControls.visibility = if (isCurrentStreamRadio && !isInPictureInPictureMode) View.VISIBLE else View.GONE
-        binding.radioCarousel.visibility = if (isCurrentStreamRadio && !isInPictureInPictureMode && channelList.size > 1) View.VISIBLE else View.GONE
+        binding.radioControls.visibility = if (radioUi && !isInPictureInPictureMode) View.VISIBLE else View.GONE
+        binding.radioCarousel.visibility = if (radioUi && !isInPictureInPictureMode && channelList.size > 1) View.VISIBLE else View.GONE
         if (binding.radioCarousel.visibility == View.VISIBLE) refreshRadioCarousel()
-        if (isCurrentStreamRadio && !isCastingRemote) binding.castButton.visibility = View.GONE
+        if (radioUi && !isCastingRemote) binding.castButton.visibility = View.GONE
     }
 
     // -----------------------------------------------------------------
