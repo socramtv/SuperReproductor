@@ -166,6 +166,12 @@ class WebActivity : AppCompatActivity() {
         binding.webFindEt.setOnEditorActionListener { _, _, _ -> webView.findNext(true); true }
         binding.webTabsBtn.setOnClickListener { toggleTabs() }
         binding.webVideoClose.setOnClickListener { hideBanner() }
+        if (isTv) binding.webVideoTv.visibility = View.GONE
+        binding.webVideoTv.setOnClickListener {
+            hideBanner()
+            val urls = synchronized(detected) { detected.keys.toList() }
+            if (urls.size == 1) sendToTv(urls[0], detected[urls[0]] ?: urls[0]) else showDetectedVideos(sendMode = true)
+        }
         binding.webVideoPlay.setOnClickListener {
             hideBanner()
             val urls = synchronized(detected) { detected.keys.toList() }
@@ -829,6 +835,19 @@ class WebActivity : AppCompatActivity() {
     }
 
     private fun playInApp(url: String, page: String) {
+        val stream = buildWebStream(url, page)
+        Toast.makeText(this, "Referer: ${stream.headers["Referer"] ?: "—"}", Toast.LENGTH_SHORT).show()
+        PlayerActivity.pendingStream = stream
+        PlayerActivity.pendingChannelList = emptyList()
+        startActivity(Intent(this, PlayerActivity::class.java))
+    }
+
+    /** Manda el vídeo detectado a la tele (la app de la tele lo abre con las mismas cabeceras). */
+    private fun sendToTv(url: String, page: String) {
+        TvSender.send(this, buildWebStream(url, page))
+    }
+
+    private fun buildWebStream(url: String, page: String): Stream {
         val name = (webView.title?.takeIf { it.isNotBlank() } ?: Uri.parse(url).lastPathSegment ?: url).take(80)
         val headers = HashMap<String, String>()
         // Referer: el del iframe del reproductor (el que de verdad envió la página), reducido a "https://host/" como
@@ -845,10 +864,7 @@ class WebActivity : AppCompatActivity() {
             } catch (e: Exception) { headers["Referer"] = ref }
         }
         headers["User-Agent"] = webView.settings.userAgentString
-        Toast.makeText(this, "Referer: ${headers["Referer"] ?: "—"}", Toast.LENGTH_SHORT).show()
-        PlayerActivity.pendingStream = Stream(name = name, type = streamTypeFor(url), url = url, icon = null, category = "Web", headers = headers)
-        PlayerActivity.pendingChannelList = emptyList()
-        startActivity(Intent(this, PlayerActivity::class.java))
+        return Stream(name = name, type = streamTypeFor(url), url = url, icon = null, category = "Web", headers = headers)
     }
 
     private fun askPlay(url: String, page: String) {
@@ -864,7 +880,7 @@ class WebActivity : AppCompatActivity() {
         binding.webVideos.visibility = if (detected.isEmpty()) View.GONE else View.VISIBLE
     }
 
-    private fun showDetectedVideos() {
+    private fun showDetectedVideos(sendMode: Boolean = false) {
         if (detected.isEmpty()) {
             Toast.makeText(this, R.string.web_no_videos, Toast.LENGTH_SHORT).show()
             return
@@ -874,15 +890,28 @@ class WebActivity : AppCompatActivity() {
             val file = Uri.parse(u).lastPathSegment ?: u
             "${streamTypeFor(u)}${qualityOf(u)} · ${Uri.parse(u).host.orEmpty()} · ${file.take(40)}"
         }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.web_videos_title)
-            .setItems(labels.toTypedArray()) { _, which -> playInApp(urls[which], detected[urls[which]] ?: urls[which]) }
+        val builder = AlertDialog.Builder(this)
+            .setTitle(if (sendMode) R.string.web_send_tv_title else R.string.web_videos_title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                val page = detected[urls[which]] ?: urls[which]
+                if (sendMode) sendToTv(urls[which], page) else playInApp(urls[which], page)
+            }
             .setNegativeButton(R.string.channel_check_close, null)
-            .create()
+        if (!isTv && !sendMode) builder.setNeutralButton(R.string.web_send_tv_btn) { _, _ -> showDetectedVideos(sendMode = true) }
+        val dialog = builder.create()
         dialog.show()
-        // Pulsación larga: copia el enlace del vídeo.
+        // Pulsación larga: copiar el enlace o (en el móvil) enviarlo a la tele.
         dialog.listView.setOnItemLongClickListener { _, _, pos, _ ->
-            copyText(urls[pos], R.string.web_video_copied)
+            if (isTv) {
+                copyText(urls[pos], R.string.web_video_copied)
+            } else {
+                AlertDialog.Builder(this)
+                    .setItems(arrayOf(getString(R.string.web_video_copy), getString(R.string.web_send_tv_btn))) { _, w ->
+                        if (w == 0) copyText(urls[pos], R.string.web_video_copied)
+                        else sendToTv(urls[pos], detected[urls[pos]] ?: urls[pos])
+                    }
+                    .show()
+            }
             true
         }
     }

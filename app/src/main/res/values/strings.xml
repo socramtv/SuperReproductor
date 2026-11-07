@@ -1001,4 +1001,8 @@
     <string name="tgtv_mode_tg">☁️ Desde Telegram en la tele (puedes cerrar el móvil)</string>
     <string name="tgtv_tg_sent">Abriendo en Telegram de %1$s. Tiene que tener la sesión iniciada</string>
     <string name="tgtv_not_found">No se encontró ese vídeo en el Telegram de esta tele: ¿tiene la sesión iniciada y acceso al chat?</string>
+    <string name="web_send_tv_btn">📺 Enviar a la TV</string>
+    <string name="web_send_tv_title">Enviar a la TV: elige el vídeo</string>
+    <string name="web_video_copy">Copiar enlace</string>
+    <string name="web_tv_sent">Enviado a %1$s</string>
 </resources>

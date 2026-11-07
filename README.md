@@ -1864,3 +1864,9 @@ Al abrir un canal de TV ya no se cambia la orientación en tiempo de ejecución 
 - Los reintentos automáticos son 6 y empiezan antes (0,7 s, 2 s, 4 s, 7 s, 10 s y 15 s), en vez de 3 (2 s, 5 s, 10 s).
 - Los tiempos de espera de conexión y lectura pasan de 8 s a 15 s en canales por internet, y ExoPlayer reintenta cada carga 5 veces antes de dar un fallo por definitivo (antes 3). Esto evita fallos falsos con servidores de IPTV lentos al primer contacto.
 - Si el canal se cortó y vuelve la wifi o los datos, se reconecta al instante.
+
+## Web: enviar el vídeo detectado a la TV
+Cuando la Web detecta un vídeo se puede mandar a la tele (la del «Mando de tele», con la app abierta) en vez de verlo en el móvil:
+- En el aviso de «vídeo detectado» hay un botón 📺 junto a «Reproducir».
+- En la lista 🎬 de vídeos de la página hay un botón «📺 Enviar a la TV» (eliges el vídeo después), y la pulsación larga sobre un vídeo da a elegir entre copiar el enlace y enviarlo.
+La tele recibe la dirección con el mismo Referer y User-Agent que se usarían en el móvil, y lo abre ella sola (no pasa por el móvil, que puede cerrarse). Si hay varias teles se elige; si no hay ninguna, abre el «Mando de tele». En la propia tele estos botones no salen.
