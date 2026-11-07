@@ -1251,6 +1251,8 @@ class TelegramAccountActivity : AppCompatActivity() {
     private val reNumPrefix = Regex("^\\s*\\d{1,5}\\s*[-.)]\\s*")
     private val reExtSuffix = Regex("(?i)[\\s.-]+(mkv|mp4|avi|mov|m4v|webm|ts|jpg|jpeg|png|webp)\\s*$")
     private val reUrlSuffix = Regex("(?i)\\s*\\burl\\s*=\\s*\\d+\\s*$")
+    private val reImgNumber = Regex("""(?im)^\s*url\s*=\s*(\d{1,6})\s*$""")
+    private val reVidNumber = Regex("""(?m)^\s*(\d{1,6})\s*[-–.)]""")
     private val reYearOpen = Regex("\\(((?:19|20)\\d{2})[^)]*$")
 
     /** "253-Peli (2025-mkv" y "Peli (2025-" -> "Peli (2025)": el mismo nombre para el vídeo y su imagen. */
@@ -1574,7 +1576,25 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         val pairedByLeader = HashMap<Long, TgMessage>() // id del vídeo principal -> su imagen
         val usedImages = HashSet<Long>()
+        // Canales que numeran cada estreno: la foto lleva «url=116» y el vídeo «116-🎬 Título…» (títulos distintos, mismo número).
+        run {
+            val imageById = HashMap<String, TgMessage>()
+            for (m in source) {
+                if (!isImageMsg(m)) continue
+                val n = reImgNumber.find(m.text)?.groupValues?.get(1) ?: continue
+                imageById.putIfAbsent("${m.chatId}:$n", m)
+            }
+            if (imageById.isEmpty()) return@run
+            for ((_, list) in groups) {
+                for (v in list) {
+                    val n = reVidNumber.find(v.text)?.groupValues?.get(1) ?: continue
+                    val img = imageById["${v.chatId}:$n"] ?: continue
+                    if (usedImages.add(img.messageId)) { pairedByLeader[list[0].messageId] = img; break }
+                }
+            }
+        }
         for ((k, list) in groups) {
+            if (pairedByLeader.containsKey(list[0].messageId)) continue
             val img = findImage(k.removePrefix("s:").removePrefix("r:")) ?: continue
             if (usedImages.add(img.messageId)) pairedByLeader[list[0].messageId] = img
         }

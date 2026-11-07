@@ -1842,3 +1842,6 @@ En la pantalla de radio, arriba, sale un carrusel horizontal con el logo y el no
 
 ## Radio: el carrusel cambia de emisora al girarlo
 La emisora que queda en el centro del carrusel es la que suena: se desliza a izquierda o derecha, el carrusel se ajusta solo al centro y, al soltarlo, cambia de emisora. Además, los controles de abajo se han subido para que no los tape la barra del sistema.
+
+## Telegram: foto y vídeo emparejados por número
+En canales que numeran cada estreno (la foto con la sinopsis termina en `url=116` y el vídeo lleva `116-🎬 Título…`), la galería ahora une la foto con su vídeo por ese número aunque los títulos sean distintos. La foto deja de salir aparte y pasa a ser la carátula del vídeo, con su ficha.
