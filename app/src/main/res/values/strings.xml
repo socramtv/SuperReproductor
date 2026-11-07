@@ -993,4 +993,12 @@
     <string name="tgtv_sending">Enviando a %1$s…</string>
     <string name="tgtv_sent">Reproduciéndose en %1$s. Deja la app abierta en el móvil</string>
     <string name="tgtv_failed">La tele no pudo abrirlo</string>
+    <string name="tgtv_notif_channel">Emitir a la tele</string>
+    <string name="tgtv_notif_title">Emitiendo a la tele</string>
+    <string name="tgtv_notif_stop">Parar</string>
+    <string name="tgtv_choose_title">Reproducir en TV</string>
+    <string name="tgtv_mode_phone">📶 Desde este móvil (por la wifi)</string>
+    <string name="tgtv_mode_tg">☁️ Desde Telegram en la tele (puedes cerrar el móvil)</string>
+    <string name="tgtv_tg_sent">Abriendo en Telegram de %1$s. Tiene que tener la sesión iniciada</string>
+    <string name="tgtv_not_found">No se encontró ese vídeo en el Telegram de esta tele: ¿tiene la sesión iniciada y acceso al chat?</string>
 </resources>

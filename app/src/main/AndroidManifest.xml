@@ -261,6 +261,12 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode" />
 
+        <!-- Mantiene viva la emisión de un vídeo de Telegram a la tele (ver telegram/TvCastService.kt) -->
+        <service
+            android:name=".telegram.TvCastService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <service
             android:name=".player.PlaybackService"
             android:exported="true"

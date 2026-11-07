@@ -224,6 +224,10 @@ class TelegramAccountActivity : AppCompatActivity() {
             pendingPlay = TelegramAccountPrefs.videoFavorites(this)
                 .firstOrNull { it.optLong("c") == playChat && it.optLong("m") == playMsg }
                 ?.let { TgMessage.fromJson(it) }
+            // Mandado desde un móvil («Reproducir en TV» → desde Telegram en la tele): se busca el mensaje en ESTA sesión.
+            if (pendingPlay == null && intent.getBooleanExtra(EXTRA_PLAY_REMOTE, false)) {
+                remotePlay = Triple(playChat, playMsg, intent.getStringExtra(EXTRA_PLAY_TITLE).orEmpty())
+            }
         }
         adapter = RowAdapter()
         chatAdapter = ChatAdapter()
@@ -312,6 +316,7 @@ class TelegramAccountActivity : AppCompatActivity() {
     private val isTvDevice by lazy { packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
     private var returnToChatId = 0L
     private var pendingPlay: TgMessage? = null
+    private var remotePlay: Triple<Long, Long, String>? = null
 
     companion object {
         private const val SM_ALL = 0
@@ -319,6 +324,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         private const val SM_MSGS = 2
         const val EXTRA_PLAY_CHAT = "play_chat"
         const val EXTRA_PLAY_MSG = "play_msg"
+        const val EXTRA_PLAY_TITLE = "play_title"
+        const val EXTRA_PLAY_REMOTE = "play_remote"
     }
 
     /** Cambia el contenido de la lista y devuelve el foco a la misma posición (si no, el mando salta arriba del todo). */
@@ -493,6 +500,17 @@ class TelegramAccountActivity : AppCompatActivity() {
                 pendingPlay?.let {
                     pendingPlay = null
                     playVideo(it)
+                }
+                remotePlay?.let { (c, mid, t) ->
+                    remotePlay = null
+                    b.loadHistory(c, t, mid, -1) { list ->
+                        runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
+                            val found = list.firstOrNull { it.messageId == mid }
+                            if (found != null) playVideo(found)
+                            else Toast.makeText(this, R.string.tgtv_not_found, Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             }
             TgAuthState.CLOSED -> showMessage(getString(R.string.tgacc_closed))
@@ -5368,16 +5386,41 @@ class TelegramAccountActivity : AppCompatActivity() {
         return Stream(name = name, type = "MP4", url = url, icon = null, category = "Telegram")
     }
 
-    /** «Reproducir en TV»: manda el vídeo a la tele guardada del «Mando de tele» (la elige si hay varias). */
+    /** «Reproducir en TV»: elige la tele (si hay varias) y cómo se reproduce: desde este móvil o desde el Telegram de la tele. */
     private fun sendToTv(m: TgMessage) {
-        if (isRarPart(m) || m.kind == "linkvideo" || m.fileId == null || m.size <= 0) {
-            Toast.makeText(this, R.string.tgtv_unsupported, Toast.LENGTH_LONG).show()
-            return
-        }
         val devices = com.example.superplayer.remote.RemoteClient.savedDevices(this)
         if (devices.isEmpty()) {
             Toast.makeText(this, R.string.tgtv_no_tv, Toast.LENGTH_LONG).show()
             startActivity(Intent(this, RemoteActivity::class.java))
+            return
+        }
+        val last = com.example.superplayer.remote.RemoteClient.lastDevice(this)
+        val sorted = devices.sortedBy { if (it.key == last?.key) 0 else 1 }
+        if (sorted.size == 1) {
+            chooseTvMode(sorted[0], m)
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.remote_choose_title)
+                .setItems(sorted.map { "📺 ${it.name}  ·  ${it.host}" }.toTypedArray()) { _, which -> chooseTvMode(sorted[which], m) }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+    }
+
+    private fun chooseTvMode(d: com.example.superplayer.remote.RemoteDevice, m: TgMessage) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tgtv_choose_title)
+            .setItems(arrayOf(getString(R.string.tgtv_mode_phone), getString(R.string.tgtv_mode_tg))) { _, which ->
+                if (which == 0) sendFromPhone(d, m) else sendTelegramToTv(d, m)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** El móvil emite el vídeo por la wifi (hay que dejarlo encendido y con la app viva; un servicio en primer plano ayuda). */
+    private fun sendFromPhone(d: com.example.superplayer.remote.RemoteDevice, m: TgMessage) {
+        if (isRarPart(m) || m.kind == "linkvideo" || m.fileId == null || m.size <= 0) {
+            Toast.makeText(this, R.string.tgtv_unsupported, Toast.LENGTH_LONG).show()
             return
         }
         val stream = streamForTv(m)
@@ -5385,17 +5428,33 @@ class TelegramAccountActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.tgtv_no_wifi, Toast.LENGTH_LONG).show()
             return
         }
-        val last = com.example.superplayer.remote.RemoteClient.lastDevice(this)
-        val sorted = devices.sortedBy { if (it.key == last?.key) 0 else 1 }
-        if (sorted.size == 1) {
-            doSendToTv(sorted[0], stream)
-        } else {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.remote_choose_title)
-                .setItems(sorted.map { "📺 ${it.name}  ·  ${it.host}" }.toTypedArray()) { _, which -> doSendToTv(sorted[which], stream) }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
+        doSendToTv(d, stream)
+    }
+
+    /** La tele abre el mismo mensaje en SU Telegram (necesita la sesión iniciada y acceso al chat): el móvil ya no hace falta. */
+    private fun sendTelegramToTv(d: com.example.superplayer.remote.RemoteDevice, m: TgMessage) {
+        if (m.kind == "linkvideo") {
+            Toast.makeText(this, R.string.tgtv_unsupported, Toast.LENGTH_LONG).show()
+            return
         }
+        val body = org.json.JSONObject().put("chat", m.chatId).put("msg", m.messageId).put("title", m.chatTitle).toString()
+        Thread {
+            val (code, text) = com.example.superplayer.remote.RemoteClient.call(d, "/opentg", body)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val ok = code in 200..299 && try { org.json.JSONObject(text).optBoolean("ok", true) } catch (e: Exception) { true }
+                Toast.makeText(
+                    this,
+                    when {
+                        code == 401 -> getString(R.string.remote_wrong_pin)
+                        code < 0 -> getString(R.string.remote_unreachable)
+                        !ok -> getString(R.string.tgtv_failed)
+                        else -> getString(R.string.tgtv_tg_sent, d.name)
+                    },
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }.start()
     }
 
     private fun doSendToTv(d: com.example.superplayer.remote.RemoteDevice, stream: Stream) {
@@ -5416,7 +5475,10 @@ class TelegramAccountActivity : AppCompatActivity() {
                         code == 401 -> getString(R.string.remote_wrong_pin)
                         code < 0 -> getString(R.string.remote_unreachable)
                         !ok -> getString(R.string.tgtv_failed)
-                        else -> getString(R.string.tgtv_sent, d.name)
+                        else -> {
+                            com.example.superplayer.telegram.TvCastService.start(applicationContext, stream.name)
+                            getString(R.string.tgtv_sent, d.name)
+                        }
                     },
                     Toast.LENGTH_LONG
                 ).show()

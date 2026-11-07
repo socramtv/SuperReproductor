@@ -1851,3 +1851,8 @@ La ficha de una película o serie tiene un botón «📺 Reproducir en TV» bajo
 
 ## Radio: el carrusel y los controles solo en la lista de Radio
 La pantalla de radio (carrusel de emisoras, botones de play/calidad/girar, vertical fijo y sin botón de enviar) solo se activa si lo que suena es de la lista de Radio. Los canales de TV que de vez en cuando no traen vídeo ya no la muestran.
+
+## Reproducir en TV: dos modos y servicio en primer plano
+Al pulsar «📺 Reproducir en TV» (tras elegir la tele) se escoge cómo:
+- **Desde este móvil (por la wifi):** como antes, pero ahora mientras emite hay un servicio en primer plano con notificación («Emitiendo a la tele», con botón «Parar») que mantiene viva la app, la wifi y la CPU con la pantalla apagada. Si se desliza la app fuera de las recientes, se para.
+- **Desde Telegram en la tele:** el móvil solo manda a la tele el chat y el mensaje; la tele lo abre en SU Telegram y lo reproduce directamente, así que el móvil se puede cerrar. Necesita que la tele tenga la sesión de Telegram iniciada y acceso a ese chat.

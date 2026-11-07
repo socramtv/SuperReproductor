@@ -283,6 +283,28 @@ object RemoteServer {
                         respond(socket, 200, JSONObject().put("ok", openStream(app, stream)))
                     }
                 }
+                "/opentg" -> {
+                    // Un móvil pide reproducir un mensaje de Telegram con la sesión de ESTA tele (el móvil ya no hace de servidor).
+                    val o = try { JSONObject(body) } catch (e: Exception) { JSONObject() }
+                    val chat = o.optLong("chat")
+                    val msg = o.optLong("msg")
+                    if (chat == 0L || msg == 0L) {
+                        respond(socket, 200, JSONObject().put("ok", false).put("error", "msg"))
+                    } else {
+                        val title = o.optString("title")
+                        val ok = onMain {
+                            val i = Intent(app, com.example.superplayer.ui.TelegramAccountActivity::class.java)
+                                .putExtra(com.example.superplayer.ui.TelegramAccountActivity.EXTRA_PLAY_CHAT, chat)
+                                .putExtra(com.example.superplayer.ui.TelegramAccountActivity.EXTRA_PLAY_MSG, msg)
+                                .putExtra(com.example.superplayer.ui.TelegramAccountActivity.EXTRA_PLAY_TITLE, title)
+                                .putExtra(com.example.superplayer.ui.TelegramAccountActivity.EXTRA_PLAY_REMOTE, true)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            app.startActivity(i)
+                            true
+                        } ?: false
+                        respond(socket, 200, JSONObject().put("ok", ok))
+                    }
+                }
                 else -> respond(socket, 404, JSONObject().put("error", "not_found"))
             }
         } catch (e: Exception) {
