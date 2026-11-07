@@ -78,8 +78,9 @@ class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) :
                     .setDefaultRequestProperties(requestProperties)
                     .setAllowCrossProtocolRedirects(true)
                     // Vídeo de Telegram emitido por el servidor local: pedir un trozo lejano puede tardar más de los 8 s por defecto.
-                    .setConnectTimeoutMs(if (local) 45_000 else DefaultHttpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS)
-                    .setReadTimeoutMs(if (local) 45_000 else DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS)
+                    // Servidores de IPTV lentos al primer contacto: 8 s (lo de serie) daba muchos fallos falsos al abrir un canal.
+                    .setConnectTimeoutMs(if (local) 45_000 else 15_000)
+                    .setReadTimeoutMs(if (local) 45_000 else 15_000)
             }
 
         val mimeType = when (type.trim().uppercase()) {
@@ -97,7 +98,8 @@ class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) :
         if (StreamMediaExtras.hasDrm(extras)) {
             factory.setDrmSessionManagerProvider { buildClearKeyDrmSessionManager(extras) }
         }
-        loadErrorHandlingPolicy?.let { factory.setLoadErrorHandlingPolicy(it) }
+        // Más reintentos internos (lo de serie son 3) antes de dar un fallo de red por definitivo: cubre cortes de un segundo.
+        factory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy ?: androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(5))
 
         return factory.createMediaSource(mediaItem)
     }

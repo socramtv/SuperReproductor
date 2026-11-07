@@ -463,17 +463,47 @@ class PlayerActivity : AppCompatActivity() {
         Toast.makeText(this, getString(R.string.player_reconnecting) + "\n" + error.errorCodeName + (error.message?.let { " · " + it.take(120) } ?: ""), Toast.LENGTH_LONG).show()
         val runnable = Runnable {
             pendingReconnectRunnable = null
-            if (isFinishing || isDestroyed) return@Runnable
-            // Se relee currentStream (no se captura `stream` de arriba) por si
-            // ha cambiado de canal mientras esperaba: aunque switchChannel ya
-            // cancela este runnable, es una comprobación barata de más.
-            val freshStream = currentStream ?: return@Runnable
-            playbackStarted = false
-            pendingMediaItem = null
-            resolveAndPlay(freshStream)
+            reconnectNow()
         }
         pendingReconnectRunnable = runnable
         reconnectHandler.postDelayed(runnable, delayMs)
+    }
+
+    /** Vuelve a pedir el canal ya (se relee currentStream por si ha cambiado de canal mientras se esperaba). */
+    private fun reconnectNow() {
+        if (isFinishing || isDestroyed) return
+        val freshStream = currentStream ?: return
+        lastReconnectAt = SystemClock.elapsedRealtime()
+        playbackStarted = false
+        pendingMediaItem = null
+        resolveAndPlay(freshStream)
+    }
+
+    private var lastReconnectAt = 0L
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
+    /**
+     * Si el canal se cortó por falta de red y vuelve la wifi o los datos, se reconecta al instante
+     * en vez de esperar al siguiente reintento programado.
+     */
+    private fun registerNetworkReconnect() {
+        try {
+            val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed || autoReconnectAttempts == 0) return@runOnUiThread
+                        if (controller?.isPlaying == true) return@runOnUiThread
+                        if (SystemClock.elapsedRealtime() - lastReconnectAt < 3_000L) return@runOnUiThread
+                        cancelPendingReconnect()
+                        reconnectNow()
+                    }
+                }
+            }
+            networkCallback = cb
+            cm.registerDefaultNetworkCallback(cb)
+        } catch (e: Exception) {
+        }
     }
 
     // -----------------------------------------------------------------
@@ -1204,6 +1234,7 @@ class PlayerActivity : AppCompatActivity() {
         applyVideoFormat()
         setupRadioControls()
         loadRadioUrls()
+        registerNetworkReconnect()
         setupRadioCarousel()
         fitRadioOverlay()
         binding.playerView.keepScreenOn = true
@@ -1379,6 +1410,10 @@ class PlayerActivity : AppCompatActivity() {
         radioPlayer?.release()
         radioPlayer = null
         cancelAutoPlayGuard()
+        networkCallback?.let {
+            try { (getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(it) } catch (e: Exception) { }
+        }
+        networkCallback = null
         if (activeInstance === this) activeInstance = null
         tsHandler.removeCallbacks(tsUiRunnable)
         nextEpisodeHandler.removeCallbacks(nextEpisodeTick)
@@ -2624,7 +2659,7 @@ class PlayerActivity : AppCompatActivity() {
         // que ya está teniendo problemas. El número de reintentos antes de
         // rendirse y mostrar el error es RECONNECT_DELAYS_MS.size (ver
         // scheduleAutoReconnectOrShowError).
-        private val RECONNECT_DELAYS_MS = longArrayOf(2_000L, 5_000L, 10_000L)
+        private val RECONNECT_DELAYS_MS = longArrayOf(700L, 2_000L, 4_000L, 7_000L, 10_000L, 15_000L)
 
         // "¿Se han quedado pegados los controles tras cambiar de canal?"
         // (ver startStuckControlsWatchdog): cuánto se espera antes de la

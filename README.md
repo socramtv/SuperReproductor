@@ -1859,3 +1859,8 @@ Al pulsar «📺 Reproducir en TV» (tras elegir la tele) se escoge cómo:
 
 ## Reproductor: sin línea blanca al abrir un canal de TV
 Al abrir un canal de TV ya no se cambia la orientación en tiempo de ejecución (solo se toca al entrar o salir de una radio de la lista de Radio). Eso reorganizaba la ventana y dejaba una línea blanca en el borde izquierdo hasta tocar la pantalla.
+
+## Reproductor: arranque más fiable al abrir un canal
+- Los reintentos automáticos son 6 y empiezan antes (0,7 s, 2 s, 4 s, 7 s, 10 s y 15 s), en vez de 3 (2 s, 5 s, 10 s).
+- Los tiempos de espera de conexión y lectura pasan de 8 s a 15 s en canales por internet, y ExoPlayer reintenta cada carga 5 veces antes de dar un fallo por definitivo (antes 3). Esto evita fallos falsos con servidores de IPTV lentos al primer contacto.
+- Si el canal se cortó y vuelve la wifi o los datos, se reconecta al instante.
