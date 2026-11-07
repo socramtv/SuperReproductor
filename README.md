@@ -1845,3 +1845,6 @@ La emisora que queda en el centro del carrusel es la que suena: se desliza a izq
 
 ## Telegram: foto y vídeo emparejados por número
 En canales que numeran cada estreno (la foto con la sinopsis termina en `url=116` y el vídeo lleva `116-🎬 Título…`), la galería ahora une la foto con su vídeo por ese número aunque los títulos sean distintos. La foto deja de salir aparte y pasa a ser la carátula del vídeo, con su ficha.
+
+## Telegram: «Reproducir en TV» desde la ficha
+La ficha de una película o serie tiene un botón «📺 Reproducir en TV» bajo «Reproducir». El móvil emite el vídeo de Telegram por la wifi (segundo servidor local, solo para la red local y con una clave distinta en cada sesión) y se lo manda a la tele guardada en el «Mando de tele», que lo reproduce con la app. Si hay varias teles, se elige; si no hay ninguna, abre el «Mando de tele» para elegirla. Hay que dejar la app abierta en el móvil mientras se ve. No vale aún para vídeos en RAR ni enlaces. En la propia tele el botón no sale.

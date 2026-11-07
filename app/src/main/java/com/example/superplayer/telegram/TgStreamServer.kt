@@ -27,6 +27,40 @@ object TgStreamServer {
         try { onProblem?.invoke(msg) } catch (e: Exception) { }
     }
 
+    // ---- Para otro aparato de la misma wifi (p. ej. «Reproducir en TV»): segundo servidor en la red local, con clave ----
+    private var lanServer: ServerSocket? = null
+    private val lanToken: String by lazy {
+        val b = ByteArray(12)
+        java.security.SecureRandom().nextBytes(b)
+        b.joinToString("") { "%02x".format(it) }
+    }
+
+    /** Dirección IPv4 de este móvil en la wifi/red local, o null si no hay. */
+    private fun lanIp(): String? = try {
+        java.net.NetworkInterface.getNetworkInterfaces().toList()
+            .filter { it.isUp && !it.isLoopback }
+            .sortedBy { if (it.name.startsWith("wlan")) 0 else 1 }
+            .flatMap { it.inetAddresses.toList() }
+            .firstOrNull { it is java.net.Inet4Address && it.isSiteLocalAddress }
+            ?.hostAddress
+    } catch (e: Exception) { null }
+
+    /**
+     * Como [urlFor] pero con la dirección del móvil en la red local, para que la reproduzca otro aparato (la tele).
+     * Solo se atienden peticiones de la red local que traigan la clave de esta sesión. null si no hay wifi.
+     */
+    @Synchronized
+    fun lanUrlFor(b: TgAccountBackend, fileId: Int, size: Long, mime: String?): String? {
+        val ip = lanIp() ?: return null
+        backend = b
+        val srv = lanServer ?: ServerSocket(0, 20).also {
+            lanServer = it
+            Thread { acceptLoop(it, true) }.apply { isDaemon = true }.start()
+        }
+        val m = java.net.URLEncoder.encode(mime ?: "video/mp4", "UTF-8")
+        return "http://$ip:${srv.localPort}/tg/$fileId?s=$size&m=$m&k=$lanToken"
+    }
+
     /** Arranca el servidor si hace falta y devuelve la URL de reproducción. */
     @Synchronized
     fun urlFor(b: TgAccountBackend, fileId: Int, size: Long, mime: String?): String {
@@ -41,7 +75,7 @@ object TgStreamServer {
 
     /** Se dejó de ver este vídeo: se cortan sus lecturas y se borra lo que TDLib había bajado a medias (nada de acumular disco). */
     fun release(url: String) {
-        val id = Regex("^http://127\\.0\\.0\\.1:\\d+/tg/(\\d+)").find(url)?.groupValues?.get(1)?.toIntOrNull() ?: return
+        val id = Regex("^http://[^/]+/tg/(\\d+)").find(url)?.groupValues?.get(1)?.toIntOrNull() ?: return
         generations[id]?.incrementAndGet()
         try { backend?.releaseStream(id) } catch (e: Exception) { }
     }
@@ -64,14 +98,14 @@ object TgStreamServer {
         return "http://127.0.0.1:${srv.localPort}/rar/$id?s=${video.total}&m=$m"
     }
 
-    private fun acceptLoop(srv: ServerSocket) {
+    private fun acceptLoop(srv: ServerSocket, lan: Boolean = false) {
         while (!srv.isClosed) {
             val socket = try { srv.accept() } catch (e: Exception) { return }
-            pool.execute { handle(socket) }
+            pool.execute { handle(socket, lan) }
         }
     }
 
-    private fun handle(socket: Socket) {
+    private fun handle(socket: Socket, lan: Boolean = false) {
         socket.use { s ->
             try {
                 s.soTimeout = 60_000
@@ -88,6 +122,14 @@ object TgStreamServer {
                 val query = target.substringAfter('?', "")
                 val params = query.split('&').filter { it.contains('=') }.associate {
                     it.substringBefore('=') to URLDecoder.decode(it.substringAfter('='), "UTF-8")
+                }
+                if (lan) {
+                    val a = s.inetAddress
+                    val local = a.isSiteLocalAddress || a.isLoopbackAddress || a.isLinkLocalAddress
+                    if (!local || params["k"] != lanToken) {
+                        s.getOutputStream().write("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                        return
+                    }
                 }
                 val rarId = if (path.startsWith("/rar/")) path.removePrefix("/rar/").toIntOrNull() else null
                 val rar = rarId?.let { rarSources[it] }

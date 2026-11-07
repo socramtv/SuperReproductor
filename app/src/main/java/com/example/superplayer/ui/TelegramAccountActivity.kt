@@ -38,6 +38,7 @@ import com.example.superplayer.databinding.ItemTgBubbleBinding
 import com.example.superplayer.databinding.ItemTgLoadmoreBinding
 import com.example.superplayer.databinding.ItemTgMediaBinding
 import com.example.superplayer.model.Stream
+import com.example.superplayer.model.toJson
 import com.example.superplayer.player.PlayerActivity
 import com.example.superplayer.telegram.TelegramAccountFactory
 import com.example.superplayer.telegram.TelegramAccountPrefs
@@ -2527,21 +2528,30 @@ class TelegramAccountActivity : AppCompatActivity() {
             playTarget != null -> getString(R.string.info_play_ep, playTarget.first, playTarget.second)
             else -> getString(R.string.info_play)
         }
-        val playBtn = pill(playLabel, accent, 0xFFFFFFFF.toInt(), sizeSp = 16f, heightDp = 46) {
+        /** Elige qué mensaje se reproduce (el siguiente capítulo, la única versión o la que se escoja) y le aplica [run]. */
+        fun pickAndRun(run: (TgMessage) -> Unit) {
             when {
-                playTarget != null -> play(playTarget.third)
-                series && others.isNotEmpty() -> play(others[0])
-                options.size == 1 -> play(options[0])
+                playTarget != null -> run(playTarget.third)
+                series && others.isNotEmpty() -> run(others[0])
+                options.size == 1 -> run(options[0])
                 else -> {
                     AlertDialog.Builder(this)
                         .setTitle(R.string.info_pick_version)
-                        .setItems(options.mapIndexed { i, m -> optionLabel(m, i + 1, true) }.toTypedArray()) { _, which -> play(options[which]) }
+                        .setItems(options.mapIndexed { i, m -> optionLabel(m, i + 1, true) }.toTypedArray()) { _, which -> run(options[which]) }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
                 }
             }
         }
+        val playBtn = pill(playLabel, accent, 0xFFFFFFFF.toInt(), sizeSp = 16f, heightDp = 46) { pickAndRun { play(it) } }
         col.addView(playBtn, lp(MATCH, dp(46), l = 28, t = 16, r = 28))
+        // «Reproducir en TV»: el móvil emite el vídeo por la wifi y la tele (con la app abierta) lo reproduce.
+        if (!isTvDevice) {
+            val tvBtn = pill(getString(R.string.tgtv_play_btn), 0x1FFFFFFF, sizeSp = 15f, heightDp = 44, stroke = 1, strokeColor = 0x40FFFFFF) {
+                pickAndRun { sendToTv(it) }
+            }
+            col.addView(tvBtn, lp(MATCH, dp(44), l = 28, t = 8, r = 28))
+        }
 
         // ---- Fila secundaria: tráiler, favoritos, visto, más ----
         val row = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
@@ -5345,6 +5355,73 @@ class TelegramAccountActivity : AppCompatActivity() {
         val opts = linkOptions(m)
         val o = opts.firstOrNull { it.start == sp.start }
         if (o == null) playUrl(sp.url, cleanName(titleOf(m)).ifEmpty { sp.url }) else playOption(o, opts.filter { it.group == o.group })
+    }
+
+    /** Vídeo de este mensaje con una dirección que otro aparato de la wifi pueda abrir (con la clave del servidor local). */
+    private fun streamForTv(m: TgMessage): Stream? {
+        val b = backend ?: return null
+        val fileId = m.fileId?.toIntOrNull() ?: return null
+        if (m.size <= 0) return null
+        val name = m.fileName ?: m.text.lineSequence().firstOrNull { it.isNotBlank() } ?: m.chatTitle
+        val mime = m.mime ?: "video/mp4"
+        val url = TgStreamServer.lanUrlFor(b, fileId, m.size, mime) ?: return null
+        return Stream(name = name, type = "MP4", url = url, icon = null, category = "Telegram")
+    }
+
+    /** «Reproducir en TV»: manda el vídeo a la tele guardada del «Mando de tele» (la elige si hay varias). */
+    private fun sendToTv(m: TgMessage) {
+        if (isRarPart(m) || m.kind == "linkvideo" || m.fileId == null || m.size <= 0) {
+            Toast.makeText(this, R.string.tgtv_unsupported, Toast.LENGTH_LONG).show()
+            return
+        }
+        val devices = com.example.superplayer.remote.RemoteClient.savedDevices(this)
+        if (devices.isEmpty()) {
+            Toast.makeText(this, R.string.tgtv_no_tv, Toast.LENGTH_LONG).show()
+            startActivity(Intent(this, RemoteActivity::class.java))
+            return
+        }
+        val stream = streamForTv(m)
+        if (stream == null) {
+            Toast.makeText(this, R.string.tgtv_no_wifi, Toast.LENGTH_LONG).show()
+            return
+        }
+        val last = com.example.superplayer.remote.RemoteClient.lastDevice(this)
+        val sorted = devices.sortedBy { if (it.key == last?.key) 0 else 1 }
+        if (sorted.size == 1) {
+            doSendToTv(sorted[0], stream)
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.remote_choose_title)
+                .setItems(sorted.map { "📺 ${it.name}  ·  ${it.host}" }.toTypedArray()) { _, which -> doSendToTv(sorted[which], stream) }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+    }
+
+    private fun doSendToTv(d: com.example.superplayer.remote.RemoteDevice, stream: Stream) {
+        Toast.makeText(this, getString(R.string.tgtv_sending, d.name), Toast.LENGTH_SHORT).show()
+        val appCtx = applicationContext
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        TgStreamServer.onProblem = { msg ->
+            handler.post { Toast.makeText(appCtx, "Telegram sin datos: $msg", Toast.LENGTH_LONG).show() }
+        }
+        Thread {
+            val (code, text) = com.example.superplayer.remote.RemoteClient.call(d, "/open", stream.toJson())
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val ok = code in 200..299 && try { org.json.JSONObject(text).optBoolean("ok", true) } catch (e: Exception) { true }
+                Toast.makeText(
+                    this,
+                    when {
+                        code == 401 -> getString(R.string.remote_wrong_pin)
+                        code < 0 -> getString(R.string.remote_unreachable)
+                        !ok -> getString(R.string.tgtv_failed)
+                        else -> getString(R.string.tgtv_sent, d.name)
+                    },
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }.start()
     }
 
     private fun open(stream: Stream, list: List<Stream> = emptyList()) {

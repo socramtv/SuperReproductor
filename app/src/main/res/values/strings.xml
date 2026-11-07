@@ -986,4 +986,11 @@
     <string name="radio_play_pause">Reproducir / pausar</string>
     <string name="radio_quality_btn">🎚 Calidad</string>
     <string name="radio_quality_title">Calidad de audio</string>
+    <string name="tgtv_play_btn">📺 Reproducir en TV</string>
+    <string name="tgtv_unsupported">Este vídeo (en RAR o enlace) todavía no se puede mandar a la tele</string>
+    <string name="tgtv_no_tv">No hay ninguna tele guardada: elígela en «Mando de tele» y vuelve a pulsar</string>
+    <string name="tgtv_no_wifi">El móvil no está en una wifi: la tele no podría recibir el vídeo</string>
+    <string name="tgtv_sending">Enviando a %1$s…</string>
+    <string name="tgtv_sent">Reproduciéndose en %1$s. Deja la app abierta en el móvil</string>
+    <string name="tgtv_failed">La tele no pudo abrirlo</string>
 </resources>
