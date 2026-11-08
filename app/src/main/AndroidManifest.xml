@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Móvil como mando de la tele: encontrar y anunciar la app en la red local (ver remote/) -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -266,6 +267,12 @@
             android:name=".telegram.TvCastService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Descarga de vídeos detectados en la web (ver ui/DownloadService.kt) -->
+        <service
+            android:name=".ui.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <service
             android:name=".player.PlaybackService"

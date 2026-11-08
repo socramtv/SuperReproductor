@@ -1882,3 +1882,7 @@ La copia ahora incluye también: ajustes del navegador (bloqueo de anuncios, cur
 ## Copia de seguridad a la carta
 
 Al exportar y al importar aparece una lista con casillas (todas marcadas) para elegir qué secciones entran: favoritos, listas, canales ocultos/renombrados, continuar viendo, recordatorios y avisos, Telegram, navegador, ajustes y teles guardadas. Al importar solo se muestran las secciones que trae el archivo. El botón «Todo» marca o desmarca todas.
+
+## Descargar vídeos detectados (web)
+
+En «Vídeos de esta página», el botón «⋯ Enviar / descargar» (en la TV, «⬇ Descargar») y la pulsación larga sobre un vídeo permiten descargarlo. Se guarda en Descargas/SocramTV con el mismo Referer y User-Agent del reproductor, en segundo plano, con notificación de progreso y botón de cancelar. Vale para archivos directos (mp4, mkv, webm…) y HLS (.m3u8) sin cifrar y que no sea en directo (se junta en un .ts). No se pueden descargar DASH (.mpd), vídeos cifrados ni directos.

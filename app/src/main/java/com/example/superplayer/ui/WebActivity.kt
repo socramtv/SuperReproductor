@@ -880,7 +880,13 @@ class WebActivity : AppCompatActivity() {
         binding.webVideos.visibility = if (detected.isEmpty()) View.GONE else View.VISIBLE
     }
 
-    private fun showDetectedVideos(sendMode: Boolean = false) {
+    private fun downloadVideo(url: String, page: String) {
+        val st = buildWebStream(url, page)
+        DownloadService.start(this, url, st.name, st.headers)
+        Toast.makeText(this, R.string.web_download_started, Toast.LENGTH_LONG).show()
+    }
+
+    private fun showDetectedVideos(sendMode: Boolean = false, downloadMode: Boolean = false) {
         if (detected.isEmpty()) {
             Toast.makeText(this, R.string.web_no_videos, Toast.LENGTH_SHORT).show()
             return
@@ -891,24 +897,40 @@ class WebActivity : AppCompatActivity() {
             "${streamTypeFor(u)}${qualityOf(u)} · ${Uri.parse(u).host.orEmpty()} · ${file.take(40)}"
         }
         val builder = AlertDialog.Builder(this)
-            .setTitle(if (sendMode) R.string.web_send_tv_title else R.string.web_videos_title)
+            .setTitle(if (downloadMode) R.string.web_download_title else if (sendMode) R.string.web_send_tv_title else R.string.web_videos_title)
             .setItems(labels.toTypedArray()) { _, which ->
                 val page = detected[urls[which]] ?: urls[which]
-                if (sendMode) sendToTv(urls[which], page) else playInApp(urls[which], page)
+                if (downloadMode) downloadVideo(urls[which], page)
+                else if (sendMode) sendToTv(urls[which], page) else playInApp(urls[which], page)
             }
             .setNegativeButton(R.string.channel_check_close, null)
-        if (!isTv && !sendMode) builder.setNeutralButton(R.string.web_send_tv_btn) { _, _ -> showDetectedVideos(sendMode = true) }
+        if (!sendMode && !downloadMode) {
+            if (isTv) builder.setNeutralButton(R.string.web_download_btn) { _, _ -> showDetectedVideos(downloadMode = true) }
+            else builder.setNeutralButton(R.string.web_more_btn) { _, _ ->
+                AlertDialog.Builder(this)
+                    .setItems(arrayOf(getString(R.string.web_send_tv_btn), getString(R.string.web_download_btn))) { _, w ->
+                        if (w == 0) showDetectedVideos(sendMode = true) else showDetectedVideos(downloadMode = true)
+                    }
+                    .show()
+            }
+        }
         val dialog = builder.create()
         dialog.show()
         // Pulsación larga: copiar el enlace o (en el móvil) enviarlo a la tele.
         dialog.listView.setOnItemLongClickListener { _, _, pos, _ ->
             if (isTv) {
-                copyText(urls[pos], R.string.web_video_copied)
+                AlertDialog.Builder(this)
+                    .setItems(arrayOf(getString(R.string.web_video_copy), getString(R.string.web_download_btn))) { _, w ->
+                        if (w == 0) copyText(urls[pos], R.string.web_video_copied)
+                        else downloadVideo(urls[pos], detected[urls[pos]] ?: urls[pos])
+                    }
+                    .show()
             } else {
                 AlertDialog.Builder(this)
-                    .setItems(arrayOf(getString(R.string.web_video_copy), getString(R.string.web_send_tv_btn))) { _, w ->
+                    .setItems(arrayOf(getString(R.string.web_video_copy), getString(R.string.web_send_tv_btn), getString(R.string.web_download_btn))) { _, w ->
                         if (w == 0) copyText(urls[pos], R.string.web_video_copied)
-                        else sendToTv(urls[pos], detected[urls[pos]] ?: urls[pos])
+                        else if (w == 1) sendToTv(urls[pos], detected[urls[pos]] ?: urls[pos])
+                        else downloadVideo(urls[pos], detected[urls[pos]] ?: urls[pos])
                     }
                     .show()
             }
