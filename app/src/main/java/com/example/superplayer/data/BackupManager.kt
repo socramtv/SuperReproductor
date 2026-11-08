@@ -14,7 +14,9 @@ import org.json.JSONObject
  * huecos de lista, el filtro y el orden de categorías de cada lista, el modo
  * claro/oscuro, los canales ocultos y renombrados, los recordatorios de la
  * guía, "Continuar viendo" y los ajustes del reproductor (audio en segundo
- * plano y formato de pantalla). No incluye las listas descargadas ni la guía: se vuelven a
+ * plano y formato de pantalla), y en "extras" (BackupExtras) los ajustes e historial del
+ * navegador, lo visto y «seguir viendo» de Telegram, su biblioteca, el radio-mix y las teles
+ * guardadas. No incluye las listas descargadas ni la guía: se vuelven a
  * bajar solas de sus URLs.
  *
  * Al importar, los favoritos se SUMAN a los que ya haya (nunca se borra
@@ -115,6 +117,7 @@ object BackupManager {
                 .put("enabled", com.example.superplayer.sports.GoalAlerts.isEnabled(context))
                 .put("teams", JSONArray(com.example.superplayer.sports.GoalAlerts.getTeams(context)))
         )
+        root.put("extras", BackupExtras.export(context))
         return root.toString(2)
     }
 
@@ -252,6 +255,8 @@ object BackupManager {
                 com.example.superplayer.sports.GoalAlerts.setEnabled(context, true)
             }
         }
+
+        root.optJSONObject("extras")?.let { other += BackupExtras.import(context, it) }
 
         return ImportResult(newFavorites, urlCount, filterCount, darkChanged, newHidden, newNames, newReminders, newContinue, other)
     }

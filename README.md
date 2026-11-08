@@ -1874,3 +1874,7 @@ La tele recibe la dirección con el mismo Referer y User-Agent que se usarían e
 ## Ficha de Cine renovada
 
 La ficha de una película en Cine tiene ahora el mismo aspecto que la de Telegram: imagen de fondo con degradado, título centrado, nota, año/duración/edad, géneros, botón grande «Reproducir», fila Tráiler / Favoritos, sinopsis y «Reparto y equipo» con fotos redondas. Funciona con el mando de la TV (foco con borde blanco).
+
+## Copia de seguridad ampliada
+
+La copia ahora incluye también: ajustes del navegador (bloqueo de anuncios, cursor, user-agent, página de inicio, aviso de vídeo) e historial, vídeos vistos y «seguir viendo» de Telegram, duración de la intro de cada serie, biblioteca de Telegram (fuentes, ocultos, lista de deseos, marcadores manuales), retardo del radio-mix y las teles guardadas. Al importar se suma a lo que ya hay.
