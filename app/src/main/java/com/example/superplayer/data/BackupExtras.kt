@@ -28,6 +28,9 @@ internal object BackupExtras {
         }
         o.put("webSettings", ws)
         o.put("webHistory", arr(web, "history"))
+        o.put("webFolders", JSONObject()
+            .put("list", arr(web, "bm_folder_list"))
+            .put("map", try { JSONObject(web.getString("bm_folders", "{}")) } catch (e: Exception) { JSONObject() }))
 
         // Telegram: vistos, seguir viendo, intros.
         o.put("tgWatched", JSONArray((sp(c, "tg_watched").getStringSet("seen", emptySet()) ?: emptySet()).toList()))
@@ -87,6 +90,17 @@ internal object BackupExtras {
                 p.edit().putString("history", out.toString()).apply()
                 added += n
             }
+        }
+
+        o.optJSONObject("webFolders")?.let { wf ->
+            val p = sp(c, "web_browser")
+            val names = arr(p, "bm_folder_list").let { a -> (0 until a.length()).map { a.optString(it) }.toMutableList() }
+            wf.optJSONArray("list")?.let { a ->
+                for (i in 0 until a.length()) { val n = a.optString(i); if (n.isNotEmpty() && n !in names) { names.add(n); added++ } }
+            }
+            val map = try { JSONObject(p.getString("bm_folders", "{}")) } catch (e: Exception) { JSONObject() }
+            wf.optJSONObject("map")?.let { m -> for (k in m.keys()) if (!map.has(k)) map.put(k, m.optString(k)) }
+            p.edit().putString("bm_folder_list", JSONArray(names).toString()).putString("bm_folders", map.toString()).apply()
         }
 
         // Vistos de Telegram

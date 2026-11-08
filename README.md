@@ -1886,3 +1886,7 @@ Al exportar y al importar aparece una lista con casillas (todas marcadas) para e
 ## Descargar vídeos detectados (web)
 
 En «Vídeos de esta página», el botón «⋯ Enviar / descargar» (en la TV, «⬇ Descargar») y la pulsación larga sobre un vídeo permiten descargarlo. Se guarda en Descargas/SocramTV con el mismo Referer y User-Agent del reproductor, en segundo plano, con notificación de progreso y botón de cancelar. Vale para archivos directos (mp4, mkv, webm…) y HLS (.m3u8) sin cifrar y que no sea en directo (se junta en un .ts). No se pueden descargar DASH (.mpd), vídeos cifrados ni directos.
+
+## Favoritos de la web: orden y carpetas
+
+En la página de inicio, el botón «+» abre un menú: añadir favorito, nueva carpeta, ordenar A→Z o Z→A. Las carpetas salen primero (icono 📁 naranja) y también en la tira de favoritos; al pulsarlas se abre su contenido. Mantén pulsado un favorito: editar, mover a carpeta, subir, bajar o borrar. Mantén pulsada una carpeta: renombrar o borrar (sus favoritos no se borran). También en el menú ⋮ → «Carpetas y orden de favoritos». Las carpetas entran en la copia de seguridad (sección Navegador).

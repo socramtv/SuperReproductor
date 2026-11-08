@@ -965,6 +965,187 @@ class WebActivity : AppCompatActivity() {
         prefs().edit().putString("bookmarks", arr.toString()).apply()
     }
 
+    // ---- Carpetas de favoritos (la carpeta de cada favorito se guarda aparte, por su dirección) ----
+
+    private fun folderNames(): MutableList<String> = try {
+        val a = JSONArray(prefs().getString("bm_folder_list", "[]"))
+        (0 until a.length()).map { a.optString(it) }.filter { it.isNotEmpty() }.toMutableList()
+    } catch (e: Exception) { mutableListOf() }
+
+    private fun saveFolderNames(l: List<String>) {
+        prefs().edit().putString("bm_folder_list", JSONArray(l).toString()).apply()
+    }
+
+    private fun folderMap(): MutableMap<String, String> = try {
+        val o = JSONObject(prefs().getString("bm_folders", "{}"))
+        val m = LinkedHashMap<String, String>()
+        for (k in o.keys()) m[k] = o.optString(k)
+        m
+    } catch (e: Exception) { LinkedHashMap() }
+
+    private fun saveFolderMap(m: Map<String, String>) {
+        val o = JSONObject()
+        for ((k, v) in m) if (v.isNotEmpty()) o.put(k, v)
+        prefs().edit().putString("bm_folders", o.toString()).apply()
+    }
+
+    private fun folderOf(url: String, names: List<String> = folderNames(), map: Map<String, String> = folderMap()): String {
+        val f = map[url] ?: return ""
+        return if (f in names) f else ""
+    }
+
+    private fun setFolder(url: String, folder: String) {
+        val m = folderMap()
+        if (folder.isEmpty()) m.remove(url) else m[url] = folder
+        saveFolderMap(m)
+    }
+
+    private fun moveBookmark(b: Pair<String, String>, dir: Int) {
+        val list = bookmarks()
+        val names = folderNames(); val map = folderMap()
+        val f = folderOf(b.second, names, map)
+        val group = list.indices.filter { folderOf(list[it].second, names, map) == f }
+        val gi = group.indexOfFirst { list[it].second == b.second }
+        val ti = gi + dir
+        if (gi < 0 || ti < 0 || ti >= group.size) return
+        val a = group[gi]; val c = group[ti]
+        val tmp = list[a]; list[a] = list[c]; list[c] = tmp
+        saveBookmarks(list)
+    }
+
+    private fun sortBookmarks(az: Boolean) {
+        val l = bookmarks()
+        l.sortWith(compareBy<Pair<String, String>, String>(String.CASE_INSENSITIVE_ORDER) { it.first })
+        if (!az) l.reverse()
+        saveBookmarks(l)
+        refreshFavUi()
+    }
+
+    private fun newFolder(then: ((String) -> Unit)? = null) {
+        val et = android.widget.EditText(this).apply { hint = getString(R.string.web_folder_name); setSingleLine() }
+        val box = android.widget.FrameLayout(this).apply {
+            val m = (20 * resources.displayMetrics.density).toInt()
+            setPadding(m, m / 2, m, 0); addView(et)
+        }
+        val dlg = AlertDialog.Builder(this)
+            .setTitle(R.string.web_folder_new)
+            .setView(box)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val n = et.text.toString().trim()
+                if (n.isEmpty()) return@setPositiveButton
+                val names = folderNames()
+                if (names.none { it.equals(n, true) }) { names.add(n); saveFolderNames(names) }
+                refreshFavUi()
+                then?.invoke(names.first { it.equals(n, true) })
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dlg.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        dlg.show()
+        et.requestFocus()
+    }
+
+    private fun moveToFolder(b: Pair<String, String>, then: () -> Unit) {
+        val names = folderNames()
+        val labels = ArrayList<String>()
+        labels.add(getString(R.string.web_folder_none))
+        names.forEach { labels.add("📁 $it") }
+        labels.add(getString(R.string.web_folder_new_opt))
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_folder_move)
+            .setItems(labels.toTypedArray()) { _, w ->
+                when {
+                    w == 0 -> { setFolder(b.second, ""); refreshFavUi(); then() }
+                    w <= names.size -> { setFolder(b.second, names[w - 1]); refreshFavUi(); then() }
+                    else -> newFolder { n -> setFolder(b.second, n); refreshFavUi(); then() }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun folderOptions(name: String) {
+        AlertDialog.Builder(this)
+            .setTitle("📁 $name")
+            .setItems(arrayOf(getString(R.string.web_fav_edit_opt), getString(R.string.web_folder_delete))) { _, w ->
+                if (w == 0) {
+                    val et = android.widget.EditText(this).apply { setText(name); setSingleLine(); selectAll() }
+                    val box = android.widget.FrameLayout(this).apply {
+                        val m = (20 * resources.displayMetrics.density).toInt()
+                        setPadding(m, m / 2, m, 0); addView(et)
+                    }
+                    AlertDialog.Builder(this).setTitle(R.string.web_folder_new).setView(box)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            val n = et.text.toString().trim()
+                            if (n.isEmpty() || n == name) return@setPositiveButton
+                            val names = folderNames()
+                            if (names.any { it.equals(n, true) }) return@setPositiveButton
+                            val i = names.indexOf(name)
+                            if (i >= 0) names[i] = n
+                            saveFolderNames(names)
+                            val m = folderMap()
+                            for (k in m.keys.toList()) if (m[k] == name) m[k] = n
+                            saveFolderMap(m)
+                            refreshFavUi()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null).show()
+                } else {
+                    AlertDialog.Builder(this)
+                        .setMessage(getString(R.string.web_folder_delete_msg, name))
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            saveFolderNames(folderNames().filter { it != name })
+                            val m = folderMap()
+                            for (k in m.keys.toList()) if (m[k] == name) m.remove(k)
+                            saveFolderMap(m)
+                            refreshFavUi()
+                        }
+                        .setNegativeButton(android.R.string.cancel, null).show()
+                }
+            }
+            .show()
+    }
+
+    private fun openFolder(name: String) {
+        val names = folderNames(); val map = folderMap()
+        val items = bookmarks().filter { folderOf(it.second, names, map) == name }
+        if (items.isEmpty()) {
+            Toast.makeText(this, R.string.web_folder_empty, Toast.LENGTH_LONG).show()
+            return
+        }
+        lateinit var dlg: AlertDialog
+        dlg = AlertDialog.Builder(this)
+            .setTitle("📁 $name")
+            .setItems(items.map { it.first.take(60) + "\n" + it.second.take(70) }.toTypedArray()) { _, w ->
+                binding.webFavScroll.visibility = View.GONE
+                load(items[w].second)
+            }
+            .setNegativeButton(R.string.channel_check_close, null)
+            .create()
+        dlg.show()
+        dlg.listView.setOnItemLongClickListener { _, _, pos, _ ->
+            dlg.dismiss()
+            favOptions(items[pos]) { openFolder(name) }
+            true
+        }
+    }
+
+    /** Menú del «+»: añadir favorito, nueva carpeta y ordenar. */
+    private fun favAddMenu() {
+        AlertDialog.Builder(this)
+            .setItems(arrayOf(
+                getString(R.string.web_fav_add), getString(R.string.web_folder_new),
+                getString(R.string.web_sort_az), getString(R.string.web_sort_za)
+            )) { _, w ->
+                when (w) {
+                    0 -> editBookmark(null)
+                    1 -> newFolder()
+                    2 -> sortBookmarks(true)
+                    else -> sortBookmarks(false)
+                }
+            }
+            .show()
+    }
+
     private fun addBookmark() {
         if (homeVisible()) { editBookmark(null); return }
         val url = webView.url ?: return
@@ -1015,7 +1196,8 @@ class WebActivity : AppCompatActivity() {
         strip.removeAllViews()
         val d = resources.displayMetrics.density
         val list = bookmarks()
-        if (list.isEmpty()) {
+        val fNames = folderNames(); val fMap = folderMap()
+        if (list.isEmpty() && fNames.isEmpty()) {
             strip.addView(android.widget.TextView(this).apply {
                 setText(R.string.web_no_favs)
                 setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_surface_muted))
@@ -1023,7 +1205,24 @@ class WebActivity : AppCompatActivity() {
             })
             return
         }
-        for (b in list) {
+        for (fn in fNames) {
+            val chip = android.widget.TextView(this).apply {
+                text = "📁 " + fn.take(20)
+                textSize = 13f
+                maxLines = 1
+                setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_background))
+                setBackgroundResource(R.drawable.bg_web_chip)
+                setPadding((14 * d).toInt(), (8 * d).toInt(), (14 * d).toInt(), (8 * d).toInt())
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { openFolder(fn) }
+                setOnLongClickListener { folderOptions(fn); true }
+            }
+            strip.addView(chip, android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0) })
+        }
+        for (b in list.filter { folderOf(it.second, fNames, fMap).isEmpty() }) {
             val chip = android.widget.TextView(this).apply {
                 text = b.first.take(22)
                 textSize = 13f
@@ -1042,14 +1241,24 @@ class WebActivity : AppCompatActivity() {
         }
     }
 
-    private fun favOptions(b: Pair<String, String>) {
+    private fun favOptions(b: Pair<String, String>, reopen: (() -> Unit)? = null) {
+        val labels = arrayOf(
+            getString(R.string.web_fav_edit_opt), getString(R.string.web_folder_move),
+            getString(R.string.web_move_up), getString(R.string.web_move_down), getString(R.string.web_fav_delete_opt)
+        )
         AlertDialog.Builder(this)
             .setTitle(b.first.take(50))
-            .setItems(arrayOf(getString(R.string.web_fav_edit_opt), getString(R.string.web_fav_delete_opt))) { _, which ->
-                if (which == 0) editBookmark(b)
-                else {
-                    saveBookmarks(bookmarks().filter { it.second != b.second })
-                    refreshFavUi()
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> editBookmark(b)
+                    1 -> moveToFolder(b) { reopen?.invoke() }
+                    2 -> { moveBookmark(b, -1); refreshFavUi(); reopen?.invoke() }
+                    3 -> { moveBookmark(b, 1); refreshFavUi(); reopen?.invoke() }
+                    else -> {
+                        saveBookmarks(bookmarks().filter { it.second != b.second })
+                        refreshFavUi()
+                        reopen?.invoke()
+                    }
                 }
             }
             .show()
@@ -1081,7 +1290,10 @@ class WebActivity : AppCompatActivity() {
                 val n = nameEt.text.toString().trim().ifEmpty { Uri.parse(u).host?.removePrefix("www.") ?: u }
                 val list = bookmarks()
                 val i = if (old == null) -1 else list.indexOfFirst { it.second == old.second }
-                if (i >= 0) list[i] = n to u else list.add(0, n to u)
+                if (i >= 0) {
+                    list[i] = n to u
+                    if (old != null && old.second != u) { val f = folderOf(old.second); setFolder(old.second, ""); if (f.isNotEmpty()) setFolder(u, f) }
+                } else list.add(0, n to u)
                 saveBookmarks(list)
                 refreshFavUi()
             }
@@ -1144,8 +1356,12 @@ class WebActivity : AppCompatActivity() {
         val widthDp = resources.displayMetrics.widthPixels / d
         val cols = maxOf(3, minOf(8, ((widthDp - 32) / 92).toInt()))
         grid.columnCount = cols
-        val items = bookmarks().map { it as Pair<String, String>? } + listOf<Pair<String, String>?>(null)
-        for (b in items) {
+        val fNames = folderNames(); val fMap = folderMap()
+        val items = ArrayList<Pair<Pair<String, String>?, String?>>()
+        for (fn in fNames) items.add(Pair(null, fn))
+        for (bm in bookmarks()) if (folderOf(bm.second, fNames, fMap).isEmpty()) items.add(Pair(bm, null))
+        items.add(Pair(null, null))
+        for ((b, fol) in items) {
             val tile = android.widget.LinearLayout(this).apply {
                 orientation = android.widget.LinearLayout.VERTICAL
                 gravity = android.view.Gravity.CENTER_HORIZONTAL
@@ -1157,13 +1373,13 @@ class WebActivity : AppCompatActivity() {
             val circle = android.widget.FrameLayout(this).apply {
                 val bg = android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(if (b == null) 0xFF9E9E9E.toInt() else tileColor(b.second))
+                    setColor(if (fol != null) 0xFFFF9800.toInt() else if (b == null) 0xFF9E9E9E.toInt() else tileColor(b.second))
                 }
                 background = bg
                 tag = bg
             }
             val letter = android.widget.TextView(this).apply {
-                text = if (b == null) "+" else b.first.trim().take(1).uppercase().ifEmpty { "?" }
+                text = if (fol != null) "📁" else if (b == null) "+" else b.first.trim().take(1).uppercase().ifEmpty { "?" }
                 textSize = 24f
                 setTextColor(0xFFFFFFFF.toInt())
                 gravity = android.view.Gravity.CENTER
@@ -1187,7 +1403,7 @@ class WebActivity : AppCompatActivity() {
             }
             tile.addView(circle, android.widget.LinearLayout.LayoutParams((56 * d).toInt(), (56 * d).toInt()))
             tile.addView(android.widget.TextView(this).apply {
-                text = if (b == null) getString(R.string.web_fav_add) else b.first
+                text = if (fol != null) fol + " (" + fMap.count { it.value == fol && bookmarks().any { x -> x.second == it.key } } + ")" else if (b == null) getString(R.string.web_fav_add) else b.first
                 textSize = 12f
                 maxLines = 2
                 gravity = android.view.Gravity.CENTER
@@ -1195,8 +1411,9 @@ class WebActivity : AppCompatActivity() {
                 setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_background))
                 setPadding((4 * d).toInt(), (6 * d).toInt(), (4 * d).toInt(), 0)
             }, android.widget.LinearLayout.LayoutParams(-1, -2))
-            tile.setOnClickListener { if (b == null) editBookmark(null) else load(b.second) }
-            if (b != null) tile.setOnLongClickListener { favOptions(b); true }
+            tile.setOnClickListener { if (fol != null) openFolder(fol) else if (b == null) favAddMenu() else load(b.second) }
+            if (fol != null) tile.setOnLongClickListener { folderOptions(fol); true }
+            else if (b != null) tile.setOnLongClickListener { favOptions(b); true }
             val lp = android.widget.GridLayout.LayoutParams(
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
@@ -1266,7 +1483,7 @@ class WebActivity : AppCompatActivity() {
         }
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.web_bookmarks)
-            .setItems(list.map { it.first.take(60) + "\n" + it.second.take(70) }.toTypedArray()) { _, which -> load(list[which].second) }
+            .setItems(list.map { (folderOf(it.second).let { f -> if (f.isEmpty()) "" else "📁 $f · " }) + it.first.take(55) + "\n" + it.second.take(70) }.toTypedArray()) { _, which -> load(list[which].second) }
             .setNegativeButton(R.string.channel_check_close, null)
             .create()
         dialog.show()
@@ -1292,6 +1509,7 @@ class WebActivity : AppCompatActivity() {
         val menu = PopupMenu(this, anchor)
         menu.menu.add(0, 1, 0, R.string.web_bookmarks)
         menu.menu.add(0, 2, 1, R.string.web_add_bookmark)
+        menu.menu.add(0, 16, 1, R.string.web_organize_favs)
         menu.menu.add(0, 11, 1, R.string.web_history)
         menu.menu.add(0, 12, 1, R.string.web_new_tab)
         menu.menu.add(0, 13, 2, getString(R.string.web_alert_menu, alertModeLabel()))
@@ -1311,6 +1529,7 @@ class WebActivity : AppCompatActivity() {
                 2 -> addBookmark()
                 3 -> showDetectedVideos()
                 11 -> showHistory()
+                16 -> favAddMenu()
                 12 -> newTab(null)
                 13 -> chooseAlertMode()
                 15 -> showRequests()
