@@ -1870,3 +1870,7 @@ Cuando la Web detecta un vídeo se puede mandar a la tele (la del «Mando de tel
 - En el aviso de «vídeo detectado» hay un botón 📺 junto a «Reproducir».
 - En la lista 🎬 de vídeos de la página hay un botón «📺 Enviar a la TV» (eliges el vídeo después), y la pulsación larga sobre un vídeo da a elegir entre copiar el enlace y enviarlo.
 La tele recibe la dirección con el mismo Referer y User-Agent que se usarían en el móvil, y lo abre ella sola (no pasa por el móvil, que puede cerrarse). Si hay varias teles se elige; si no hay ninguna, abre el «Mando de tele». En la propia tele estos botones no salen.
+
+## Ficha de Cine renovada
+
+La ficha de una película en Cine tiene ahora el mismo aspecto que la de Telegram: imagen de fondo con degradado, título centrado, nota, año/duración/edad, géneros, botón grande «Reproducir», fila Tráiler / Favoritos, sinopsis y «Reparto y equipo» con fotos redondas. Funciona con el mando de la TV (foco con borde blanco).

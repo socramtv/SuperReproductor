@@ -224,114 +224,263 @@ class CineActivity : AppCompatActivity() {
 
     private fun showDetails(stream: Stream) {
         val density = resources.displayMetrics.density
-        val pad = (16 * density).toInt()
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, 0)
-        }
-        val poster = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (260 * density).toInt())
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
-        val meta = TextView(this).apply {
-            textSize = 13f
-            setTextColor(ContextCompat.getColor(this@CineActivity, R.color.primary))
-            setPadding(0, (10 * density).toInt(), 0, (6 * density).toInt())
-        }
-        val synopsis = TextView(this).apply {
-            textSize = 14f
-            setTextColor(ContextCompat.getColor(this@CineActivity, R.color.on_background))
-        }
-        content.addView(poster)
-        content.addView(meta)
-        content.addView(synopsis)
-        val extra = TextView(this).apply {
-            textSize = 13f
-            setTextColor(ContextCompat.getColor(this@CineActivity, R.color.on_background))
-            setPadding(0, (10 * density).toInt(), 0, 0)
-        }
-        val trailer = TextView(this).apply {
-            textSize = 15f
-            text = getString(R.string.cine_trailer)
-            setTextColor(ContextCompat.getColor(this@CineActivity, R.color.primary))
-            setPadding(0, (12 * density).toInt(), 0, (8 * density).toInt())
-            visibility = View.GONE
-        }
-        content.addView(extra)
-        content.addView(trailer)
-        val scroll = ScrollView(this)
-        scroll.addView(content)
+        fun dp(v: Int) = (v * density).toInt()
+        val cBg = 0xFF12121C.toInt()
+        val cCard = 0xFF222232.toInt()
+        val cText = 0xFFFFFFFF.toInt()
+        val cMuted = 0xFFB4B4C6.toInt()
+        val accent = ContextCompat.getColor(this, R.color.primary)
+        val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
+        val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val favorites = FavoritesStore(this)
 
-        fun fill(info: MovieInfo.Info?) {
-            poster.load(info?.posterUrl ?: stream.icon) {
-                placeholder(R.drawable.ic_placeholder)
-                error(R.drawable.ic_placeholder)
+        fun shape(fill: Int, radius: Int, stroke: Int = 0, strokeColor: Int = 0) = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(radius).toFloat()
+            setColor(fill)
+            if (stroke > 0) setStroke(dp(stroke), strokeColor)
+        }
+        fun focusBg(fill: Int, radius: Int, stroke: Int = 0, strokeColor: Int = 0) = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), shape(fill, radius, 3, cText))
+            addState(intArrayOf(android.R.attr.state_pressed), shape(fill, radius, 3, cText))
+            addState(intArrayOf(), shape(fill, radius, stroke, strokeColor))
+        }
+        fun pill(text: String, fill: Int, sizeSp: Float = 14f, heightDp: Int = 44, stroke: Int = 0, strokeColor: Int = 0, onClick: () -> Unit) =
+            TextView(this).apply {
+                this.text = text
+                textSize = sizeSp
+                setTextColor(cText)
+                gravity = android.view.Gravity.CENTER
+                typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                background = focusBg(fill, heightDp / 2, stroke, strokeColor)
+                setPadding(dp(14), 0, dp(14), 0)
+                minHeight = dp(heightDp)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { onClick() }
             }
-            val parts = listOfNotNull(
-                info?.rating?.takeIf { it > 0.0 }?.let { "★ " + String.format(Locale.US, "%.1f", it) },
-                info?.year,
-                info?.runtimeMin?.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
-                info?.genre,
-                info?.certification?.takeIf { it.isNotBlank() }
-            )
-            meta.text = parts.joinToString(" · ")
-            meta.visibility = if (parts.isEmpty()) View.GONE else View.VISIBLE
-            val tag = info?.tagline?.takeIf { it.isNotBlank() }
-            val over = info?.overview?.takeIf { it.isNotBlank() } ?: getString(R.string.cine_no_synopsis)
-            synopsis.text = if (tag != null) "“$tag”\n\n$over" else over
-            val lines = ArrayList<String>()
-            info?.director?.takeIf { it.isNotBlank() }?.let {
-                lines.add(getString(if (info?.isTv == true) R.string.cine_creator else R.string.cine_director) + ": " + it)
+        fun lp(w: Int, h: Int, l: Int = 0, t: Int = 0, r: Int = 0, b: Int = 0) =
+            LinearLayout.LayoutParams(w, h).apply { setMargins(dp(l), dp(t), dp(r), dp(b)) }
+
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(col) }
+        lateinit var playBtn: View
+
+        fun render(info: MovieInfo.Info?, searching: Boolean) {
+            col.removeAllViews()
+            // Cabecera con fondo y degradado
+            val header = android.widget.FrameLayout(this)
+            val img = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundColor(cCard)
             }
-            if (info != null && info.cast.isNotEmpty()) {
-                lines.add(getString(R.string.cine_cast) + ": " + info.cast.joinToString(", "))
-            }
-            extra.text = lines.joinToString("\n\n")
-            extra.visibility = if (lines.isEmpty()) View.GONE else View.VISIBLE
-            val tk = info?.trailerKey
-            if (tk.isNullOrBlank()) {
-                trailer.visibility = View.GONE
-            } else {
-                trailer.visibility = View.VISIBLE
-                trailer.setOnClickListener {
-                    try {
-                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$tk")))
-                    } catch (e: Exception) {
-                        android.widget.Toast.makeText(this@CineActivity, R.string.cine_trailer_error, android.widget.Toast.LENGTH_SHORT).show()
+            val headerUrl = info?.backdropUrl?.takeIf { it.isNotBlank() } ?: info?.posterUrl ?: stream.icon
+            if (!headerUrl.isNullOrBlank()) img.load(headerUrl) { error(R.drawable.ic_placeholder) }
+            header.addView(img, android.widget.FrameLayout.LayoutParams(MATCH, MATCH))
+            header.addView(View(this).apply {
+                background = android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x00000000, cBg)
+                )
+            }, android.widget.FrameLayout.LayoutParams(MATCH, dp(130), android.view.Gravity.BOTTOM))
+            col.addView(header, lp(MATCH, dp(240)))
+
+            col.addView(TextView(this).apply {
+                text = info?.title?.takeIf { it.isNotBlank() } ?: MovieInfo.cleanTitle(stream.name).first
+                textSize = 24f
+                setTextColor(cText)
+                gravity = android.view.Gravity.CENTER
+                typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                setPadding(dp(20), 0, dp(20), 0)
+            }, lp(MATCH, WRAP, t = -34))
+
+            if (info != null) {
+                val facts = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER }
+                if (info.rating > 0.0) facts.addView(TextView(this).apply {
+                    text = "★ " + String.format(Locale.US, "%.1f", info.rating)
+                    textSize = 14f
+                    setTextColor(0xFFFFC107.toInt())
+                    typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                    background = shape(0x33FFC107, 14)
+                    setPadding(dp(10), dp(3), dp(10), dp(3))
+                }, lp(WRAP, WRAP, r = 8))
+                val rest = listOfNotNull(
+                    info.year,
+                    info.runtimeMin.takeIf { it > 0 }?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
+                    info.certification?.takeIf { it.isNotBlank() }
+                ).joinToString("  ·  ")
+                if (rest.isNotEmpty()) facts.addView(TextView(this).apply { text = rest; textSize = 14f; setTextColor(cMuted) })
+                col.addView(facts, lp(MATCH, WRAP, t = 8))
+
+                val genres = info.genre?.split(",", "/")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+                if (genres.isNotEmpty()) {
+                    val avail = resources.displayMetrics.widthPixels * 0.95f - dp(36)
+                    val paint = android.graphics.Paint().apply { textSize = 13f * resources.displayMetrics.scaledDensity }
+                    val gbox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL }
+                    var line: LinearLayout? = null
+                    var used = 0f
+                    for (g in genres) {
+                        val w = paint.measureText(g) + dp(28) + dp(8)
+                        if (line == null || used + w > avail) {
+                            line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER }
+                            gbox.addView(line, lp(WRAP, WRAP, t = 6))
+                            used = 0f
+                        }
+                        line!!.addView(TextView(this).apply {
+                            text = g
+                            textSize = 13f
+                            setTextColor(cText)
+                            maxLines = 1
+                            background = shape(0x1AFFFFFF, 16, 1, 0x40FFFFFF)
+                            setPadding(dp(14), dp(6), dp(14), dp(6))
+                        }, lp(WRAP, WRAP, l = 4, r = 4))
+                        used += w
                     }
+                    col.addView(gbox, lp(MATCH, WRAP, t = 6))
                 }
             }
+
+            // Botón grande
+            playBtn = pill(getString(R.string.info_play), accent, sizeSp = 16f, heightDp = 46) {
+                dialog.dismiss()
+                PlayerActivity.pendingStream = stream
+                PlayerActivity.pendingChannelList = emptyList()
+                startActivity(Intent(this, PlayerActivity::class.java))
+            }
+            col.addView(playBtn, lp(MATCH, dp(46), l = 28, t = 16, r = 28))
+
+            // Fila: tráiler, favoritos
+            val ghost = 0x1FFFFFFF
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val tk = info?.trailerKey
+            if (!tk.isNullOrBlank()) row.addView(pill(getString(R.string.info_trailer), ghost, stroke = 1, strokeColor = 0x40FFFFFF) {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$tk")))
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(this, R.string.cine_trailer_error, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(6), 0) })
+            lateinit var favBtn: TextView
+            favBtn = pill(getString(if (favorites.isFavorite(stream)) R.string.info_fav_on else R.string.info_fav_add), ghost, stroke = 1, strokeColor = 0x40FFFFFF) {
+                favorites.toggle(stream)
+                favBtn.text = getString(if (favorites.isFavorite(stream)) R.string.info_fav_on else R.string.info_fav_add)
+            }
+            row.addView(favBtn, LinearLayout.LayoutParams(0, dp(44), 1f))
+            col.addView(row, lp(MATCH, dp(44), l = 28, t = 10, r = 28))
+
+            // Sinopsis
+            val tag = info?.tagline?.takeIf { it.isNotBlank() }
+            val over = info?.overview?.takeIf { it.isNotBlank() }
+                ?: getString(if (searching) R.string.cine_searching else R.string.cine_no_synopsis)
+            col.addView(TextView(this).apply {
+                text = if (tag != null) "“$tag”\n\n$over" else over
+                textSize = 15f
+                setTextColor(cMuted)
+                setLineSpacing(0f, 1.25f)
+            }, lp(MATCH, WRAP, l = 24, t = 18, r = 24))
+
+            // Reparto y equipo
+            val people = info?.people.orEmpty().mapNotNull { e -> e.split("\t").takeIf { it.size >= 4 } }
+            if (people.isNotEmpty()) {
+                col.addView(TextView(this).apply {
+                    text = getString(R.string.info_cast_title)
+                    textSize = 17f
+                    setTextColor(cText)
+                    typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                }, lp(MATCH, WRAP, l = 24, t = 20))
+                val hs = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+                val strip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(16), dp(8), dp(16), 0) }
+                for (p in people) {
+                    val isDir = p[0] == "D"
+                    val ring = if (isDir) 0xFFFFC107.toInt() else 0xFF3A3A4E.toInt()
+                    val cell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL }
+                    val frame = android.widget.FrameLayout(this).apply {
+                        background = android.graphics.drawable.GradientDrawable().apply { shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(cCard); setStroke(dp(2), ring) }
+                        setPadding(dp(3), dp(3), dp(3), dp(3))
+                    }
+                    val face = ImageView(this).apply {
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        clipToOutline = true
+                        outlineProvider = object : android.view.ViewOutlineProvider() {
+                            override fun getOutline(v: View, o: android.graphics.Outline) { o.setOval(0, 0, v.width, v.height) }
+                        }
+                        setImageResource(android.R.drawable.ic_menu_myplaces)
+                        setColorFilter(0xFF6B6B80.toInt())
+                    }
+                    if (p[3].isNotEmpty()) { face.clearColorFilter(); face.load(p[3]) }
+                    frame.addView(face, android.widget.FrameLayout.LayoutParams(dp(68), dp(68)))
+                    cell.addView(frame, lp(WRAP, WRAP))
+                    cell.addView(TextView(this).apply {
+                        text = p[1]; textSize = 13f; setTextColor(cText); gravity = android.view.Gravity.CENTER; maxLines = 2
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                    }, lp(dp(88), WRAP, t = 6))
+                    val sub = if (isDir) getString(R.string.info_director_label) else p[2]
+                    if (sub.isNotEmpty()) cell.addView(TextView(this).apply {
+                        text = sub; textSize = 11f; gravity = android.view.Gravity.CENTER; maxLines = 2
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        setTextColor(if (isDir) 0xFFFFC107.toInt() else cMuted)
+                    }, lp(dp(88), WRAP, t = 1))
+                    strip.addView(cell, lp(WRAP, WRAP, l = 4, r = 4))
+                }
+                hs.addView(strip)
+                col.addView(hs, lp(MATCH, WRAP))
+            } else if (info != null) {
+                val credits = ArrayList<String>()
+                info.director?.takeIf { it.isNotBlank() }?.let {
+                    credits.add(getString(if (info.isTv) R.string.cine_creator else R.string.cine_director) + ": " + it)
+                }
+                if (info.cast.isNotEmpty()) credits.add(getString(R.string.cine_cast) + ": " + info.cast.joinToString(", "))
+                if (credits.isNotEmpty()) col.addView(TextView(this).apply {
+                    text = credits.joinToString("\n\n")
+                    textSize = 13f
+                    setTextColor(cMuted)
+                    setLineSpacing(0f, 1.2f)
+                }, lp(MATCH, WRAP, l = 24, t = 14, r = 24))
+            }
+            col.addView(View(this), lp(MATCH, dp(28)))
         }
 
         val cached = MovieInfo.peek(this, stream.name)
-        fill(cached)
-        if (MovieInfo.needsFetch(this, stream.name)) {
-            if (cached == null) synopsis.text = getString(R.string.cine_searching)
+        val needs = MovieInfo.needsFetch(this, stream.name)
+        render(cached, needs && cached == null)
+        if (needs) {
             MovieInfo.request(this, stream.name) { found ->
                 runOnUiThread {
-                    if (!isFinishing && !isDestroyed) {
-                        fill(found)
+                    if (!isFinishing && !isDestroyed && dialog.isShowing) {
+                        render(found, false)
+                        playBtn.requestFocus()
                         adapter.notifyDataSetChanged()
                     }
                 }
             }
         }
 
-        val favorites = FavoritesStore(this)
-        val title = cached?.title?.takeIf { it.isNotBlank() } ?: MovieInfo.cleanTitle(stream.name).first
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setView(scroll)
-            .setPositiveButton(R.string.cine_watch) { _, _ ->
-                PlayerActivity.pendingStream = stream
-                PlayerActivity.pendingChannelList = emptyList()
-                startActivity(Intent(this, PlayerActivity::class.java))
-            }
-            .setNeutralButton(
-                if (favorites.isFavorite(stream)) R.string.channel_opt_unfavorite else R.string.channel_opt_favorite
-            ) { _, _ -> favorites.toggle(stream) }
-            .setNegativeButton(R.string.channel_check_close, null)
-            .show()
+        val root = android.widget.FrameLayout(this).apply {
+            background = shape(cBg, 22)
+            clipToOutline = true
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            addView(scroll, android.widget.FrameLayout.LayoutParams(MATCH, MATCH))
+            addView(TextView(this@CineActivity).apply {
+                text = "✕"
+                textSize = 18f
+                setTextColor(cText)
+                gravity = android.view.Gravity.CENTER
+                background = focusBg(0x99000000.toInt(), 20)
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { dialog.dismiss() }
+            }, android.widget.FrameLayout.LayoutParams(dp(40), dp(40), android.view.Gravity.TOP or android.view.Gravity.END).apply { setMargins(0, dp(12), dp(12), 0) })
+        }
+        dialog.setContentView(root)
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0x00000000))
+            setLayout((resources.displayMetrics.widthPixels * 0.95f).toInt(), (resources.displayMetrics.heightPixels * 0.92f).toInt())
+            setDimAmount(0.75f)
+        }
+        dialog.show()
+        playBtn.requestFocus()
     }
 
     companion object {
