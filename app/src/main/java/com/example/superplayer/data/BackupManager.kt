@@ -25,6 +25,41 @@ import org.json.JSONObject
  */
 object BackupManager {
 
+    /** Bloques de la copia que se pueden elegir al guardar y al importar. [keys] son las claves del JSON (y de "extras"). */
+    enum class Section(val labelRes: Int, val keys: List<String>, val extraKeys: List<String> = emptyList()) {
+        FAVORITES(com.example.superplayer.R.string.bk_favorites, listOf("favorites")),
+        LISTS(com.example.superplayer.R.string.bk_lists, listOf("listUrls", "hiddenCategories", "categoryOrder")),
+        CHANNELS(com.example.superplayer.R.string.bk_channels, listOf("hiddenChannels", "channelNames")),
+        CONTINUE(com.example.superplayer.R.string.bk_continue, listOf("continueWatching")),
+        ALERTS(com.example.superplayer.R.string.bk_alerts, listOf("reminders", "programAlerts", "goalAlerts")),
+        TELEGRAM(com.example.superplayer.R.string.bk_telegram, listOf("telegram"), listOf("tgWatched", "tgResume", "tgIntros", "tgLibrary", "tgManual")),
+        WEB(com.example.superplayer.R.string.bk_web, listOf("webBookmarks"), listOf("webSettings", "webHistory")),
+        SETTINGS(com.example.superplayer.R.string.bk_settings, listOf("darkMode", "backgroundAudio", "videoFormat", "timeShiftMinutes")),
+        DEVICES(com.example.superplayer.R.string.bk_devices, emptyList(), listOf("radioDelay", "tvDevices"))
+    }
+
+    /** Quita del JSON todo lo que no sea de las secciones elegidas. */
+    private fun keepOnly(root: JSONObject, sections: Set<Section>) {
+        val keep = HashSet<String>(); val keepExtra = HashSet<String>()
+        for (sec in sections) { keep.addAll(sec.keys); keepExtra.addAll(sec.extraKeys) }
+        for (k in root.keys().asSequence().toList()) {
+            if (k == "app" || k == "version") continue
+            if (k == "extras") continue
+            if (k !in keep) root.remove(k)
+        }
+        root.optJSONObject("extras")?.let { ex ->
+            for (k in ex.keys().asSequence().toList()) if (k !in keepExtra) ex.remove(k)
+        }
+    }
+
+    /** Qué secciones trae un archivo de copia (para enseñar solo esas al importar). */
+    fun sectionsIn(text: String): Set<Section> {
+        val root = try { JSONObject(text) } catch (e: Exception) { throw IllegalArgumentException("No es un archivo de copia válido") }
+        if (root.optString("app") != APP_ID) throw IllegalArgumentException("Este archivo no es una copia de Socram TV+")
+        val ex = root.optJSONObject("extras")
+        return Section.values().filter { sec -> sec.keys.any { root.has(it) } || sec.extraKeys.any { ex?.has(it) == true } }.toSet()
+    }
+
     private const val FORMAT_VERSION = 1
     private const val APP_ID = "socram-tv-backup"
 
@@ -41,7 +76,7 @@ object BackupManager {
         val otherItems: Int = 0
     )
 
-    fun export(context: Context): String {
+    fun export(context: Context, sections: Set<Section> = Section.values().toSet()): String {
         val root = JSONObject()
         root.put("app", APP_ID)
         root.put("version", FORMAT_VERSION)
@@ -118,17 +153,20 @@ object BackupManager {
                 .put("teams", JSONArray(com.example.superplayer.sports.GoalAlerts.getTeams(context)))
         )
         root.put("extras", BackupExtras.export(context))
+        keepOnly(root, sections)
         return root.toString(2)
     }
 
     /** Lanza IllegalArgumentException si el texto no es una copia de esta app. */
-    fun restore(context: Context, text: String): ImportResult {
+    fun restore(context: Context, text: String, sections: Set<Section> = Section.values().toSet()): ImportResult {
         val root = try {
             JSONObject(text)
         } catch (e: Exception) {
             throw IllegalArgumentException("No es un archivo de copia válido")
         }
         if (root.optString("app") != APP_ID) throw IllegalArgumentException("Este archivo no es una copia de Socram TV+")
+
+        keepOnly(root, sections)
 
         val streams = ArrayList<Stream>()
         val favs = root.optJSONArray("favorites")

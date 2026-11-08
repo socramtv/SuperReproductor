@@ -1878,3 +1878,7 @@ La ficha de una película en Cine tiene ahora el mismo aspecto que la de Telegra
 ## Copia de seguridad ampliada
 
 La copia ahora incluye también: ajustes del navegador (bloqueo de anuncios, cursor, user-agent, página de inicio, aviso de vídeo) e historial, vídeos vistos y «seguir viendo» de Telegram, duración de la intro de cada serie, biblioteca de Telegram (fuentes, ocultos, lista de deseos, marcadores manuales), retardo del radio-mix y las teles guardadas. Al importar se suma a lo que ya hay.
+
+## Copia de seguridad a la carta
+
+Al exportar y al importar aparece una lista con casillas (todas marcadas) para elegir qué secciones entran: favoritos, listas, canales ocultos/renombrados, continuar viendo, recordatorios y avisos, Telegram, navegador, ajustes y teles guardadas. Al importar solo se muestran las secciones que trae el archivo. El botón «Todo» marca o desmarca todas.

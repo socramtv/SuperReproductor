@@ -87,8 +87,9 @@ class MainActivity : AppCompatActivity() {
     // archivo / cuál abrir, así que no hacen falta permisos de almacenamiento.
     private val exportBackupLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
-            if (uri != null) exportBackupTo(uri)
+            if (uri != null) exportBackupTo(uri, pendingExportSections)
         }
+    private var pendingExportSections: Set<BackupManager.Section> = BackupManager.Section.values().toSet()
     private val importBackupLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) importBackupFrom(uri)
@@ -1242,7 +1243,7 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             R.id.action_backup_export -> {
-                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { exportBackupLauncher.launch("socram-tv-copia.json") }
+                com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { chooseBackupSections(R.string.bk_title_export, BackupManager.Section.values().toSet(), R.string.action_backup_export) { sel -> pendingExportSections = sel; exportBackupLauncher.launch("socram-tv-copia.json") } }
                 true
             }
             R.id.action_backup_import -> {
@@ -1283,9 +1284,43 @@ class MainActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun exportBackupTo(uri: Uri) {
+    /** Diálogo con casillas (todas marcadas) para elegir qué secciones entran en la copia o se importan. */
+    private fun chooseBackupSections(
+        titleRes: Int,
+        available: Set<BackupManager.Section>,
+        okRes: Int,
+        onChosen: (Set<BackupManager.Section>) -> Unit
+    ) {
+        val list = BackupManager.Section.values().filter { it in available }
+        val checked = BooleanArray(list.size) { true }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(titleRes)
+            .setMultiChoiceItems(list.map { getString(it.labelRes) }.toTypedArray(), checked) { _, i, on -> checked[i] = on }
+            .setPositiveButton(android.R.string.ok, null)
+            .setNeutralButton(R.string.bk_all, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                val sel = list.filterIndexed { i, _ -> checked[i] }.toSet()
+                if (sel.isEmpty()) {
+                    Toast.makeText(this, R.string.bk_none, Toast.LENGTH_SHORT).show()
+                } else {
+                    dialog.dismiss()
+                    onChosen(sel)
+                }
+            }
+            dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
+                val all = checked.any { !it }
+                for (i in checked.indices) { checked[i] = all; dialog.listView.setItemChecked(i, all) }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun exportBackupTo(uri: Uri, sections: Set<BackupManager.Section>) {
         try {
-            val text = BackupManager.export(this)
+            val text = BackupManager.export(this, sections)
             contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
                 ?: throw IllegalStateException("no se pudo abrir el archivo")
             Toast.makeText(this, R.string.backup_export_ok, Toast.LENGTH_SHORT).show()
@@ -1298,7 +1333,17 @@ class MainActivity : AppCompatActivity() {
         try {
             val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
                 ?: throw IllegalStateException("no se pudo abrir el archivo")
-            val result = BackupManager.restore(this, text)
+            val present = BackupManager.sectionsIn(text)
+            if (present.isEmpty()) throw IllegalArgumentException("la copia está vacía")
+            chooseBackupSections(R.string.bk_title_import, present, R.string.action_backup_import) { sel -> doImportBackup(text, sel) }
+        } catch (e: Exception) {
+            Toast.makeText(this, getString(R.string.backup_import_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun doImportBackup(text: String, sections: Set<BackupManager.Section>) {
+        try {
+            val result = BackupManager.restore(this, text, sections)
             // Refresca lo que se ve: categorías (filtros), canales ocultos/renombrados, favoritos y accesos directos.
             reapplyChannelOverrides()
             categoryAdapter.submit(buildCategoryListWithFavorites())
