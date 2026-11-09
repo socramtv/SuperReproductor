@@ -216,6 +216,7 @@ class MainActivity : AppCompatActivity() {
         binding.homeVpnButton.setOnClickListener { VpnHelper.open(this) }
         binding.categoryVpnButton.setOnClickListener { VpnHelper.open(this) }
         binding.openAceServeButton.setOnClickListener { openAceServe() }
+        setAceServeColor(false)
         // Tocar el logo de la cabecera vuelve a enseñar la portada.
         binding.headerLogo.setOnClickListener {
             homeDismissed = false
@@ -437,10 +438,31 @@ class MainActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
-                    binding.openAceServeTitle.setTextColor(if (open) 0xFF43A047.toInt() else 0xFFE53935.toInt())
+                    setAceServeColor(open)
                 }
             }
         }.start()
+    }
+
+    /** Fondo rectangular de esquinas suaves con contorno discontinuo del color dado (rojo = cerrado, verde = abierto). */
+    private fun aceServeBackground(color: Int): android.graphics.drawable.Drawable {
+        val d = resources.displayMetrics.density
+        fun shape(fill: Int, width: Float) = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12 * d
+            setColor(fill)
+            setStroke((width * d).toInt(), color, 8 * d, 5 * d)
+        }
+        return android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), shape((color and 0x00FFFFFF) or 0x33000000, 3f))
+            addState(intArrayOf(android.R.attr.state_pressed), shape((color and 0x00FFFFFF) or 0x33000000, 3f))
+            addState(intArrayOf(), shape(0x00000000, 2f))
+        }
+    }
+
+    private fun setAceServeColor(open: Boolean) {
+        val c = if (open) 0xFF43A047.toInt() else 0xFFE53935.toInt()
+        binding.openAceServeTitle.setTextColor(c)
+        binding.openAceServeButton.background = aceServeBackground(c)
     }
 
     /** Abre la app AceServe (org.free.aceserve); si no está instalada, lleva a la tienda. */

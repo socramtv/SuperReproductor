@@ -1896,3 +1896,5 @@ En la página de inicio, el botón «+» abre un menú: añadir favorito, nueva 
 En la lista 2 (Acestream+) aparece, bajo los botones de la lista, un botón ancho «▶ Abrir AceServe», con un texto pequeño debajo explicando que tiene que estar abierto, que lanza la app `org.free.aceserve` (AceServe tiene que estar en marcha antes de reproducir). Si no está instalada, avisa y abre la tienda. En el resto de listas no se ve.
 
 El título se pone en verde cuando AceServe está abierto y en rojo cuando no: cada 3 segundos (solo mientras se ve la lista 2 y la app está en primer plano) se comprueba si responde en el puerto de las direcciones 127.0.0.1 de la lista o, si no hay, en el 6878 habitual de Acestream.
+
+El botón de AceServe es rectangular con esquinas suaves y contorno discontinuo: rojo si AceServe está cerrado y verde si está abierto (el texto cambia igual).
