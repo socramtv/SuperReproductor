@@ -34,6 +34,7 @@
 
     <queries>
         <package android:name="ch.protonvpn.android" />
+        <package android:name="org.free.aceserve" />
         <package android:name="com.cloudflare.onedotonedotonedotone" />
         <package android:name="com.wireguard.android" />
         <package android:name="com.windscribe.vpn" />

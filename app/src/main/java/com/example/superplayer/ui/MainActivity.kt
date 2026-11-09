@@ -213,6 +213,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupHomeInfo() {
         binding.homeVpnButton.setOnClickListener { VpnHelper.open(this) }
         binding.categoryVpnButton.setOnClickListener { VpnHelper.open(this) }
+        binding.openAceServeButton.setOnClickListener { openAceServe() }
         // Tocar el logo de la cabecera vuelve a enseñar la portada.
         binding.headerLogo.setOnClickListener {
             homeDismissed = false
@@ -387,6 +388,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** El botón "Cine 🍿" abre directamente la pantalla de carátulas con las categorías de su lista (sin cambiar la lista que se esté viendo). */
+    /** Abre la app AceServe (org.free.aceserve); si no está instalada, lleva a la tienda. */
+    private fun openAceServe() {
+        val pkg = "org.free.aceserve"
+        val launch = packageManager.getLaunchIntentForPackage(pkg)
+        if (launch != null) {
+            try { startActivity(launch); return } catch (e: Exception) { }
+        }
+        Toast.makeText(this, R.string.aceserve_missing, Toast.LENGTH_LONG).show()
+        for (u in listOf("market://details?id=$pkg", "https://play.google.com/store/apps/details?id=$pkg")) {
+            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))); return } catch (e: Exception) { }
+        }
+    }
+
     private fun openCineFromSlot(slot: Int, url: String) {
         if (PlaylistCache.lastSavedAt(this, slot) == null) {
             Toast.makeText(this, R.string.loading_list, Toast.LENGTH_SHORT).show()
@@ -730,6 +744,7 @@ class MainActivity : AppCompatActivity() {
      * fila entera se oculta.
      */
     private fun updateCategoryFilterButton() {
+        binding.openAceServeButton.visibility = if (currentListKey == "slot_2") View.VISIBLE else View.GONE
         val total = playlist.categories.size
         val multi = total >= 2
         val isRemoteSlot = currentListKey.startsWith("slot_")
