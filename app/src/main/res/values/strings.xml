@@ -121,7 +121,8 @@
     <string name="bk_devices">Teles guardadas y radio-mix</string>
     <string name="bk_none">Marca al menos una casilla</string>
     <string name="bk_all">Todo</string>
-    <string name="aceserve_open">▶ Abrir AceServe primero</string>
+    <string name="aceserve_open">▶ Abrir AceServe</string>
+    <string name="aceserve_hint">Tiene que estar abierto para que funcione esta sección (rojo = cerrado, verde = abierto)</string>
     <string name="aceserve_missing">AceServe no está instalado</string>
     <string name="backup_import_error">No se pudo importar: %1$s</string>
     <string name="category_order_button">Ordenar ↕️</string>

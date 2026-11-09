@@ -1891,6 +1891,8 @@ En «Vídeos de esta página», el botón «⋯ Enviar / descargar» (en la TV, 
 
 En la página de inicio, el botón «+» abre un menú: añadir favorito, nueva carpeta, ordenar A→Z o Z→A. Las carpetas salen primero (icono 📁 naranja) y también en la tira de favoritos; al pulsarlas se abre su contenido. Mantén pulsado un favorito: editar, mover a carpeta, subir, bajar o borrar. Mantén pulsada una carpeta: renombrar o borrar (sus favoritos no se borran). También en el menú ⋮ → «Carpetas y orden de favoritos». Las carpetas entran en la copia de seguridad (sección Navegador).
 
-## Botón «Abrir AceServe primero»
+## Botón «Abrir AceServe» (lista 2)
 
-En la lista 2 (Acestream+) aparece, bajo los botones de la lista, un botón ancho «▶ Abrir AceServe primero» que lanza la app `org.free.aceserve` (AceServe tiene que estar en marcha antes de reproducir). Si no está instalada, avisa y abre la tienda. En el resto de listas no se ve.
+En la lista 2 (Acestream+) aparece, bajo los botones de la lista, un botón ancho «▶ Abrir AceServe», con un texto pequeño debajo explicando que tiene que estar abierto, que lanza la app `org.free.aceserve` (AceServe tiene que estar en marcha antes de reproducir). Si no está instalada, avisa y abre la tienda. En el resto de listas no se ve.
+
+El título se pone en verde cuando AceServe está abierto y en rojo cuando no: cada 3 segundos (solo mientras se ve la lista 2 y la app está en primer plano) se comprueba si responde en el puerto de las direcciones 127.0.0.1 de la lista o, si no hay, en el 6878 habitual de Acestream.

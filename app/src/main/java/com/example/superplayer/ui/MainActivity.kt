@@ -154,6 +154,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        aceChecking = false
+        aceHandler.removeCallbacks(aceTick)
         super.onPause()
         binding.root.removeCallbacks(premiumTick)
         AccessControl.onUnlocked = null
@@ -388,6 +390,59 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** El botón "Cine 🍿" abre directamente la pantalla de carátulas con las categorías de su lista (sin cambiar la lista que se esté viendo). */
+    private val aceHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var aceChecking = false
+    private val aceTick = object : Runnable {
+        override fun run() {
+            if (isFinishing || isDestroyed || currentListKey != "slot_2") { aceChecking = false; return }
+            updateAceServeState()
+            aceHandler.postDelayed(this, 3000)
+        }
+    }
+
+    /** Empieza (o para) a comprobar cada pocos segundos si AceServe está abierto, mientras se ve la lista 2. */
+    private fun syncAceServePolling() {
+        if (currentListKey == "slot_2") {
+            if (!aceChecking) { aceChecking = true; aceHandler.post(aceTick) }
+        } else {
+            aceChecking = false
+            aceHandler.removeCallbacks(aceTick)
+        }
+    }
+
+    /**
+     * AceServe es un motor local: se mira si responde en su puerto (el de las direcciones 127.0.0.1/localhost de la
+     * propia lista, o el 6878 habitual de Acestream). Abierto = título verde; cerrado = rojo.
+     */
+    private fun updateAceServeState() {
+        val ports = LinkedHashSet<Int>()
+        try {
+            for (cat in playlist.categories) for (st in cat.streams) {
+                val u = Uri.parse(st.url)
+                if (u.host == "127.0.0.1" || u.host == "localhost") { if (u.port > 0) ports.add(u.port) }
+                if (ports.size >= 3) break
+                }
+        } catch (e: Exception) { }
+        ports.add(6878)
+        Thread {
+            var open = false
+            for (port in ports) {
+                try {
+                    java.net.Socket().use { sk ->
+                        sk.connect(java.net.InetSocketAddress("127.0.0.1", port), 400)
+                        open = true
+                    }
+                } catch (e: Exception) { }
+                if (open) break
+            }
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    binding.openAceServeTitle.setTextColor(if (open) 0xFF43A047.toInt() else 0xFFE53935.toInt())
+                }
+            }
+        }.start()
+    }
+
     /** Abre la app AceServe (org.free.aceserve); si no está instalada, lleva a la tienda. */
     private fun openAceServe() {
         val pkg = "org.free.aceserve"
@@ -551,6 +606,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        syncAceServePolling()
         // Insignia premium y sincronización de «Continuar viendo» con otros dispositivos del mismo código.
         AccessControl.onUnlocked = {
             updatePremiumBanner()
@@ -745,6 +801,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun updateCategoryFilterButton() {
         binding.openAceServeButton.visibility = if (currentListKey == "slot_2") View.VISIBLE else View.GONE
+        syncAceServePolling()
         val total = playlist.categories.size
         val multi = total >= 2
         val isRemoteSlot = currentListKey.startsWith("slot_")

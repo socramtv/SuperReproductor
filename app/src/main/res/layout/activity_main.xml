@@ -254,11 +254,13 @@
 
     </LinearLayout>
 
-    <!-- Solo en la lista 2 (Acestream+): abre AceServe, que tiene que estar en marcha antes de reproducir. -->
-    <TextView
+    <!-- Solo en la lista 2 (Acestream+): abre AceServe, que tiene que estar en marcha para reproducir.
+         El título se pone rojo si AceServe está cerrado y verde si está abierto (ver MainActivity.updateAceServeState). -->
+    <LinearLayout
         android:id="@+id/openAceServeButton"
         android:layout_width="match_parent"
-        android:layout_height="44dp"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
         android:layout_marginStart="20dp"
         android:layout_marginEnd="12dp"
         android:layout_marginTop="4dp"
@@ -267,11 +269,30 @@
         android:focusable="true"
         android:clickable="true"
         android:gravity="center"
-        android:text="@string/aceserve_open"
-        android:textColor="@color/primary"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
+        android:orientation="vertical"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/openAceServeTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/aceserve_open"
+            android:textColor="#E53935"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/openAceServeHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingHorizontal="12dp"
+            android:text="@string/aceserve_hint"
+            android:textColor="@color/on_surface_muted"
+            android:textSize="11sp" />
+    </LinearLayout>
 
     <FrameLayout
         android:layout_width="match_parent"
