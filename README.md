@@ -1898,3 +1898,7 @@ En la lista 2 (Acestream+) aparece, bajo los botones de la lista, un botón anch
 El título se pone en verde cuando AceServe está abierto y en rojo cuando no: cada 3 segundos (solo mientras se ve la lista 2 y la app está en primer plano) se comprueba si responde en el puerto de las direcciones 127.0.0.1 de la lista o, si no hay, en el 6878 habitual de Acestream.
 
 El botón de AceServe es rectangular con esquinas suaves y contorno discontinuo: rojo si AceServe está cerrado y verde si está abierto (el texto cambia igual).
+
+## Bloqueador de anuncios mejorado (web)
+
+Además de la lista de dominios (ampliada con los de DaddyLive: scatteramarth, vpbugplg, terciohagrid, smockeddesmoid, adscore…), ahora se bloquean por patrón las peticiones a otro sitio cuyo dominio parece de publicidad (ads, pop, banner, track…) o cuya ruta es de anuncios (/pagead/, /popunder, /sbx/…, /mtn/…, /cuid/…); nunca se bloquean los vídeos (m3u8, mpd, ts, mp4…). Y en ⋮ → Peticiones hay un botón «Bloquear dominios…» con casillas para añadir tú los dominios de terceros que veas; se guardan y recargan la página.

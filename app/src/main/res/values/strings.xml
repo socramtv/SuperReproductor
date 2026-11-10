@@ -121,6 +121,11 @@
     <string name="bk_devices">Teles guardadas y radio-mix</string>
     <string name="bk_none">Marca al menos una casilla</string>
     <string name="bk_all">Todo</string>
+    <string name="web_block_hosts_btn">Bloquear dominios…</string>
+    <string name="web_block_hosts_title">Marca los dominios que son anuncios</string>
+    <string name="web_block_hosts_ok">Bloquear</string>
+    <string name="web_block_hosts_none">No hay dominios de terceros nuevos en las peticiones: abre la página y vuelve a probar</string>
+    <string name="web_block_hosts_done">%1$d dominio(s) bloqueado(s); recargando</string>
     <string name="aceserve_open">▶ Abrir AceServe</string>
     <string name="aceserve_hint">Tiene que estar abierto para que funcione esta sección (rojo = cerrado, verde = abierto)</string>
     <string name="aceserve_missing">AceServe no está instalado</string>

@@ -235,7 +235,7 @@ class WebActivity : AppCompatActivity() {
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url.toString()
-                if (adBlockOn() && !request.isForMainFrame && isAdHost(request.url.host)) {
+                if (adBlockOn() && !request.isForMainFrame && (isAdHost(request.url.host) || looksLikeAd(request.url, t.page))) {
                     t.blocked++
                     return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                 }
@@ -524,7 +524,38 @@ class WebActivity : AppCompatActivity() {
             .setTitle(R.string.web_requests_menu)
             .setView(android.widget.ScrollView(this).apply { addView(tv) })
             .setPositiveButton(R.string.web_requests_copy) { _, _ -> copyText(text, R.string.web_requests_copied) }
+            .setNeutralButton(R.string.web_block_hosts_btn) { _, _ -> blockHostsDialog() }
             .setNegativeButton(R.string.channel_check_close, null)
+            .show()
+    }
+
+    /** Lista los dominios de terceros que ha pedido la página (los que se ven en «Peticiones») para bloquear los que sobran. */
+    private fun blockHostsDialog() {
+        val page = curTab.page
+        val cur = try { Uri.parse(page).host } catch (e: Exception) { null }
+        val seen = LinkedHashSet<String>()
+        val lines = synchronized(curTab.requests) { curTab.requests.toList() } + synchronized(curTab.resp) { curTab.resp.toList() }
+        for (l in lines) for (m in Regex("https?://([^/\\s:?#]+)").findAll(l.toString())) {
+            val h = m.groupValues[1].lowercase()
+            if (cur != null && siteOf(cur) == siteOf(h)) continue
+            if (isAdHost(h)) continue
+            seen.add(h)
+        }
+        if (seen.isEmpty()) { Toast.makeText(this, R.string.web_block_hosts_none, Toast.LENGTH_LONG).show(); return }
+        val hosts = seen.toList()
+        val checked = BooleanArray(hosts.size)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_block_hosts_title)
+            .setMultiChoiceItems(hosts.toTypedArray(), checked) { _, i, on -> checked[i] = on }
+            .setPositiveButton(R.string.web_block_hosts_ok) { _, _ ->
+                val sel = hosts.filterIndexed { i, _ -> checked[i] }
+                if (sel.isNotEmpty()) {
+                    addCustomHosts(sel)
+                    Toast.makeText(this, getString(R.string.web_block_hosts_done, sel.size), Toast.LENGTH_LONG).show()
+                    curTab.view.reload()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
@@ -532,11 +563,38 @@ class WebActivity : AppCompatActivity() {
 
     private fun adBlockOn() = prefs().getBoolean("adblock", true)
 
+    private var customAdHosts: Set<String>? = null
+
+    private fun customHosts(): Set<String> =
+        customAdHosts ?: (prefs().getStringSet("custom_ad_hosts", emptySet()) ?: emptySet()).toSet().also { customAdHosts = it }
+
+    private fun addCustomHosts(hosts: Collection<String>) {
+        val all = HashSet(customHosts()); all.addAll(hosts)
+        prefs().edit().putStringSet("custom_ad_hosts", all).apply()
+        customAdHosts = all
+    }
+
+    /**
+     * Los anuncios cambian de dominio a cada rato, así que además de la lista se miran los patrones típicos:
+     * una petición a OTRO sitio (de tercero) cuyo anfitrión parece de publicidad/rastreo (ads, pop, banner, track…)
+     * o cuya ruta es la de un script de anuncios (/pagead/, /popunder, /prebid, /sbx/x/123, /mtn/123/, /cuid/…).
+     * Nunca se bloquea un vídeo (m3u8, mpd, ts, mp4…).
+     */
+    private fun looksLikeAd(u: Uri, page: String): Boolean {
+        val host = u.host?.lowercase() ?: return false
+        val pageHost = try { Uri.parse(page).host } catch (e: Exception) { null }
+        if (pageHost == null || siteOf(pageHost) == siteOf(host)) return false
+        val path = (u.encodedPath ?: "").lowercase()
+        if (MEDIA_PATH_RE.containsMatchIn(path)) return false
+        return AD_HOST_RE.containsMatchIn(host) || AD_PATH_RE.containsMatchIn(path)
+    }
+
     /** El anfitrión es (o cuelga de) uno de los dominios de anuncios/rastreo conocidos. */
     private fun isAdHost(host: String?): Boolean {
         var h = host?.lowercase() ?: return false
+        val custom = customHosts()
         while (true) {
-            if (h in AD_HOSTS) return true
+            if (h in AD_HOSTS || h in custom) return true
             val dot = h.indexOf('.')
             if (dot < 0 || h.indexOf('.', dot + 1) < 0) return false
             h = h.substring(dot + 1)
@@ -1861,6 +1919,9 @@ class WebActivity : AppCompatActivity() {
             "s.textContent='ins.adsbygoogle,.adsbygoogle,iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=adservice]," +
             "div[id^=google_ads],div[id^=taboola],div[id^=outbrain],[class*=popunder]{display:none!important}';" +
             "(document.head||document.documentElement).appendChild(s);})();"
+        private val MEDIA_PATH_RE = Regex("\\.(m3u8|mpd|ts|m4s|mp4|mkv|webm|aac|mp3)$")
+        private val AD_HOST_RE = Regex("(^|[.-])(ads?|adserv\\w*|adsrv|adtrack\\w*|popads?|pops?|popunder|banners?|trk|tracker|track|metrics|telemetry)\\d*([.-]|$)|adscore|adsystem|adnetwork|clickid|doubleclick")
+        private val AD_PATH_RE = Regex("/(pagead|popunder|popads?|prebid|adserve\\w*|ad-?manager|adsbygoogle|sbx/[a-z]/\\d+|mtn/\\d+/|cuid/)")
         private val STATIC_RE = Regex("\\.(png|jpe?g|gif|webp|svg|ico|css|woff2?|ttf|otf|js|json|html?|map|pdf|zip|apk)$")
         private val AD_HOSTS = hashSetOf(
             "doubleclick.net", "googlesyndication.com", "googleadservices.com", "adservice.google.com", "pagead2.googlesyndication.com",
@@ -1874,7 +1935,9 @@ class WebActivity : AppCompatActivity() {
             "adtng.com", "adxpansion.com", "cpmstar.com", "adcash.com", "adsco.re", "profitablegatecpm.com", "highperformanceformat.com",
             "mc.yandex.ru", "ads.yahoo.com", "advertising.com", "casalemedia.com", "contextweb.com", "sharethrough.com", "teads.tv",
             "smaato.net", "inmobi.com", "mopub.com", "applovin.com", "unityads.unity3d.com", "ads.twitter.com", "static.ads-twitter.com",
-            "facebook.net", "connect.facebook.net", "hotjar.com", "mouseflow.com", "bat.bing.com", "ads.linkedin.com"
+            "facebook.net", "connect.facebook.net", "hotjar.com", "mouseflow.com", "bat.bing.com", "ads.linkedin.com",
+            "scatteramarth.com", "vpbugplg.com", "smockeddesmoid.qpon", "terciohagrid.click", "adscore.com", "adsco.re",
+            "clickaine.com", "histats.com", "pushwhy.com", "acscdn.com", "magsrv.com", "tzegilo.com", "bvtpk.com", "ofphmsg.com"
         )
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
