@@ -1669,14 +1669,15 @@ class WebActivity : AppCompatActivity() {
 
     // ---- Menú ----
 
-    private class MenuRow(val label: String, val header: Boolean = false, val action: (() -> Unit)? = null)
+    private class MenuRow(val label: String, val header: Boolean = false, val section: Int = 0, val action: (() -> Unit)? = null)
 
     /** Menú del navegador agrupado por apartados (cabeceras no pulsables). */
     private fun showMenu(anchor: View) {
         fun check(on: Boolean, text: String) = (if (on) "☑ " else "☐ ") + text
-        val rows = ArrayList<MenuRow>()
-        fun head(r: Int) = rows.add(MenuRow(getString(r), header = true))
-        fun item(label: String, action: () -> Unit) = rows.add(MenuRow(label, action = action))
+        val all = ArrayList<MenuRow>()
+        var sec = -1
+        fun head(r: Int) { sec++; all.add(MenuRow(getString(r), header = true, section = sec)) }
+        fun item(label: String, action: () -> Unit) { all.add(MenuRow(label, section = sec, action = action)) }
 
         head(R.string.web_sec_favs)
         item(getString(R.string.web_bookmarks)) { showBookmarks() }
@@ -1727,33 +1728,55 @@ class WebActivity : AppCompatActivity() {
                 .show()
         }
 
+        // Apartados plegados: se abre uno al pulsar su cabecera (y se cierra el que estuviera abierto) para que el menú ocupe poco.
+        var open = -1
+        val rows = ArrayList<MenuRow>()
+        fun rebuild() {
+            rows.clear()
+            for (r in all) if (r.header || r.section == open) rows.add(r)
+        }
+        rebuild()
         val d = resources.displayMetrics.density
-        val adapter = object : android.widget.ArrayAdapter<MenuRow>(this, 0, rows) {
-            override fun areAllItemsEnabled() = false
-            override fun isEnabled(position: Int) = !rows[position].header
+        lateinit var adapter: android.widget.ArrayAdapter<MenuRow>
+        adapter = object : android.widget.ArrayAdapter<MenuRow>(this, 0, rows) {
             override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
                 val r = rows[position]
                 return android.widget.TextView(context).apply {
-                    text = r.label
                     if (r.header) {
-                        textSize = 12f
+                        text = (if (r.section == open) "▾  " else "▸  ") + r.label
+                        textSize = 15f
                         setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.primary))
                         typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
-                        setPadding((20 * d).toInt(), (14 * d).toInt(), (20 * d).toInt(), (4 * d).toInt())
+                        setPadding((20 * d).toInt(), (13 * d).toInt(), (20 * d).toInt(), (13 * d).toInt())
                     } else {
+                        text = r.label
                         textSize = 16f
                         setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.on_background))
-                        setPadding((28 * d).toInt(), (11 * d).toInt(), (20 * d).toInt(), (11 * d).toInt())
+                        setPadding((36 * d).toInt(), (10 * d).toInt(), (20 * d).toInt(), (10 * d).toInt())
                         maxLines = 2
                     }
                 }
             }
         }
-        AlertDialog.Builder(this)
+        val dlg = AlertDialog.Builder(this)
             .setTitle(R.string.web_menu_title)
-            .setAdapter(adapter) { _, w -> rows[w].action?.invoke() }
+            .setAdapter(adapter, null)
             .setNegativeButton(R.string.channel_check_close, null)
-            .show()
+            .create()
+        dlg.show()
+        dlg.listView.setOnItemClickListener { _, _, pos, _ ->
+            val r = rows[pos]
+            if (r.header) {
+                open = if (open == r.section) -1 else r.section
+                rebuild()
+                adapter.notifyDataSetChanged()
+                // la cabecera pulsada queda a la vista
+                dlg.listView.post { dlg.listView.setSelection(rows.indexOfFirst { it.header && it.section == r.section }) }
+            } else {
+                dlg.dismiss()
+                r.action?.invoke()
+            }
+        }
     }
 
     // -----------------------------------------------------------------

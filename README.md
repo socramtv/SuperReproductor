@@ -1905,4 +1905,4 @@ Además de la lista de dominios (ampliada con los de DaddyLive: scatteramarth, v
 
 ## Menú de la web por apartados y dominios bloqueados
 
-El menú ⋮ del navegador ahora está agrupado: ⭐ Favoritos e historial · 🌐 Navegación · 🎬 Vídeos · 🛡 Anuncios · ⚙ Ajustes. En Anuncios hay «🚫 Dominios bloqueados»: lista lo que has bloqueado tú (🚫) y lo que se ha bloqueado en la página actual (⚙), todo marcado; desmarca y «Guardar» para desbloquear (queda permitido aunque lo bloquee la lista o un patrón), o «Añadir…» para escribir un dominio. Todo entra en la copia de seguridad (sección Navegador).
+El menú ⋮ del navegador ahora está agrupado en apartados plegables (se abre uno al pulsar su cabecera): ⭐ Favoritos e historial · 🌐 Navegación · 🎬 Vídeos · 🛡 Anuncios · ⚙ Ajustes. En Anuncios hay «🚫 Dominios bloqueados»: lista lo que has bloqueado tú (🚫) y lo que se ha bloqueado en la página actual (⚙), todo marcado; desmarca y «Guardar» para desbloquear (queda permitido aunque lo bloquee la lista o un patrón), o «Añadir…» para escribir un dominio. Todo entra en la copia de seguridad (sección Navegador).
