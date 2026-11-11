@@ -28,6 +28,9 @@ internal object BackupExtras {
         }
         o.put("webSettings", ws)
         o.put("webHistory", arr(web, "history"))
+        o.put("webBlocked", JSONObject()
+            .put("custom", JSONArray((web.getStringSet("custom_ad_hosts", emptySet()) ?: emptySet()).toList()))
+            .put("allowed", JSONArray((web.getStringSet("allow_ad_hosts", emptySet()) ?: emptySet()).toList())))
         o.put("webFolders", JSONObject()
             .put("list", arr(web, "bm_folder_list"))
             .put("map", try { JSONObject(web.getString("bm_folders", "{}")) } catch (e: Exception) { JSONObject() }))
@@ -101,6 +104,18 @@ internal object BackupExtras {
             val map = try { JSONObject(p.getString("bm_folders", "{}")) } catch (e: Exception) { JSONObject() }
             wf.optJSONObject("map")?.let { m -> for (k in m.keys()) if (!map.has(k)) map.put(k, m.optString(k)) }
             p.edit().putString("bm_folder_list", JSONArray(names).toString()).putString("bm_folders", map.toString()).apply()
+        }
+
+        o.optJSONObject("webBlocked")?.let { wb ->
+            val p = sp(c, "web_browser")
+            val e = p.edit()
+            for ((json, key) in listOf("custom" to "custom_ad_hosts", "allowed" to "allow_ad_hosts")) {
+                val cur = HashSet(p.getStringSet(key, emptySet()) ?: emptySet())
+                val before = cur.size
+                wb.optJSONArray(json)?.let { a -> for (i in 0 until a.length()) a.optString(i).takeIf { it.isNotEmpty() }?.let { cur.add(it) } }
+                if (cur.size > before) { e.putStringSet(key, cur); added += cur.size - before }
+            }
+            e.apply()
         }
 
         // Vistos de Telegram

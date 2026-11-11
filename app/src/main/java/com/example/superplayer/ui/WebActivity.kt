@@ -61,6 +61,8 @@ class WebActivity : AppCompatActivity() {
         var popup = false
         @Volatile var blocked = 0
         /** Últimas peticiones de la página (sin imágenes/estilos/fuentes ni anuncios), para el diagnóstico. */
+        /** Dominios bloqueados en esta pestaña (por lista, patrón o a mano), para poder permitirlos desde «Dominios bloqueados». */
+        val blockedHosts: MutableSet<String> = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
         val requests: MutableList<String> = java.util.Collections.synchronizedList(ArrayList<String>())
         @Volatile var lastTouch = 0L
         /** Cuerpos de respuestas de APIs de stream (diagnóstico), aparte para que el ruido no los desplace. */
@@ -237,6 +239,7 @@ class WebActivity : AppCompatActivity() {
                 val url = request.url.toString()
                 if (adBlockOn() && !request.isForMainFrame && (isAdHost(request.url.host) || looksLikeAd(request.url, t.page))) {
                     t.blocked++
+                    request.url.host?.lowercase()?.let { if (t.blockedHosts.size < 200) t.blockedHosts.add(it) }
                     return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                 }
                 if (!request.isForMainFrame && t.hostRef.size < 100) {
@@ -529,6 +532,83 @@ class WebActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * «Dominios bloqueados»: los que has bloqueado tú a mano más los que se han bloqueado en esta página.
+     * Marcado = bloqueado. Si lo desmarcas y guardas, se desbloquea (y se permite aunque lo bloquee la lista o un patrón).
+     * «Añadir…» permite escribir un dominio a mano.
+     */
+    private fun showBlockedDomains(extra: List<String> = emptyList()) {
+        val custom = customHosts()
+        val rows = LinkedHashSet<String>()
+        rows.addAll(custom.sorted())
+        rows.addAll(extra)
+        synchronized(curTab.blockedHosts) { rows.addAll(curTab.blockedHosts.filter { !isAllowedHost(it) }) }
+        val hosts = rows.toList()
+        if (hosts.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.web_blocked_title)
+                .setMessage(R.string.web_blocked_none)
+                .setPositiveButton(R.string.web_blocked_add) { _, _ -> addBlockedDomainDialog(emptyList()) }
+                .setNegativeButton(R.string.channel_check_close, null)
+                .show()
+            return
+        }
+        val labels = hosts.map { h ->
+            when {
+                h in custom -> "🚫 $h"
+                else -> "⚙ $h"
+            }
+        }.toTypedArray()
+        val checked = BooleanArray(hosts.size) { true }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_blocked_title)
+            .setMultiChoiceItems(labels, checked) { _, i, on -> checked[i] = on }
+            .setPositiveButton(R.string.web_blocked_save) { _, _ ->
+                val newCustom = HashSet(custom)
+                val newAllow = HashSet(allowedHosts())
+                for (i in hosts.indices) {
+                    val h = hosts[i]
+                    if (!checked[i]) {
+                        newCustom.remove(h)
+                        newAllow.add(h)
+                    }
+                }
+                saveBlockLists(newCustom, newAllow)
+                curTab.blockedHosts.removeAll(hosts.filterIndexed { i, _ -> !checked[i] }.toSet())
+                Toast.makeText(this, R.string.web_blocked_saved, Toast.LENGTH_SHORT).show()
+                curTab.view.reload()
+            }
+            .setNeutralButton(R.string.web_blocked_add) { _, _ -> addBlockedDomainDialog(hosts) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun addBlockedDomainDialog(keep: List<String>) {
+        val et = android.widget.EditText(this).apply {
+            hint = getString(R.string.web_blocked_add_hint)
+            setSingleLine()
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        }
+        val box = android.widget.FrameLayout(this).apply {
+            val m = (20 * resources.displayMetrics.density).toInt()
+            setPadding(m, m / 2, m, 0); addView(et)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_blocked_add)
+            .setView(box)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val raw = et.text.toString().trim().lowercase()
+                val h = (try { Uri.parse(if (raw.contains("://")) raw else "http://$raw").host } catch (e: Exception) { null }) ?: ""
+                if (h.contains('.')) {
+                    addCustomHosts(listOf(h))
+                    Toast.makeText(this, getString(R.string.web_block_hosts_done, 1), Toast.LENGTH_SHORT).show()
+                    curTab.view.reload()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     /** Lista los dominios de terceros que ha pedido la página (los que se ven en «Peticiones») para bloquear los que sobran. */
     private fun blockHostsDialog() {
         val page = curTab.page
@@ -568,10 +648,34 @@ class WebActivity : AppCompatActivity() {
     private fun customHosts(): Set<String> =
         customAdHosts ?: (prefs().getStringSet("custom_ad_hosts", emptySet()) ?: emptySet()).toSet().also { customAdHosts = it }
 
+    private var allowedAdHosts: Set<String>? = null
+
+    private fun allowedHosts(): Set<String> =
+        allowedAdHosts ?: (prefs().getStringSet("allow_ad_hosts", emptySet()) ?: emptySet()).toSet().also { allowedAdHosts = it }
+
+    /** El anfitrión (o uno de sus dominios padre) está en la lista de permitidos por el usuario. */
+    private fun isAllowedHost(host: String): Boolean {
+        val allow = allowedHosts()
+        if (allow.isEmpty()) return false
+        var h = host.lowercase()
+        while (true) {
+            if (h in allow) return true
+            val dot = h.indexOf('.')
+            if (dot < 0) return false
+            h = h.substring(dot + 1)
+        }
+    }
+
+    private fun saveBlockLists(custom: Set<String>, allowed: Set<String>) {
+        prefs().edit().putStringSet("custom_ad_hosts", custom).putStringSet("allow_ad_hosts", allowed).apply()
+        customAdHosts = custom
+        allowedAdHosts = allowed
+    }
+
     private fun addCustomHosts(hosts: Collection<String>) {
         val all = HashSet(customHosts()); all.addAll(hosts)
-        prefs().edit().putStringSet("custom_ad_hosts", all).apply()
-        customAdHosts = all
+        val allow = HashSet(allowedHosts()); allow.removeAll(hosts.toSet())
+        saveBlockLists(all, allow)
     }
 
     /**
@@ -582,6 +686,7 @@ class WebActivity : AppCompatActivity() {
      */
     private fun looksLikeAd(u: Uri, page: String): Boolean {
         val host = u.host?.lowercase() ?: return false
+        if (isAllowedHost(host)) return false
         val pageHost = try { Uri.parse(page).host } catch (e: Exception) { null }
         if (pageHost == null || siteOf(pageHost) == siteOf(host)) return false
         val path = (u.encodedPath ?: "").lowercase()
@@ -592,6 +697,7 @@ class WebActivity : AppCompatActivity() {
     /** El anfitrión es (o cuelga de) uno de los dominios de anuncios/rastreo conocidos. */
     private fun isAdHost(host: String?): Boolean {
         var h = host?.lowercase() ?: return false
+        if (isAllowedHost(h) && h !in customHosts()) return false
         val custom = customHosts()
         while (true) {
             if (h in AD_HOSTS || h in custom) return true
@@ -1563,66 +1669,91 @@ class WebActivity : AppCompatActivity() {
 
     // ---- Menú ----
 
+    private class MenuRow(val label: String, val header: Boolean = false, val action: (() -> Unit)? = null)
+
+    /** Menú del navegador agrupado por apartados (cabeceras no pulsables). */
     private fun showMenu(anchor: View) {
-        val menu = PopupMenu(this, anchor)
-        menu.menu.add(0, 1, 0, R.string.web_bookmarks)
-        menu.menu.add(0, 2, 1, R.string.web_add_bookmark)
-        menu.menu.add(0, 16, 1, R.string.web_organize_favs)
-        menu.menu.add(0, 11, 1, R.string.web_history)
-        menu.menu.add(0, 12, 1, R.string.web_new_tab)
-        menu.menu.add(0, 13, 2, getString(R.string.web_alert_menu, alertModeLabel()))
-        menu.menu.add(0, 15, 9, R.string.web_requests_menu)
-        menu.menu.add(0, 14, 2, getString(if (adBlockOn()) R.string.web_adblock_on else R.string.web_adblock_off, curTab.blocked))
-        menu.menu.add(0, 3, 2, getString(R.string.web_videos_menu, detected.size))
-        menu.menu.add(0, 4, 3, R.string.web_desktop).apply { isCheckable = true; isChecked = desktop }
-        menu.menu.add(0, 10, 4, getString(R.string.web_agent_menu, agentLabel()))
-        menu.menu.add(0, 5, 4, R.string.web_home)
-        menu.menu.add(0, 6, 5, R.string.web_open_external)
-        menu.menu.add(0, 8, 6, R.string.web_home_set)
-        if (isTv) menu.menu.add(0, 9, 8, R.string.web_cursor_opt).apply { isCheckable = true; isChecked = cursorEnabled() }
-        menu.menu.add(0, 7, 9, R.string.web_clear)
-        menu.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                1 -> showBookmarks()
-                2 -> addBookmark()
-                3 -> showDetectedVideos()
-                11 -> showHistory()
-                16 -> favAddMenu()
-                12 -> newTab(null)
-                13 -> chooseAlertMode()
-                15 -> showRequests()
-                14 -> {
-                    prefs().edit().putBoolean("adblock", !adBlockOn()).apply()
-                    Toast.makeText(this, if (adBlockOn()) R.string.web_adblock_enabled else R.string.web_adblock_disabled, Toast.LENGTH_SHORT).show()
-                    webView.reload()
-                }
-                4 -> {
-                    setAgent(if (desktop) "" else "desktop", "")
-                    webView.reload()
-                    hideHome()
-                }
-                10 -> chooseAgent()
-                5 -> goHome()
-                8 -> chooseHomePage()
-                9 -> {
-                    prefs().edit().putBoolean("cursor", !cursorEnabled()).apply()
-                    if (cursorEnabled()) showCursor() else cursorView?.visibility = View.GONE
-                }
-                6 -> (if (homeVisible()) null else webView.url)?.let { openUri(it) }
-                7 -> AlertDialog.Builder(this)
-                    .setMessage(R.string.web_clear_confirm)
-                    .setPositiveButton(android.R.string.ok) { _, _ ->
-                        for (t in tabs) { t.view.clearCache(true); t.view.clearHistory() }
-                        CookieManager.getInstance().removeAllCookies(null)
-                        WebStorage.getInstance().deleteAllData()
-                        Toast.makeText(this, R.string.web_cleared, Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
-            }
-            true
+        fun check(on: Boolean, text: String) = (if (on) "☑ " else "☐ ") + text
+        val rows = ArrayList<MenuRow>()
+        fun head(r: Int) = rows.add(MenuRow(getString(r), header = true))
+        fun item(label: String, action: () -> Unit) = rows.add(MenuRow(label, action = action))
+
+        head(R.string.web_sec_favs)
+        item(getString(R.string.web_bookmarks)) { showBookmarks() }
+        item(getString(R.string.web_add_bookmark)) { addBookmark() }
+        item(getString(R.string.web_organize_favs)) { favAddMenu() }
+        item(getString(R.string.web_history)) { showHistory() }
+
+        head(R.string.web_sec_nav)
+        item(getString(R.string.web_new_tab)) { newTab(null) }
+        item(getString(R.string.web_home)) { goHome() }
+        item(getString(R.string.web_home_set)) { chooseHomePage() }
+        item(getString(R.string.web_open_external)) { (if (homeVisible()) null else webView.url)?.let { openUri(it) } }
+
+        head(R.string.web_sec_video)
+        item(getString(R.string.web_videos_menu, detected.size)) { showDetectedVideos() }
+        item(getString(R.string.web_alert_menu, alertModeLabel())) { chooseAlertMode() }
+
+        head(R.string.web_sec_ads)
+        item(getString(if (adBlockOn()) R.string.web_adblock_on else R.string.web_adblock_off, curTab.blocked)) {
+            prefs().edit().putBoolean("adblock", !adBlockOn()).apply()
+            Toast.makeText(this, if (adBlockOn()) R.string.web_adblock_enabled else R.string.web_adblock_disabled, Toast.LENGTH_SHORT).show()
+            webView.reload()
         }
-        menu.show()
+        item(getString(R.string.web_blocked_menu, customHosts().size)) { showBlockedDomains() }
+        item(getString(R.string.web_requests_menu)) { showRequests() }
+
+        head(R.string.web_sec_settings)
+        item(check(desktop, getString(R.string.web_desktop))) {
+            setAgent(if (desktop) "" else "desktop", "")
+            webView.reload()
+            hideHome()
+        }
+        item(getString(R.string.web_agent_menu, agentLabel())) { chooseAgent() }
+        if (isTv) item(check(cursorEnabled(), getString(R.string.web_cursor_opt))) {
+            prefs().edit().putBoolean("cursor", !cursorEnabled()).apply()
+            if (cursorEnabled()) showCursor() else cursorView?.visibility = View.GONE
+        }
+        item(getString(R.string.web_clear)) {
+            AlertDialog.Builder(this)
+                .setMessage(R.string.web_clear_confirm)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    for (t in tabs) { t.view.clearCache(true); t.view.clearHistory() }
+                    CookieManager.getInstance().removeAllCookies(null)
+                    WebStorage.getInstance().deleteAllData()
+                    Toast.makeText(this, R.string.web_cleared, Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+
+        val d = resources.displayMetrics.density
+        val adapter = object : android.widget.ArrayAdapter<MenuRow>(this, 0, rows) {
+            override fun areAllItemsEnabled() = false
+            override fun isEnabled(position: Int) = !rows[position].header
+            override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
+                val r = rows[position]
+                return android.widget.TextView(context).apply {
+                    text = r.label
+                    if (r.header) {
+                        textSize = 12f
+                        setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.primary))
+                        typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                        setPadding((20 * d).toInt(), (14 * d).toInt(), (20 * d).toInt(), (4 * d).toInt())
+                    } else {
+                        textSize = 16f
+                        setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.on_background))
+                        setPadding((28 * d).toInt(), (11 * d).toInt(), (20 * d).toInt(), (11 * d).toInt())
+                        maxLines = 2
+                    }
+                }
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_menu_title)
+            .setAdapter(adapter) { _, w -> rows[w].action?.invoke() }
+            .setNegativeButton(R.string.channel_check_close, null)
+            .show()
     }
 
     // -----------------------------------------------------------------

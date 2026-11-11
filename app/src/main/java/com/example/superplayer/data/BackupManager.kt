@@ -33,7 +33,7 @@ object BackupManager {
         CONTINUE(com.example.superplayer.R.string.bk_continue, listOf("continueWatching")),
         ALERTS(com.example.superplayer.R.string.bk_alerts, listOf("reminders", "programAlerts", "goalAlerts")),
         TELEGRAM(com.example.superplayer.R.string.bk_telegram, listOf("telegram"), listOf("tgWatched", "tgResume", "tgIntros", "tgLibrary", "tgManual")),
-        WEB(com.example.superplayer.R.string.bk_web, listOf("webBookmarks"), listOf("webSettings", "webHistory", "webFolders")),
+        WEB(com.example.superplayer.R.string.bk_web, listOf("webBookmarks"), listOf("webSettings", "webHistory", "webFolders", "webBlocked")),
         SETTINGS(com.example.superplayer.R.string.bk_settings, listOf("darkMode", "backgroundAudio", "videoFormat", "timeShiftMinutes")),
         DEVICES(com.example.superplayer.R.string.bk_devices, emptyList(), listOf("radioDelay", "tvDevices"))
     }

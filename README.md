@@ -1902,3 +1902,7 @@ El botón de AceServe es rectangular con esquinas suaves y contorno discontinuo:
 ## Bloqueador de anuncios mejorado (web)
 
 Además de la lista de dominios (ampliada con los de DaddyLive: scatteramarth, vpbugplg, terciohagrid, smockeddesmoid, adscore…), ahora se bloquean por patrón las peticiones a otro sitio cuyo dominio parece de publicidad (ads, pop, banner, track…) o cuya ruta es de anuncios (/pagead/, /popunder, /sbx/…, /mtn/…, /cuid/…); nunca se bloquean los vídeos (m3u8, mpd, ts, mp4…). Y en ⋮ → Peticiones hay un botón «Bloquear dominios…» con casillas para añadir tú los dominios de terceros que veas; se guardan y recargan la página.
+
+## Menú de la web por apartados y dominios bloqueados
+
+El menú ⋮ del navegador ahora está agrupado: ⭐ Favoritos e historial · 🌐 Navegación · 🎬 Vídeos · 🛡 Anuncios · ⚙ Ajustes. En Anuncios hay «🚫 Dominios bloqueados»: lista lo que has bloqueado tú (🚫) y lo que se ha bloqueado en la página actual (⚙), todo marcado; desmarca y «Guardar» para desbloquear (queda permitido aunque lo bloquee la lista o un patrón), o «Añadir…» para escribir un dominio. Todo entra en la copia de seguridad (sección Navegador).
