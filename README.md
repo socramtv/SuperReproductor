@@ -1909,7 +1909,7 @@ El menú ⋮ del navegador ahora está agrupado en apartados plegables (se abre 
 
 ## El reproductor principal abre enlaces de páginas (.php / .html)
 
-Si un canal es una página con reproductor (p. ej. `https://streamxhd.sbs/live1.php?stream=espndeportes`), el reproductor la abre antes de empezar, busca dentro (y en sus iframes, hasta 2 niveles) la dirección real `.m3u8`/`.mpd` —también escapada o en base64— y la reproduce con el Referer del sitio y un User-Agent de móvil. Si la página solo da el vídeo mediante JavaScript y no se ve la dirección, abre la página en el navegador de la app, donde «Vídeos de esta página» lo detecta. Código en `player/PageStreamResolver.kt`.
+Si un canal es una página con reproductor (p. ej. `https://streamxhd.sbs/live1.php?stream=espndeportes`), el reproductor la abre antes de empezar, busca dentro (y en sus iframes, hasta 2 niveles) la dirección real `.m3u8`/`.mpd` —también escapada o en base64— y la reproduce con el Referer del sitio y un User-Agent de móvil. Si la página solo da el vídeo mediante JavaScript y no se ve la dirección, la carga en un navegador invisible dentro del propio reproductor (`player/HiddenWebResolver.kt`): «pulsa» el play y espera hasta 22 s a que la página pida un .m3u8/.mpd; esa petición, con su Referer y User-Agent, es la que se reproduce. Nunca abre el navegador de la app. Código en `player/PageStreamResolver.kt`.
 
 ## Plantilla de lista (formato .w3u / JSON)
 

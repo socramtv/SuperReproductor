@@ -13,7 +13,7 @@ import java.net.URL
  * (.m3u8 / .mpd, también escapada, en base64 o con \/ ) y se reproduce esa, con el Referer y el User-Agent de la página.
  */
 object PageStreamResolver {
-    private const val UA =
+    const val UA =
         "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
     private val PAGE_EXT = listOf(".php", ".html", ".htm", ".asp", ".aspx", ".jsp", ".shtml")
     private val MEDIA_URL = Regex("""https?://[^\s"'<>\\()\[\]{}]+?\.(?:m3u8|mpd)(?:\?[^\s"'<>\\()\[\]{}]*)?""", RegexOption.IGNORE_CASE)
@@ -31,7 +31,7 @@ object PageStreamResolver {
         return PAGE_EXT.any { path.endsWith(it) }
     }
 
-    class Result(val url: String, val referer: String)
+    class Result(val url: String, val referer: String, val ua: String? = null)
 
     private fun header(h: Map<String, String>, name: String): String? =
         h.entries.firstOrNull { it.key.equals(name, true) }?.value?.takeIf { it.isNotBlank() }
@@ -46,7 +46,7 @@ object PageStreamResolver {
         val body = fetch(pageUrl, referer, ua) ?: return null
         val text = normalize(body)
         val found = candidates(text, pageUrl)
-        if (found.isNotEmpty()) return Result(found.first(), origin(pageUrl))
+        if (found.isNotEmpty()) return Result(found.first(), origin(pageUrl), ua)
         for (m in IFRAME.findAll(text)) {
             val child = absolute(pageUrl, m.groupValues[1]) ?: continue
             if (!child.startsWith("http")) continue
@@ -116,7 +116,7 @@ object PageStreamResolver {
             // Referer/User-Agent que puso el autor de la lista, si los hay; si no, los de la página donde se encontró el vídeo.
             headers = mapOf(
                 "Referer" to (header(orig.headers, "Referer") ?: r.referer),
-                "User-Agent" to (header(orig.headers, "User-Agent") ?: UA)
+                "User-Agent" to (header(orig.headers, "User-Agent") ?: r.ua ?: UA)
             )
         )
     }
