@@ -1821,6 +1821,26 @@ class PlayerActivity : AppCompatActivity() {
     // -----------------------------------------------------------------
 
     private fun resolveAndPlay(stream: Stream) {
+        // Si la «dirección» es una página web con un reproductor dentro, se busca el vídeo real en ella.
+        if (PageStreamResolver.needsResolve(stream)) {
+            Toast.makeText(this, R.string.page_resolving, Toast.LENGTH_SHORT).show()
+            Thread {
+                val res = try { PageStreamResolver.resolve(stream.url, stream.headers) } catch (e: Exception) { null }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || currentStream?.id != stream.id) return@runOnUiThread
+                    if (res != null) {
+                        resolveAndPlay(PageStreamResolver.toStream(stream, res).copy(tokenUrl = stream.tokenUrl))
+                    } else {
+                        // No hay dirección a la vista (la página la pide con JavaScript): se abre en el navegador de la app,
+                        // que sí detecta el vídeo («Vídeos de esta página»).
+                        Toast.makeText(this, R.string.page_resolve_failed, Toast.LENGTH_LONG).show()
+                        try { startActivity(Intent(this, com.example.superplayer.ui.WebActivity::class.java).setData(Uri.parse(stream.url))) } catch (e: Exception) { }
+                        finish()
+                    }
+                }
+            }.start()
+            return
+        }
         val tokenUrl = stream.tokenUrl
         if (tokenUrl.isNullOrBlank()) {
             onStreamResolved(stream)

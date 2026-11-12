@@ -1906,3 +1906,7 @@ Además de la lista de dominios (ampliada con los de DaddyLive: scatteramarth, v
 ## Menú de la web por apartados y dominios bloqueados
 
 El menú ⋮ del navegador ahora está agrupado en apartados plegables (se abre uno al pulsar su cabecera): ⭐ Favoritos e historial · 🌐 Navegación · 🎬 Vídeos · 🛡 Anuncios · ⚙ Ajustes. En Anuncios hay «🚫 Dominios bloqueados»: lista lo que has bloqueado tú (🚫) y lo que se ha bloqueado en la página actual (⚙), todo marcado; desmarca y «Guardar» para desbloquear (queda permitido aunque lo bloquee la lista o un patrón), o «Añadir…» para escribir un dominio. Todo entra en la copia de seguridad (sección Navegador).
+
+## El reproductor principal abre enlaces de páginas (.php / .html)
+
+Si un canal es una página con reproductor (p. ej. `https://streamxhd.sbs/live1.php?stream=espndeportes`), el reproductor la abre antes de empezar, busca dentro (y en sus iframes, hasta 2 niveles) la dirección real `.m3u8`/`.mpd` —también escapada o en base64— y la reproduce con el Referer del sitio y un User-Agent de móvil. Si la página solo da el vídeo mediante JavaScript y no se ve la dirección, abre la página en el navegador de la app, donde «Vídeos de esta página» lo detecta. Código en `player/PageStreamResolver.kt`.

@@ -139,6 +139,8 @@
     <string name="web_blocked_saved">Guardado; recargando</string>
     <string name="web_blocked_add">Añadir…</string>
     <string name="web_blocked_add_hint">Dominio, p. ej. anuncios.com</string>
+    <string name="page_resolving">Buscando el vídeo de la página…</string>
+    <string name="page_resolve_failed">No se ve el vídeo en la página: la abro en el navegador de la app (usa «Vídeos de esta página»)</string>
     <string name="aceserve_open">▶ Abrir AceServe</string>
     <string name="aceserve_hint">Tiene que estar abierto para que funcione esta sección (rojo = cerrado, verde = abierto)</string>
     <string name="aceserve_missing">AceServe no está instalado</string>
