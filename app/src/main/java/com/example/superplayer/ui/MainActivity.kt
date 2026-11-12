@@ -1341,11 +1341,14 @@ class MainActivity : AppCompatActivity() {
                 val cur = com.example.superplayer.data.AppDns.current(this)
                 androidx.appcompat.app.AlertDialog.Builder(this)
                     .setTitle(R.string.dns_title)
-                    .setMessage(R.string.dns_hint)
                     .setSingleChoiceItems(provs.map { it.label }.toTypedArray(), provs.indexOf(cur)) { d, w ->
                         com.example.superplayer.data.AppDns.set(this, provs[w])
                         Toast.makeText(this, provs[w].label, Toast.LENGTH_SHORT).show()
                         d.dismiss()
+                    }
+                    .setNeutralButton(R.string.dns_what) { _, _ ->
+                        androidx.appcompat.app.AlertDialog.Builder(this).setMessage(R.string.dns_hint)
+                            .setPositiveButton(android.R.string.ok, null).show()
                     }
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
