@@ -141,6 +141,10 @@
     <string name="web_blocked_add_hint">Dominio, p. ej. anuncios.com</string>
     <string name="page_resolving">Buscando el vídeo de la página…</string>
     <string name="page_resolve_failed">No se ha podido sacar el vídeo de esa página (no ha salido ninguna dirección en 22 s)</string>
+    <string name="web_popup_closed">Ventana emergente cerrada</string>
+    <string name="action_dns">DNS de los canales</string>
+    <string name="dns_title">DNS para los canales</string>
+    <string name="dns_hint">Si un canal no carga por culpa del DNS de tu operadora, prueba otro. Afecta al reproductor.</string>
     <string name="aceserve_open">▶ Abrir AceServe</string>
     <string name="aceserve_hint">Tiene que estar abierto para que funcione esta sección (rojo = cerrado, verde = abierto)</string>
     <string name="aceserve_missing">AceServe no está instalado</string>

@@ -1820,14 +1820,14 @@ class PlayerActivity : AppCompatActivity() {
     // las extras: ver StreamMediaExtras)
     // -----------------------------------------------------------------
 
-    private fun resolveAndPlay(stream: Stream) {
+    private fun resolveAndPlay(stream: Stream, resolved: Boolean = false) {
         // Si la «dirección» es una página web con un reproductor dentro, se saca de ella el vídeo real: primero leyendo su
         // código y, si no sale, cargándola en un navegador invisible hasta que pida el .m3u8/.mpd (todo dentro del reproductor).
-        if (PageStreamResolver.needsResolve(stream)) {
+        if (!resolved && PageStreamResolver.needsResolve(stream)) {
             Toast.makeText(this, R.string.page_resolving, Toast.LENGTH_SHORT).show()
             fun play(res: PageStreamResolver.Result) {
                 if (isFinishing || isDestroyed || currentStream?.id != stream.id) return
-                resolveAndPlay(PageStreamResolver.toStream(stream, res).copy(tokenUrl = stream.tokenUrl))
+                resolveAndPlay(PageStreamResolver.toStream(stream, res).copy(tokenUrl = stream.tokenUrl), resolved = true)
             }
             Thread {
                 val res = try { PageStreamResolver.resolve(stream.url, stream.headers) } catch (e: Exception) { null }

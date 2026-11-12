@@ -86,6 +86,10 @@
                 android:title="@string/action_program_alerts"
                 app:showAsAction="never" />
             <item
+                android:id="@+id/action_dns"
+                android:title="@string/action_dns"
+                app:showAsAction="never" />
+            <item
                 android:id="@+id/action_timeshift"
                 android:title="@string/timeshift_menu_item"
                 app:showAsAction="never" />

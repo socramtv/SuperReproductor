@@ -31,7 +31,9 @@ import com.example.superplayer.model.DrmInfo
  * MediaItem que le llega a través del MediaController.
  */
 @OptIn(UnstableApi::class)
-class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) : MediaSource.Factory {
+class StreamMediaSourceFactory(context: Context) : MediaSource.Factory {
+
+    private val appContext: Context = context.applicationContext
 
     private var loadErrorHandlingPolicy: LoadErrorHandlingPolicy? = null
 
@@ -65,7 +67,10 @@ class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) :
         // Solo para audio/vídeo progresivo: en HLS/DASH no hace falta y algunos servidores con token lo rechazan.
         val isAdaptive = type.trim().uppercase() in setOf("DASH", "MPD", "HLS", "M3U8")
         val requestProperties = linkedMapOf<String, String>()
-        if (!isAdaptive) requestProperties["Icy-MetaData"] = "1"
+        // Tampoco en scripts .php/.ts que devuelven el vídeo directamente (no son emisoras Shoutcast).
+        val path = mediaItem.localConfiguration?.uri?.path?.lowercase().orEmpty()
+        val isScript = path.endsWith(".php") || path.endsWith(".ts")
+        if (!isAdaptive && !isScript) requestProperties["Icy-MetaData"] = "1"
         requestProperties.putAll(headers)
 
         // Archivos locales (p. ej. un vídeo de Telegram ya descargado): sin red.
@@ -74,6 +79,12 @@ class StreamMediaSourceFactory(@Suppress("UNUSED_PARAMETER") context: Context) :
                 androidx.media3.datasource.FileDataSource.Factory()
             } else {
                 val local = mediaItem.localConfiguration?.uri?.host == "127.0.0.1"
+                val dohClient = if (local) null else com.example.superplayer.data.AppDns.client(appContext)
+                if (dohClient != null) {
+                    // DNS elegido en Ajustes → DNS de los canales (DNS sobre HTTPS)
+                    androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(dohClient)
+                        .setDefaultRequestProperties(requestProperties)
+                } else
                 DefaultHttpDataSource.Factory()
                     .setDefaultRequestProperties(requestProperties)
                     .setAllowCrossProtocolRedirects(true)

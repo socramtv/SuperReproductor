@@ -60,6 +60,12 @@ class WebActivity : AppCompatActivity() {
         /** Abierta por una ventana emergente pedida por la página: no es una pestaña en blanco. */
         var popup = false
         @Volatile var blocked = 0
+        /** Pestaña desde la que se abrió esta ventana emergente (al cerrarla se vuelve a ella). */
+        var opener: Tab? = null
+        /** Esta pestaña nació de un window.open: mientras el usuario no la toque, una cadena de redirecciones se cierra sola. */
+        var isPopupTab = false
+        var popupStarts = 0
+        var popupOpenedAt = 0L
         /** Últimas peticiones de la página (sin imágenes/estilos/fuentes ni anuncios), para el diagnóstico. */
         /** Dominios bloqueados en esta pestaña (por lista, patrón o a mano), para poder permitirlos desde «Dominios bloqueados». */
         val blockedHosts: MutableSet<String> = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
@@ -106,7 +112,7 @@ class WebActivity : AppCompatActivity() {
             } catch (e: Exception) { }
         }
 
-        binding.webBack.setOnClickListener { if (webView.canGoBack()) webView.goBack() }
+        binding.webBack.setOnClickListener { goBackOrCloseTab() }
         binding.webForward.setOnClickListener { if (webView.canGoForward()) webView.goForward() }
         binding.webReload.setOnClickListener { webView.reload() }
         binding.webVideos.setOnClickListener { showDetectedVideos() }
@@ -147,7 +153,7 @@ class WebActivity : AppCompatActivity() {
                     homeVisible() && webView.url != null -> hideHome()
                     homeVisible() -> finish()
                     binding.webFavScroll.visibility == View.VISIBLE -> binding.webFavScroll.visibility = View.GONE
-                    webView.canGoBack() -> webView.goBack()
+                    goBackOrCloseTab() -> {}
                     else -> finish()
                 }
             }
@@ -268,6 +274,17 @@ class WebActivity : AppCompatActivity() {
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                if (t.isPopupTab && adBlockOn() && url != "about:blank") {
+                    t.popupStarts++
+                    val u = Uri.parse(url)
+                    val untouched = t.lastTouch < t.popupOpenedAt
+                    val adLike = isAdHost(u.host) || looksLikeAd(u, t.opener?.page ?: "")
+                    // Una ventana emergente de publicidad (dominio de anuncios, o redirecciones sin que el usuario la toque) se cierra sola.
+                    if (adLike || (untouched && t.popupStarts >= 2)) {
+                        closePopupTab(t)
+                        return
+                    }
+                }
                 t.page = url
                 t.bannerShown = false
                 t.popup = false
@@ -305,7 +322,16 @@ class WebActivity : AppCompatActivity() {
             /** window.open / target=_blank: con el bloqueador, solo si lo ha tocado el usuario (y se abre en una pestaña nueva). */
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
                 if (adBlockOn() && !isUserGesture) { t.blocked++; return false }
+                // Toque sobre algo que no es un enlace (capa de anuncio sobre el vídeo): ventana emergente de publicidad.
+                if (adBlockOn() && view.hitTestResult.type == WebView.HitTestResult.UNKNOWN_TYPE) {
+                    t.blocked++
+                    Toast.makeText(this@WebActivity, R.string.web_popup_closed, Toast.LENGTH_SHORT).show()
+                    return false
+                }
                 val nt = newTab(null, popup = true) ?: return false
+                nt.opener = t
+                nt.isPopupTab = true
+                nt.popupOpenedAt = SystemClock.uptimeMillis()
                 val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
                 transport.webView = nt.view
                 resultMsg.sendToTarget()
@@ -405,6 +431,34 @@ class WebActivity : AppCompatActivity() {
         updateVideosButton()
         refreshTabsUi()
         if (isTv && binding.webTabsPanel.visibility != View.VISIBLE) t.view.post { t.view.requestFocus() }
+    }
+
+    /** Cierra una ventana emergente (sin tocar su propio callback) y vuelve a la pestaña desde la que se abrió. */
+    private fun closePopupTab(t: Tab) {
+        t.blocked++
+        binding.root.post {
+            val i = tabs.indexOf(t)
+            if (i < 0) return@post
+            val back = t.opener
+            closeTab(i)
+            val bi = if (back != null) tabs.indexOf(back) else -1
+            if (bi >= 0) switchTo(bi)
+            Toast.makeText(this, R.string.web_popup_closed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Atrás: página anterior; si no hay y esta pestaña es una ventana/pestaña extra, se cierra y se vuelve a la anterior. */
+    private fun goBackOrCloseTab(): Boolean {
+        if (webView.canGoBack()) { webView.goBack(); return true }
+        if (tabs.size > 1) {
+            val t = curTab
+            val back = t.opener
+            closeTab(curIdx)
+            val bi = if (back != null) tabs.indexOf(back) else -1
+            if (bi >= 0) switchTo(bi)
+            return true
+        }
+        return false
     }
 
     private fun closeTab(i: Int) {
@@ -867,7 +921,7 @@ class WebActivity : AppCompatActivity() {
     }
 
     private fun updateNavButtons() {
-        binding.webBack.alpha = if (webView.canGoBack()) 1f else 0.35f
+        binding.webBack.alpha = if (webView.canGoBack() || tabs.size > 1) 1f else 0.35f
         binding.webForward.alpha = if (webView.canGoForward()) 1f else 0.35f
     }
 
@@ -2031,7 +2085,7 @@ class WebActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                if (down && webView.canGoBack()) webView.goBack()
+                if (down) goBackOrCloseTab()
                 return true
             }
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {

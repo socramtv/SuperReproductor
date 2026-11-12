@@ -31,7 +31,8 @@ object PageStreamResolver {
         return PAGE_EXT.any { path.endsWith(it) }
     }
 
-    class Result(val url: String, val referer: String, val ua: String? = null)
+    /** [referer] vacío = sin Referer propio. [type]: "HLS", "DASH" o "PROGRESSIVE" si ya se sabe (p. ej. el script devuelve directamente el vídeo). */
+    class Result(val url: String, val referer: String, val ua: String? = null, val type: String? = null)
 
     private fun header(h: Map<String, String>, name: String): String? =
         h.entries.firstOrNull { it.key.equals(name, true) }?.value?.takeIf { it.isNotBlank() }
@@ -43,8 +44,10 @@ object PageStreamResolver {
 
     private fun find(pageUrl: String, referer: String?, ua: String, depth: Int, visited: HashSet<String>): Result? {
         if (depth > 2 || !visited.add(pageUrl)) return null
-        val body = fetch(pageUrl, referer, ua) ?: return null
-        val text = normalize(body)
+        val probe = probe(pageUrl, referer, ua) ?: return null
+        // Muchos .php no son una página sino un script que devuelve directamente el vídeo (TS de ffmpeg, lista m3u8…).
+        if (probe.direct != null) return Result(probe.finalUrl, "", ua, probe.direct)
+        val text = normalize(probe.body ?: return null)
         val found = candidates(text, pageUrl)
         if (found.isNotEmpty()) return Result(found.first(), origin(pageUrl), ua)
         for (m in IFRAME.findAll(text)) {
@@ -85,39 +88,68 @@ object PageStreamResolver {
         }
     } catch (e: Exception) { null }
 
-    private fun fetch(url: String, referer: String?, ua: String): String? = try {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 10_000
-        c.readTimeout = 12_000
-        c.instanceFollowRedirects = true
-        c.setRequestProperty("User-Agent", ua)
-        c.setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
-        c.setRequestProperty("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
-        if (!referer.isNullOrBlank()) c.setRequestProperty("Referer", referer)
-        if (c.responseCode !in 200..299) null
-        else c.inputStream.use { ins ->
-            val buf = java.io.ByteArrayOutputStream()
-            val tmp = ByteArray(16 * 1024)
-            while (buf.size() < 1_500_000) {
-                val n = ins.read(tmp)
-                if (n < 0) break
-                buf.write(tmp, 0, n)
+    private class Probe(val direct: String?, val body: String?, val finalUrl: String)
+
+    /** Pide la dirección y mira qué es: vídeo directo (TS/audio/vídeo), lista HLS o una página de texto. */
+    private fun probe(url: String, referer: String?, ua: String): Probe? {
+        var c: HttpURLConnection? = null
+        return try {
+            c = URL(url).openConnection() as HttpURLConnection
+            c.connectTimeout = 10_000
+            c.readTimeout = 15_000
+            c.instanceFollowRedirects = true
+            c.setRequestProperty("User-Agent", ua)
+            c.setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+            c.setRequestProperty("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
+            if (!referer.isNullOrBlank()) c.setRequestProperty("Referer", referer)
+            if (c.responseCode !in 200..299) return null
+            val finalUrl = c.url.toString()
+            val ct = (c.contentType ?: "").lowercase()
+            c.inputStream.use { ins ->
+                val head = ByteArray(4096)
+                var n = 0
+                while (n < head.size) {
+                    val r = ins.read(head, n, head.size - n)
+                    if (r < 0) break
+                    n += r
+                }
+                if (n <= 0) return null
+                val start = String(head, 0, minOf(n, 16), Charsets.ISO_8859_1)
+                val isTs = n > 188 && head[0] == 0x47.toByte() && head[188] == 0x47.toByte()
+                when {
+                    start.startsWith("#EXTM3U") -> return Probe("HLS", null, finalUrl)
+                    isTs -> return Probe("PROGRESSIVE", null, finalUrl)
+                    ct.contains("mpegurl") -> return Probe("HLS", null, finalUrl)
+                    ct.startsWith("video/") || ct.startsWith("audio/") -> return Probe("PROGRESSIVE", null, finalUrl)
+                    ct.contains("octet-stream") && head[0] != '<'.code.toByte() && head[0] != ' '.code.toByte() -> return Probe("PROGRESSIVE", null, finalUrl)
+                }
+                val buf = java.io.ByteArrayOutputStream()
+                buf.write(head, 0, n)
+                val tmp = ByteArray(16 * 1024)
+                while (buf.size() < 1_500_000) {
+                    val r = ins.read(tmp)
+                    if (r < 0) break
+                    buf.write(tmp, 0, r)
+                }
+                Probe(null, buf.toString("UTF-8"), finalUrl)
             }
-            buf.toString("UTF-8")
+        } catch (e: Exception) {
+            null
+        } finally {
+            try { c?.disconnect() } catch (e: Exception) { }
         }
-    } catch (e: Exception) { null }
+    }
 
     /** Stream listo para ExoPlayer a partir de lo encontrado (Referer = sitio de la página, mismo User-Agent). */
     fun toStream(orig: Stream, r: Result): Stream {
         val low = r.url.substringBefore('?').lowercase()
+        val hdrs = LinkedHashMap<String, String>()
+        (header(orig.headers, "Referer") ?: r.referer.takeIf { it.isNotBlank() })?.let { hdrs["Referer"] = it }
+        hdrs["User-Agent"] = header(orig.headers, "User-Agent") ?: r.ua ?: UA
         return orig.copy(
             url = r.url,
-            type = if (low.endsWith(".mpd")) "DASH" else "HLS",
-            // Referer/User-Agent que puso el autor de la lista, si los hay; si no, los de la página donde se encontró el vídeo.
-            headers = mapOf(
-                "Referer" to (header(orig.headers, "Referer") ?: r.referer),
-                "User-Agent" to (header(orig.headers, "User-Agent") ?: r.ua ?: UA)
-            )
+            type = r.type ?: if (low.endsWith(".mpd")) "DASH" else "HLS",
+            headers = hdrs
         )
     }
 }

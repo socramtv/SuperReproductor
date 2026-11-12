@@ -1920,3 +1920,10 @@ Cada canal admite: `name`, `image` (logo), `url`, `referer`, `userAgent`, `origi
 - **Enlace a otra lista**: `"isHost": "true"` con una `url` que NO sea una página (p. ej. .w3u o .json): se abre y se mezcla (hasta 2 niveles).
 
 También valen en el formato `categories` → `streams`. Ejemplo completo en `plantilla-lista.w3u`.
+
+## Scripts .php que devuelven el vídeo, atrás por páginas, pop-ups y DNS
+
+- **.php que devuelve el vídeo directo** (p. ej. `…/algo.php?cmd=…` que lanza ffmpeg): antes de buscar nada, el resolvedor mira qué devuelve la dirección: si es un flujo TS, un audio/vídeo o una lista `#EXTM3U`, se reproduce esa misma dirección (con las cabeceras de la lista). Para estos scripts no se envía `Icy-MetaData`.
+- **Atrás en la web**: el botón/gesto de atrás va a la página anterior; si la pestaña no tiene historial y hay más pestañas, la cierra y vuelve a la anterior (antes salía de la web).
+- **Pop-ups**: se cierran solos las ventanas emergentes que se abren al tocar algo que no es un enlace (capas de anuncio) y las que van a dominios de anuncios o encadenan redirecciones sin que las toques; se vuelve a la pestaña de origen con el aviso «Ventana emergente cerrada».
+- **DNS**: menú ⋮ de la pantalla principal → «DNS de los canales»: Sistema (por defecto), Cloudflare, Google, AdGuard o Quad9 (DNS sobre HTTPS). Afecta al reproductor; si el DNS elegido falla, usa el del sistema.

@@ -1336,6 +1336,21 @@ class MainActivity : AppCompatActivity() {
                 toggleTheme()
                 true
             }
+            R.id.action_dns -> {
+                val provs = com.example.superplayer.data.AppDns.Provider.values()
+                val cur = com.example.superplayer.data.AppDns.current(this)
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.dns_title)
+                    .setMessage(R.string.dns_hint)
+                    .setSingleChoiceItems(provs.map { it.label }.toTypedArray(), provs.indexOf(cur)) { d, w ->
+                        com.example.superplayer.data.AppDns.set(this, provs[w])
+                        Toast.makeText(this, provs[w].label, Toast.LENGTH_SHORT).show()
+                        d.dismiss()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                true
+            }
             R.id.action_backup_export -> {
                 com.example.superplayer.data.AccessControl.require(this, com.example.superplayer.data.AccessControl.S_SETTINGS) { chooseBackupSections(R.string.bk_title_export, BackupManager.Section.values().toSet(), R.string.action_backup_export) { sel -> pendingExportSections = sel; exportBackupLauncher.launch("socram-tv-copia.json") } }
                 true
