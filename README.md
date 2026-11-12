@@ -1910,3 +1910,13 @@ El menú ⋮ del navegador ahora está agrupado en apartados plegables (se abre 
 ## El reproductor principal abre enlaces de páginas (.php / .html)
 
 Si un canal es una página con reproductor (p. ej. `https://streamxhd.sbs/live1.php?stream=espndeportes`), el reproductor la abre antes de empezar, busca dentro (y en sus iframes, hasta 2 niveles) la dirección real `.m3u8`/`.mpd` —también escapada o en base64— y la reproduce con el Referer del sitio y un User-Agent de móvil. Si la página solo da el vídeo mediante JavaScript y no se ve la dirección, abre la página en el navegador de la app, donde «Vídeos de esta página» lo detecta. Código en `player/PageStreamResolver.kt`.
+
+## Plantilla de lista (formato .w3u / JSON)
+
+Cada canal admite: `name`, `image` (logo), `url`, `referer`, `userAgent`, `origin`, `type` (HLS/DASH/PROGRESSIVE, opcional) y `headers` (objeto con cabeceras extra). Se agrupan en `groups` → `stations` (los grupos pueden anidarse).
+
+- **Página con reproductor** (`url` acaba en .php/.html/.htm/.asp/.aspx/.jsp/.shtml, con o sin `"isHost": "true"`): al pulsar el canal, la app abre la página, saca el `.m3u8`/`.mpd` y lo reproduce con el `referer` y `userAgent` indicados (si no los pones, usa los de la página).
+- **Stream directo**: `url` al .m3u8/.mpd/.ts con `referer`/`userAgent` si el servidor los exige.
+- **Enlace a otra lista**: `"isHost": "true"` con una `url` que NO sea una página (p. ej. .w3u o .json): se abre y se mezcla (hasta 2 niveles).
+
+También valen en el formato `categories` → `streams`. Ejemplo completo en `plantilla-lista.w3u`.

@@ -127,11 +127,11 @@ object PlaylistRepository {
                 streams.add(
                     Stream(
                         name = sObj.optString("name").ifBlank { "Sin nombre" },
-                        type = typeRaw.ifBlank { "HLS" },
+                        type = typeRaw.ifBlank { if (isPageUrl(url)) "" else "HLS" },
                         url = url,
                         icon = icon,
                         category = categoryName,
-                        headers = sObj.optJSONObject("headers")?.toStringMap() ?: emptyMap(),
+                        headers = headersOf(sObj),
                         drm = buildDrmInfo(sObj),
                         tokenUrl = tokenUrl,
                         tvgId = tvgId
@@ -279,8 +279,10 @@ object PlaylistRepository {
             for (j in 0 until stationsJson.length()) {
                 val stObj = stationsJson.optJSONObject(j) ?: continue
                 val url = stObj.optStringOrNull("url") ?: continue
-                val isHost = stObj.optBoolean("isHost", false) ||
-                    url.substringBefore('?').lowercase().let { it.endsWith(".w3u") || it.endsWith(".json") }
+                // isHost + dirección de una PÁGINA (.php/.html…) = canal cuyo vídeo hay que sacar de esa página (ver
+                // PageStreamResolver); si no, isHost es el enlace a otra lista.
+                val isHost = !isPageUrl(url) && (stObj.optBoolean("isHost", false) ||
+                    url.substringBefore('?').lowercase().let { it.endsWith(".w3u") || it.endsWith(".json") })
                 if (isHost) {
                     if (depth < 2 && hostsOpened < 10 && (url.startsWith("http://", true) || url.startsWith("https://", true))) {
                         hostsOpened++
@@ -294,10 +296,7 @@ object PlaylistRepository {
                     continue
                 }
 
-                val headers = LinkedHashMap<String, String>()
-                stObj.optStringOrNull("referer")?.let { headers["Referer"] = it }
-                stObj.optStringOrNull("userAgent")?.let { headers["User-Agent"] = it }
-                stObj.optStringOrNull("origin")?.let { headers["Origin"] = it }
+                val headers = headersOf(stObj)
 
                 add(
                     categoryName,
@@ -330,6 +329,22 @@ object PlaylistRepository {
         val categories = byName.filter { it.value.isNotEmpty() }.map { Category(it.key, it.value) }
         val epgUrl = root.optStringOrNull("epgUrl") ?: root.optStringOrNull("epg_url") ?: (root.opt("epg") as? String)?.takeIf { it.startsWith("http") }
         return PlaylistData(categories, epgUrl = epgUrl)
+    }
+
+    /** Cabeceras de un canal: las del objeto "headers" más los atajos "referer", "userAgent" y "origin". */
+    private fun headersOf(o: JSONObject): MutableMap<String, String> {
+        val h = LinkedHashMap<String, String>()
+        o.optJSONObject("headers")?.toStringMap()?.let { h.putAll(it) }
+        (o.optStringOrNull("referer") ?: o.optStringOrNull("referrer"))?.let { h["Referer"] = it }
+        (o.optStringOrNull("userAgent") ?: o.optStringOrNull("user_agent") ?: o.optStringOrNull("user-agent"))?.let { h["User-Agent"] = it }
+        o.optStringOrNull("origin")?.let { h["Origin"] = it }
+        return h
+    }
+
+    /** ¿La dirección es una página web (con reproductor dentro) y no una lista ni un stream? Se reproduce buscando el vídeo en ella. */
+    private fun isPageUrl(url: String): Boolean {
+        val path = url.substringBefore('?').substringBefore('#').lowercase()
+        return listOf(".php", ".html", ".htm", ".asp", ".aspx", ".jsp", ".shtml").any { path.endsWith(it) }
     }
 
     /** Sin campo "type"/"extension" explícito, se adivina de la URL (igual que en M3U). */

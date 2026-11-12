@@ -33,21 +33,24 @@ object PageStreamResolver {
 
     class Result(val url: String, val referer: String)
 
+    private fun header(h: Map<String, String>, name: String): String? =
+        h.entries.firstOrNull { it.key.equals(name, true) }?.value?.takeIf { it.isNotBlank() }
+
     fun resolve(pageUrl: String, headers: Map<String, String>): Result? {
         val visited = HashSet<String>()
-        return find(pageUrl, headers["Referer"] ?: headers["referer"], 0, visited)
+        return find(pageUrl, header(headers, "Referer"), header(headers, "User-Agent") ?: UA, 0, visited)
     }
 
-    private fun find(pageUrl: String, referer: String?, depth: Int, visited: HashSet<String>): Result? {
+    private fun find(pageUrl: String, referer: String?, ua: String, depth: Int, visited: HashSet<String>): Result? {
         if (depth > 2 || !visited.add(pageUrl)) return null
-        val body = fetch(pageUrl, referer) ?: return null
+        val body = fetch(pageUrl, referer, ua) ?: return null
         val text = normalize(body)
         val found = candidates(text, pageUrl)
         if (found.isNotEmpty()) return Result(found.first(), origin(pageUrl))
         for (m in IFRAME.findAll(text)) {
             val child = absolute(pageUrl, m.groupValues[1]) ?: continue
             if (!child.startsWith("http")) continue
-            find(child, origin(pageUrl), depth + 1, visited)?.let { return it }
+            find(child, origin(pageUrl), ua, depth + 1, visited)?.let { return it }
         }
         return null
     }
@@ -82,12 +85,12 @@ object PageStreamResolver {
         }
     } catch (e: Exception) { null }
 
-    private fun fetch(url: String, referer: String?): String? = try {
+    private fun fetch(url: String, referer: String?, ua: String): String? = try {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 10_000
         c.readTimeout = 12_000
         c.instanceFollowRedirects = true
-        c.setRequestProperty("User-Agent", UA)
+        c.setRequestProperty("User-Agent", ua)
         c.setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
         c.setRequestProperty("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
         if (!referer.isNullOrBlank()) c.setRequestProperty("Referer", referer)
@@ -110,7 +113,11 @@ object PageStreamResolver {
         return orig.copy(
             url = r.url,
             type = if (low.endsWith(".mpd")) "DASH" else "HLS",
-            headers = mapOf("Referer" to r.referer, "User-Agent" to UA)
+            // Referer/User-Agent que puso el autor de la lista, si los hay; si no, los de la página donde se encontró el vídeo.
+            headers = mapOf(
+                "Referer" to (header(orig.headers, "Referer") ?: r.referer),
+                "User-Agent" to (header(orig.headers, "User-Agent") ?: UA)
+            )
         )
     }
 }
