@@ -48,8 +48,9 @@ object AppDns {
             .bootstrapDnsHosts(p.bootstrap.map { InetAddress.getByName(it) })
             .build()
         // Si el DNS elegido falla (sin red hacia él), se cae al del sistema en vez de quedarse sin canal.
-        val dns = Dns { host ->
-            try { doh.lookup(host) } catch (e: Exception) { Dns.SYSTEM.lookup(host) }
+        val dns = object : Dns {
+            override fun lookup(hostname: String): List<InetAddress> =
+                try { doh.lookup(hostname) } catch (e: Exception) { Dns.SYSTEM.lookup(hostname) }
         }
         val c = OkHttpClient.Builder()
             .dns(dns)
