@@ -1766,7 +1766,7 @@ class WebActivity : AppCompatActivity() {
             }
             tile.addView(circle, android.widget.LinearLayout.LayoutParams((56 * d).toInt(), (56 * d).toInt()))
             tile.addView(android.widget.TextView(this).apply {
-                text = if (fol == REC_KEY) getString(R.string.web_rec_title) + " (" + WebSites.cached(this).size + ")" else if (fol != null) fol + " (" + fMap.count { it.value == fol && bookmarks().any { x -> x.second == it.key } } + ")" else if (b == null) getString(R.string.web_fav_add) else b.first
+                text = if (fol == REC_KEY) getString(R.string.web_rec_title) + " (" + WebSites.cached(this@WebActivity).size + ")" else if (fol != null) fol + " (" + fMap.count { it.value == fol && bookmarks().any { x -> x.second == it.key } } + ")" else if (b == null) getString(R.string.web_fav_add) else b.first
                 textSize = 12f
                 maxLines = 2
                 gravity = android.view.Gravity.CENTER
