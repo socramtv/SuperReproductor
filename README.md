@@ -1927,3 +1927,6 @@ También valen en el formato `categories` → `streams`. Ejemplo completo en `pl
 - **Atrás en la web**: el botón/gesto de atrás va a la página anterior; si la pestaña no tiene historial y hay más pestañas, la cierra y vuelve a la anterior (antes salía de la web).
 - **Pop-ups**: se cierran solos las ventanas emergentes que se abren al tocar algo que no es un enlace (capas de anuncio) y las que van a dominios de anuncios o encadenan redirecciones sin que las toques; se vuelve a la pestaña de origen con el aviso «Ventana emergente cerrada».
 - **DNS**: menú ⋮ de la pantalla principal → «DNS de los canales»: Sistema (por defecto), Cloudflare, Google, AdGuard o Quad9 (DNS sobre HTTPS). Afecta al reproductor; si el DNS elegido falla, usa el del sistema.
+
+## Webs recomendadas (administrador)
+En Web → menú → «Favoritos e historial» hay «⭐ Webs recomendadas» (lista de solo lectura que ve todo el mundo, también como carpeta ⭐ en el inicio y en la barra de favoritos) y «🛠 Administrar webs recomendadas» (PIN maestro + token de GitHub): añadir, editar, subir/bajar, quitar y **Publicar**. La lista vive en `webs.json`, junto a `acceso.json`, y las apps la descargan al abrir Web (caché local).

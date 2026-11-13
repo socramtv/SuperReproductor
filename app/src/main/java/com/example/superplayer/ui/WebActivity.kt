@@ -29,6 +29,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import coil.load
 import com.example.superplayer.R
+import com.example.superplayer.data.AccessAdmin
+import com.example.superplayer.data.AccessControl
+import com.example.superplayer.data.WebSites
 import com.example.superplayer.databinding.ActivityWebBinding
 import com.example.superplayer.model.Stream
 import com.example.superplayer.player.PlayerActivity
@@ -96,6 +99,7 @@ class WebActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         applySystemBarInsets(top = binding.webBar, bottom = binding.webBody)
         title = getString(R.string.web_title)
+        WebSites.refresh(applicationContext) { l -> if (l != null) runOnUiThread { if (!isFinishing && !isDestroyed) refreshFavUi() } }
 
         isTv = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
 
@@ -1380,6 +1384,130 @@ class WebActivity : AppCompatActivity() {
 
     private fun homeVisible() = binding.webHome.visibility == View.VISIBLE
 
+    /** Webs recomendadas: lista publicada por el administrador. */
+    private fun openRecommended() {
+        val sites = WebSites.cached(this)
+        if (sites.isEmpty()) {
+            Toast.makeText(this, R.string.web_rec_empty, Toast.LENGTH_LONG).show()
+            return
+        }
+        val b = AlertDialog.Builder(this)
+            .setTitle("⭐ " + getString(R.string.web_rec_title))
+            .setItems(sites.map { (if (it.folder.isEmpty()) "" else "📁 ${it.folder} · ") + it.name.take(55) + "\n" + it.url.take(70) }.toTypedArray()) { _, w ->
+                binding.webFavScroll.visibility = View.GONE
+                load(sites[w].url)
+            }
+            .setNegativeButton(R.string.channel_check_close, null)
+        b.show()
+    }
+
+    private class AdminState(var list: MutableList<WebSites.Site>, var sha: String?, var dirty: Boolean = false)
+
+    /** Panel del administrador: añade, edita, ordena y quita webs, y las publica para todos. */
+    private fun showSitesAdmin() {
+        if (AccessAdmin.token(this).isEmpty()) {
+            val f = android.widget.EditText(this).apply { hint = "github_pat_…"; setSingleLine() }
+            AlertDialog.Builder(this).setTitle(R.string.web_rec_token_title).setMessage(R.string.web_rec_token_msg).setView(f)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    val t = f.text.toString().trim()
+                    if (t.isNotEmpty()) { AccessAdmin.setToken(this, t); showSitesAdmin() }
+                }
+                .setNegativeButton(android.R.string.cancel, null).show()
+            return
+        }
+        Toast.makeText(this, R.string.web_rec_loading, Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val l = WebSites.fetchAdmin(applicationContext)
+                runOnUiThread { if (!isFinishing && !isDestroyed) adminDialog(AdminState(l.sites.toMutableList(), l.sha)) }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, getString(R.string.web_rec_error, e.message ?: ""), Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    private fun adminDialog(st: AdminState) {
+        val labels = st.list.map { (if (it.folder.isEmpty()) "" else "📁 ${it.folder} · ") + it.name.take(50) + "\n" + it.url.take(70) }
+        val title = getString(R.string.web_rec_admin_title, st.list.size) + if (st.dirty) getString(R.string.web_rec_unpublished) else ""
+        val b = AlertDialog.Builder(this).setTitle(title)
+        if (labels.isEmpty()) b.setMessage(R.string.web_rec_admin_empty)
+        else b.setItems(labels.toTypedArray()) { _, i -> adminItemOptions(st, i) }
+        b.setPositiveButton(R.string.web_rec_publish) { _, _ ->
+            Toast.makeText(this, R.string.web_rec_publishing, Toast.LENGTH_SHORT).show()
+            val snapshot = st.list.toList()
+            Thread {
+                try {
+                    val sha = WebSites.publish(applicationContext, snapshot, st.sha)
+                    st.sha = sha; st.dirty = false
+                    runOnUiThread { Toast.makeText(this, R.string.web_rec_published, Toast.LENGTH_LONG).show(); refreshFavUi() }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        Toast.makeText(this, getString(R.string.web_rec_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                        adminDialog(st)
+                    }
+                }
+            }.start()
+        }
+        b.setNeutralButton(R.string.web_rec_add) { _, _ -> siteEditDialog(st, -1) }
+        b.setNegativeButton(R.string.channel_check_close) { _, _ ->
+            if (st.dirty) Toast.makeText(this, R.string.web_rec_discarded, Toast.LENGTH_LONG).show()
+        }
+        b.show()
+    }
+
+    private fun adminItemOptions(st: AdminState, i: Int) {
+        val ops = arrayOf(getString(R.string.web_fav_edit_opt), getString(R.string.web_move_up), getString(R.string.web_move_down), getString(R.string.web_fav_delete_opt))
+        AlertDialog.Builder(this)
+            .setTitle(st.list[i].name.take(50))
+            .setItems(ops) { _, w ->
+                when (w) {
+                    0 -> { siteEditDialog(st, i); return@setItems }
+                    1 -> if (i > 0) { val t = st.list[i]; st.list[i] = st.list[i - 1]; st.list[i - 1] = t; st.dirty = true }
+                    2 -> if (i < st.list.size - 1) { val t = st.list[i]; st.list[i] = st.list[i + 1]; st.list[i + 1] = t; st.dirty = true }
+                    else -> { st.list.removeAt(i); st.dirty = true }
+                }
+                adminDialog(st)
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> adminDialog(st) }
+            .show()
+    }
+
+    private fun siteEditDialog(st: AdminState, index: Int) {
+        val old = st.list.getOrNull(index)
+        val d = resources.displayMetrics.density
+        fun field(hint: String, text: String) = android.widget.EditText(this).apply { this.hint = hint; setText(text); setSingleLine() }
+        val name = field(getString(R.string.web_rec_f_name), old?.name ?: "")
+        val url = field(getString(R.string.web_rec_f_url), old?.url ?: "https://").apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        }
+        val folder = field(getString(R.string.web_rec_f_folder), old?.folder ?: "")
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val m = (20 * d).toInt()
+            setPadding(m, m / 2, m, 0)
+            addView(name); addView(url); addView(folder)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (old == null) R.string.web_rec_add else R.string.web_fav_edit_opt)
+            .setView(box)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                var u = url.text.toString().trim()
+                if (u.isNotEmpty() && !u.contains("://")) u = "https://$u"
+                val n = name.text.toString().trim()
+                val host = try { Uri.parse(u).host } catch (e: Exception) { null }
+                if (n.isEmpty() || host == null || !host.contains('.')) {
+                    Toast.makeText(this, R.string.web_rec_invalid, Toast.LENGTH_LONG).show()
+                } else {
+                    val site = WebSites.Site(n, u, folder.text.toString().trim())
+                    if (old == null) st.list.add(site) else st.list[index] = site
+                    st.dirty = true
+                }
+                adminDialog(st)
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> adminDialog(st) }
+            .show()
+    }
+
     private fun refreshFavUi() {
         updateSaveButton()
         if (binding.webFavScroll.visibility == View.VISIBLE) renderFavStrip()
@@ -1415,13 +1543,29 @@ class WebActivity : AppCompatActivity() {
         val d = resources.displayMetrics.density
         val list = bookmarks()
         val fNames = folderNames(); val fMap = folderMap()
-        if (list.isEmpty() && fNames.isEmpty()) {
+        if (list.isEmpty() && fNames.isEmpty() && WebSites.cached(this).isEmpty()) {
             strip.addView(android.widget.TextView(this).apply {
                 setText(R.string.web_no_favs)
                 setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_surface_muted))
                 setPadding((10 * d).toInt(), (8 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
             })
             return
+        }
+        if (WebSites.cached(this).isNotEmpty()) {
+            val rec = android.widget.TextView(this).apply {
+                text = "⭐ " + getString(R.string.web_rec_title)
+                textSize = 13f
+                maxLines = 1
+                setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_background))
+                setBackgroundResource(R.drawable.bg_web_chip)
+                setPadding((14 * d).toInt(), (8 * d).toInt(), (14 * d).toInt(), (8 * d).toInt())
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { openRecommended() }
+            }
+            strip.addView(rec, android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0) })
         }
         for (fn in fNames) {
             val chip = android.widget.TextView(this).apply {
@@ -1576,6 +1720,7 @@ class WebActivity : AppCompatActivity() {
         grid.columnCount = cols
         val fNames = folderNames(); val fMap = folderMap()
         val items = ArrayList<Pair<Pair<String, String>?, String?>>()
+        if (WebSites.cached(this).isNotEmpty()) items.add(Pair(null, REC_KEY))
         for (fn in fNames) items.add(Pair(null, fn))
         for (bm in bookmarks()) if (folderOf(bm.second, fNames, fMap).isEmpty()) items.add(Pair(bm, null))
         items.add(Pair(null, null))
@@ -1591,13 +1736,13 @@ class WebActivity : AppCompatActivity() {
             val circle = android.widget.FrameLayout(this).apply {
                 val bg = android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(if (fol != null) 0xFFFF9800.toInt() else if (b == null) 0xFF9E9E9E.toInt() else tileColor(b.second))
+                    setColor(if (fol == REC_KEY) 0xFF1E88E5.toInt() else if (fol != null) 0xFFFF9800.toInt() else if (b == null) 0xFF9E9E9E.toInt() else tileColor(b.second))
                 }
                 background = bg
                 tag = bg
             }
             val letter = android.widget.TextView(this).apply {
-                text = if (fol != null) "📁" else if (b == null) "+" else b.first.trim().take(1).uppercase().ifEmpty { "?" }
+                text = if (fol == REC_KEY) "⭐" else if (fol != null) "📁" else if (b == null) "+" else b.first.trim().take(1).uppercase().ifEmpty { "?" }
                 textSize = 24f
                 setTextColor(0xFFFFFFFF.toInt())
                 gravity = android.view.Gravity.CENTER
@@ -1621,7 +1766,7 @@ class WebActivity : AppCompatActivity() {
             }
             tile.addView(circle, android.widget.LinearLayout.LayoutParams((56 * d).toInt(), (56 * d).toInt()))
             tile.addView(android.widget.TextView(this).apply {
-                text = if (fol != null) fol + " (" + fMap.count { it.value == fol && bookmarks().any { x -> x.second == it.key } } + ")" else if (b == null) getString(R.string.web_fav_add) else b.first
+                text = if (fol == REC_KEY) getString(R.string.web_rec_title) + " (" + WebSites.cached(this).size + ")" else if (fol != null) fol + " (" + fMap.count { it.value == fol && bookmarks().any { x -> x.second == it.key } } + ")" else if (b == null) getString(R.string.web_fav_add) else b.first
                 textSize = 12f
                 maxLines = 2
                 gravity = android.view.Gravity.CENTER
@@ -1629,8 +1774,8 @@ class WebActivity : AppCompatActivity() {
                 setTextColor(androidx.core.content.ContextCompat.getColor(this@WebActivity, R.color.on_background))
                 setPadding((4 * d).toInt(), (6 * d).toInt(), (4 * d).toInt(), 0)
             }, android.widget.LinearLayout.LayoutParams(-1, -2))
-            tile.setOnClickListener { if (fol != null) openFolder(fol) else if (b == null) favAddMenu() else load(b.second) }
-            if (fol != null) tile.setOnLongClickListener { folderOptions(fol); true }
+            tile.setOnClickListener { if (fol == REC_KEY) openRecommended() else if (fol != null) openFolder(fol) else if (b == null) favAddMenu() else load(b.second) }
+            if (fol != null && fol != REC_KEY) tile.setOnLongClickListener { folderOptions(fol); true }
             else if (b != null) tile.setOnLongClickListener { favOptions(b); true }
             val lp = android.widget.GridLayout.LayoutParams(
                 android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
@@ -1737,6 +1882,8 @@ class WebActivity : AppCompatActivity() {
         item(getString(R.string.web_bookmarks)) { showBookmarks() }
         item(getString(R.string.web_add_bookmark)) { addBookmark() }
         item(getString(R.string.web_organize_favs)) { favAddMenu() }
+        item(getString(R.string.web_rec_menu, WebSites.cached(this).size)) { openRecommended() }
+        item(getString(R.string.web_rec_admin)) { AccessControl.requireMaster(this) { showSitesAdmin() } }
         item(getString(R.string.web_history)) { showHistory() }
 
         head(R.string.web_sec_nav)
@@ -2127,6 +2274,7 @@ class WebActivity : AppCompatActivity() {
             "s.textContent='ins.adsbygoogle,.adsbygoogle,iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=adservice]," +
             "div[id^=google_ads],div[id^=taboola],div[id^=outbrain],[class*=popunder]{display:none!important}';" +
             "(document.head||document.documentElement).appendChild(s);})();"
+        private const val REC_KEY = "\u2605rec"
         private val MEDIA_PATH_RE = Regex("\\.(m3u8|mpd|ts|m4s|mp4|mkv|webm|aac|mp3)$")
         private val AD_HOST_RE = Regex("(^|[.-])(ads?|adserv\\w*|adsrv|adtrack\\w*|popads?|pops?|popunder|banners?|trk|tracker|track|metrics|telemetry)\\d*([.-]|$)|adscore|adsystem|adnetwork|clickid|doubleclick")
         private val AD_PATH_RE = Regex("/(pagead|popunder|popads?|prebid|adserve\\w*|ad-?manager|adsbygoogle|sbx/[a-z]/\\d+|mtn/\\d+/|cuid/)")

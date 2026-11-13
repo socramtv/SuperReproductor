@@ -1073,4 +1073,24 @@
     <string name="web_send_tv_title">Enviar a la TV: elige el vídeo</string>
     <string name="web_video_copy">Copiar enlace</string>
     <string name="web_tv_sent">Enviado a %1$s</string>
+    <string name="web_rec_title">Recomendadas</string>
+    <string name="web_rec_menu">⭐ Webs recomendadas (%1$d)</string>
+    <string name="web_rec_empty">Aún no hay webs recomendadas.</string>
+    <string name="web_rec_admin">🛠 Administrar webs recomendadas</string>
+    <string name="web_rec_admin_title">Webs recomendadas (%1$d)</string>
+    <string name="web_rec_unpublished"> · sin publicar</string>
+    <string name="web_rec_admin_empty">No hay ninguna web. Pulsa «Añadir».</string>
+    <string name="web_rec_publish">Publicar</string>
+    <string name="web_rec_publishing">Publicando…</string>
+    <string name="web_rec_published">Publicado. A los demás les llegará en unos 5 minutos.</string>
+    <string name="web_rec_discarded">Cambios sin publicar descartados.</string>
+    <string name="web_rec_loading">Cargando lista…</string>
+    <string name="web_rec_error">Error: %1$s</string>
+    <string name="web_rec_add">＋ Añadir</string>
+    <string name="web_rec_f_name">Nombre de la web</string>
+    <string name="web_rec_f_url">Dirección (URL)</string>
+    <string name="web_rec_f_folder">Carpeta (opcional)</string>
+    <string name="web_rec_invalid">Escribe un nombre y una dirección válida.</string>
+    <string name="web_rec_token_title">Token de administrador</string>
+    <string name="web_rec_token_msg">Pega tu token de GitHub (permiso Contents lectura/escritura sobre el repositorio de acceso). Se guarda solo en este móvil.</string>
 </resources>
