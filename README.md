@@ -1930,3 +1930,6 @@ También valen en el formato `categories` → `streams`. Ejemplo completo en `pl
 
 ## Webs recomendadas (administrador)
 En Web → menú → «Favoritos e historial» hay «⭐ Webs recomendadas» (lista de solo lectura que ve todo el mundo, también como carpeta ⭐ en el inicio y en la barra de favoritos) y «🛠 Administrar webs recomendadas» (PIN maestro + token de GitHub): añadir, editar, subir/bajar, quitar y **Publicar**. La lista vive en `webs.json`, junto a `acceso.json`, y las apps la descargan al abrir Web (caché local).
+
+## Páginas «embed» (p2p/embed/player)
+Enlaces como `https://emb.sitio/p2p/?id=123` (sin extensión) se tratan como páginas: se abren en el navegador invisible y se reproduce el `.m3u8` que pidan (host y token cambian, por eso se resuelve cada vez). Tiempo máximo de espera 45 s por los muros de anuncio.

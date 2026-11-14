@@ -28,8 +28,13 @@ object PageStreamResolver {
         val u = stream.url
         if (!u.startsWith("http", ignoreCase = true)) return false
         val path = u.substringBefore('?').substringBefore('#').lowercase()
-        return PAGE_EXT.any { path.endsWith(it) }
+        if (PAGE_EXT.any { path.endsWith(it) }) return true
+        // Páginas «embed» sin extensión (p. ej. https://emb.sitio/p2p/?id=268668): reproductor por JavaScript.
+        val last = path.substringAfterLast('/')
+        return !last.contains('.') && EMBED_HINTS.any { path.contains(it) }
     }
+
+    private val EMBED_HINTS = listOf("/embed", "/p2p/", "/player", "/iframe", "/watch/", "/live/embed", "/stream.php")
 
     /** [referer] vacío = sin Referer propio. [type]: "HLS", "DASH" o "PROGRESSIVE" si ya se sabe (p. ej. el script devuelve directamente el vídeo). */
     class Result(val url: String, val referer: String, val ua: String? = null, val type: String? = null)

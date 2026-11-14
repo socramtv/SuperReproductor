@@ -36,7 +36,7 @@ object HiddenWebResolver {
         activity: Activity,
         pageUrl: String,
         headers: Map<String, String>,
-        timeoutMs: Long = 22_000L,
+        timeoutMs: Long = 45_000L,
         onResult: (PageStreamResolver.Result?) -> Unit
     ) {
         val main = Handler(Looper.getMainLooper())
