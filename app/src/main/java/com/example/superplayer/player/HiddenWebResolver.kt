@@ -42,6 +42,7 @@ object HiddenWebResolver {
         val main = Handler(Looper.getMainLooper())
         var done = false
         var wv: WebView? = null
+        var variantFallback: PageStreamResolver.Result? = null
         val ua = headers.entries.firstOrNull { it.key.equals("User-Agent", true) }?.value?.takeIf { it.isNotBlank() } ?: PageStreamResolver.UA
         val userReferer = headers.entries.firstOrNull { it.key.equals("Referer", true) }?.value?.takeIf { it.isNotBlank() }
 
@@ -79,7 +80,18 @@ object HiddenWebResolver {
             view.webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse? {
                     val u = request.url.toString()
-                    if (!done && MEDIA.containsMatchIn(u.lowercase())) {
+                    if (!done && MEDIA.containsMatchIn(u.lowercase()) && PageStreamResolver.isBadHost(u)) {
+                        // CDN que acaba de fallar: se le corta para que el reproductor de la página pruebe con otro.
+                        return WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
+                    }
+                    if (!done && variantFallback == null && MEDIA.containsMatchIn(u.lowercase()) && PageStreamResolver.isVariantPlaylist(u)) {
+                        val ref = request.requestHeaders.entries.firstOrNull { it.key.equals("Referer", true) }?.value
+                        val refOrigin = (userReferer ?: ref ?: pageUrl).let {
+                            try { val x = android.net.Uri.parse(it); x.scheme + "://" + x.host + "/" } catch (e: Exception) { it }
+                        }
+                        variantFallback = PageStreamResolver.Result(u, refOrigin, ua) // por si la lista principal nunca llega
+                    }
+                    if (!done && MEDIA.containsMatchIn(u.lowercase()) && !PageStreamResolver.isVariantPlaylist(u)) {
                         val ref = request.requestHeaders.entries.firstOrNull { it.key.equals("Referer", true) }?.value
                         val refOrigin = (userReferer ?: ref ?: pageUrl).let {
                             try { val x = android.net.Uri.parse(it); x.scheme + "://" + x.host + "/" } catch (e: Exception) { it }
@@ -120,7 +132,7 @@ object HiddenWebResolver {
                     v.dispatchTouchEvent(MotionEvent.obtain(t, t + 60, MotionEvent.ACTION_UP, x, y, 0))
                 }, delay)
             }
-            main.postDelayed({ finish(null) }, timeoutMs)
+            main.postDelayed({ finish(variantFallback) }, timeoutMs)
         } catch (e: Exception) {
             finish(null)
         }

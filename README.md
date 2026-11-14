@@ -1935,3 +1935,6 @@ En Web → menú → «Favoritos e historial» hay «⭐ Webs recomendadas» (li
 Enlaces como `https://emb.sitio/p2p/?id=123` (sin extensión) se tratan como páginas: se abren en el navegador invisible y se reproduce el `.m3u8` que pidan (host y token cambian, por eso se resuelve cada vez). Tiempo máximo de espera 45 s por los muros de anuncio.
 
 Reproductores tipo `https://sitio/api/player/9` también se resuelven como página (el `.m3u8` con token sale de una llamada JS `renew`).
+
+## Canales de página más robustos
+Si un canal sacado de una página (p. ej. `/api/player/N`) se corta, se descarta el servidor (CDN) que falló durante 2 min y se vuelve a resolver la página cortándole ese servidor, para que pase al siguiente. Al resolver se prefiere la lista principal (`index.m3u8`); si solo llega una sublista (`tracks-…/mono.m3u8`, `chunklist…`) se usa esa como alternativa. En «Vídeos de esta página» se siguen viendo todas.

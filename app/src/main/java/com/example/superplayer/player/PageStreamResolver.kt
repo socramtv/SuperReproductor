@@ -36,6 +36,29 @@ object PageStreamResolver {
 
     private val EMBED_HINTS = listOf("/embed", "/p2p/", "/player", "/iframe", "/watch/", "/live/embed", "/stream.php", "/api/player/")
 
+    /** Sublistas de calidad (tracks-v1a1/mono.m3u8, chunklist…): no son el canal, es la lista principal la que hay que reproducir. */
+    fun isVariantPlaylist(url: String): Boolean {
+        val path = url.substringBefore('?').substringBefore('#').lowercase()
+        val last = path.substringAfterLast('/')
+        return path.contains("/tracks-") || last == "mono.m3u8" || last.startsWith("chunklist") || last.startsWith("media_") ||
+            Regex("""(playlist|index)_\d+p?\.m3u8""").containsMatchIn(last)
+    }
+
+    // Servidores (CDN) que acaban de fallar: al volver a resolver la página se les corta la petición para que ella pase al siguiente.
+    private val badHosts = HashMap<String, Long>()
+    fun markBadHost(url: String) {
+        val h = try { URI(url).host } catch (e: Exception) { null } ?: return
+        synchronized(badHosts) { badHosts[h] = System.currentTimeMillis() + 120_000L }
+    }
+    fun isBadHost(url: String): Boolean {
+        val h = try { URI(url).host } catch (e: Exception) { null } ?: return false
+        synchronized(badHosts) {
+            val t = badHosts[h] ?: return false
+            if (t < System.currentTimeMillis()) { badHosts.remove(h); return false }
+            return true
+        }
+    }
+
     /** [referer] vacío = sin Referer propio. [type]: "HLS", "DASH" o "PROGRESSIVE" si ya se sabe (p. ej. el script devuelve directamente el vídeo). */
     class Result(val url: String, val referer: String, val ua: String? = null, val type: String? = null)
 
