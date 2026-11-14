@@ -34,7 +34,7 @@ object PageStreamResolver {
         return !last.contains('.') && EMBED_HINTS.any { path.contains(it) }
     }
 
-    private val EMBED_HINTS = listOf("/embed", "/p2p/", "/player", "/iframe", "/watch/", "/live/embed", "/stream.php")
+    private val EMBED_HINTS = listOf("/embed", "/p2p/", "/player", "/iframe", "/watch/", "/live/embed", "/stream.php", "/api/player/")
 
     /** [referer] vacío = sin Referer propio. [type]: "HLS", "DASH" o "PROGRESSIVE" si ya se sabe (p. ej. el script devuelve directamente el vídeo). */
     class Result(val url: String, val referer: String, val ua: String? = null, val type: String? = null)

@@ -1933,3 +1933,5 @@ En Web → menú → «Favoritos e historial» hay «⭐ Webs recomendadas» (li
 
 ## Páginas «embed» (p2p/embed/player)
 Enlaces como `https://emb.sitio/p2p/?id=123` (sin extensión) se tratan como páginas: se abren en el navegador invisible y se reproduce el `.m3u8` que pidan (host y token cambian, por eso se resuelve cada vez). Tiempo máximo de espera 45 s por los muros de anuncio.
+
+Reproductores tipo `https://sitio/api/player/9` también se resuelven como página (el `.m3u8` con token sale de una llamada JS `renew`).
