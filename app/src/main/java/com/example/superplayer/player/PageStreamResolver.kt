@@ -18,6 +18,7 @@ object PageStreamResolver {
     private val PAGE_EXT = listOf(".php", ".html", ".htm", ".asp", ".aspx", ".jsp", ".shtml")
     private val MEDIA_URL = Regex("""https?://[^\s"'<>\\()\[\]{}]+?\.(?:m3u8|mpd)(?:\?[^\s"'<>\\()\[\]{}]*)?""", RegexOption.IGNORE_CASE)
     private val REL_URL = Regex("""["'`]((?:/|\.\./|\./)?[A-Za-z0-9_\-./%]+\.(?:m3u8|mpd)(?:\?[^"'`\s]*)?)["'`]""", RegexOption.IGNORE_CASE)
+    private val MP4_URL = Regex("""https?://[^\s"'<>\\()\[\]{}]+?\.(?:mp4|webm|mkv)(?:\?[^\s"'<>\\()\[\]{}]*)?""", RegexOption.IGNORE_CASE)
     private val IFRAME = Regex("""<iframe[^>]+?src\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
     private val B64 = Regex("""(?:atob\(\s*|["'])([A-Za-z0-9+/=]{40,})["']?""")
 
@@ -28,10 +29,27 @@ object PageStreamResolver {
         val u = stream.url
         if (!u.startsWith("http", ignoreCase = true)) return false
         val path = u.substringBefore('?').substringBefore('#').lowercase()
+        if (isHoster(u) && !isDirectFile(path)) return true
         if (PAGE_EXT.any { path.endsWith(it) }) return true
         // Páginas «embed» sin extensión (p. ej. https://emb.sitio/p2p/?id=268668): reproductor por JavaScript.
         val last = path.substringAfterLast('/')
         return !last.contains('.') && EMBED_HINTS.any { path.contains(it) }
+    }
+
+    /** Servidores de vídeo («hosters») de los que se saca el vídeo directo (mp4…) en vez de una lista m3u8. */
+    private val HOSTERS = listOf(
+        "uqload", "streamtape", "streamta", "strtape", "powvideo", "playmogo", "doodstream", "dood.", "dsvplay", "voe.sx", "mixdrop",
+        "filemoon", "moonplayer", "streamwish", "wishembed", "vidhide", "vidguard", "upstream", "streamlare", "supervideo", "evoload",
+        "okru", "ok.ru", "fembed", "mp4upload", "vidoza", "jetload", "streamsb", "sbembed", "lulustream", "luluvdo", "vtube", "tubeload",
+        "waaw", "netu", "hqq.", "streamhub", "krakenfiles", "cloudvideo", "uptostream", "fastream"
+    )
+    private val DIRECT_EXT = listOf(".mp4", ".mkv", ".webm", ".m4v", ".m3u8", ".mpd", ".ts", ".mp3", ".aac")
+
+    private fun isDirectFile(path: String) = DIRECT_EXT.any { path.endsWith(it) }
+
+    fun isHoster(url: String): Boolean {
+        val h = try { URI(url).host?.lowercase() } catch (e: Exception) { null } ?: return false
+        return HOSTERS.any { h.contains(it) }
     }
 
     private val EMBED_HINTS = listOf("/embed", "/p2p/", "/player", "/iframe", "/watch/", "/live/embed", "/stream.php", "/api/player/")
@@ -90,6 +108,9 @@ object PageStreamResolver {
         val out = LinkedHashSet<String>()
         for (m in MEDIA_URL.findAll(text)) out.add(m.value)
         if (out.isEmpty()) {
+            for (m in MP4_URL.findAll(text)) if (!looksLikeAd(m.value)) out.add(m.value)
+        }
+        if (out.isEmpty()) {
             for (m in REL_URL.findAll(text)) absolute(base, m.groupValues[1])?.let { out.add(it) }
         }
         if (out.isEmpty()) {
@@ -100,6 +121,11 @@ object PageStreamResolver {
             }
         }
         return out.toList()
+    }
+
+    fun looksLikeAd(u: String): Boolean {
+        val l = u.lowercase()
+        return listOf("/ads/", "adserver", "/vast", "banner", "doubleclick", "popads", "preroll", "/promo").any { l.contains(it) }
     }
 
     private fun normalize(s: String): String =
@@ -176,7 +202,11 @@ object PageStreamResolver {
         hdrs["User-Agent"] = header(orig.headers, "User-Agent") ?: r.ua ?: UA
         return orig.copy(
             url = r.url,
-            type = r.type ?: if (low.endsWith(".mpd")) "DASH" else "HLS",
+            type = r.type ?: when {
+                low.endsWith(".mpd") -> "DASH"
+                low.endsWith(".mp4") || low.endsWith(".webm") || low.endsWith(".mkv") || low.contains("get_video") -> "MP4"
+                else -> "HLS"
+            },
             headers = hdrs
         )
     }

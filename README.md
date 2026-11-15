@@ -1938,3 +1938,6 @@ Reproductores tipo `https://sitio/api/player/9` también se resuelven como pági
 
 ## Canales de página más robustos
 Si un canal sacado de una página (p. ej. `/api/player/N`) se corta, se descarta el servidor (CDN) que falló durante 2 min y se vuelve a resolver la página cortándole ese servidor, para que pase al siguiente. Al resolver se prefiere la lista principal (`index.m3u8`); si solo llega una sublista (`tracks-…/mono.m3u8`, `chunklist…`) se usa esa como alternativa. En «Vídeos de esta página» se siguen viendo todas.
+
+## Servidores de vídeo en las fichas de Telegram
+Los botones de enlace de los bots (uqload, streamtape, powvideo, playmogo, doodstream, voe, mixdrop, filemoon, streamwish…) ya no abren el navegador: se busca el vídeo (mp4/m3u8) en la página, o con el navegador invisible, y se reproduce en el reproductor de la app con el título de la ficha. También vale para los enlaces con texto de los mensajes. Si un servidor no da vídeo, avisa y se prueba otro botón. Los saltos entre dominios del mismo servidor (streamtape.com → .to) se permiten.

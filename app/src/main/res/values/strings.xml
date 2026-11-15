@@ -140,7 +140,7 @@
     <string name="web_blocked_add">Añadir…</string>
     <string name="web_blocked_add_hint">Dominio, p. ej. anuncios.com</string>
     <string name="page_resolving">Buscando el vídeo de la página…</string>
-    <string name="page_resolve_failed">No se ha podido sacar el vídeo de esa página (no ha salido ninguna dirección en 22 s)</string>
+    <string name="page_resolve_failed">No se pudo sacar el vídeo de esa página. Prueba otro servidor.</string>
     <string name="web_popup_closed">Ventana emergente cerrada</string>
     <string name="action_dns">DNS de los canales</string>
     <string name="dns_title">DNS para los canales</string>

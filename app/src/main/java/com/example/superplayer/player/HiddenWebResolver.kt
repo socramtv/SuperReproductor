@@ -21,6 +21,7 @@ import android.widget.FrameLayout
  * navegador se destruye. Todo en segundo plano, sin abrir el navegador de la app.
  */
 object HiddenWebResolver {
+    private val VIDEO_FILE = Regex("""(\.(mp4|webm|mkv)(\?|#|$))|get_video\?""", RegexOption.IGNORE_CASE)
     private val MEDIA = Regex("""\.(m3u8|mpd)(\?|#|$)""", RegexOption.IGNORE_CASE)
     private val CLICK_JS = """
         (function(){try{
@@ -37,6 +38,8 @@ object HiddenWebResolver {
         pageUrl: String,
         headers: Map<String, String>,
         timeoutMs: Long = 45_000L,
+        /** Servidores de vídeo (uqload, streamtape…): además de .m3u8/.mpd vale un .mp4 / get_video. */
+        progressive: Boolean = false,
         onResult: (PageStreamResolver.Result?) -> Unit
     ) {
         val main = Handler(Looper.getMainLooper())
@@ -91,6 +94,14 @@ object HiddenWebResolver {
                         }
                         variantFallback = PageStreamResolver.Result(u, refOrigin, ua) // por si la lista principal nunca llega
                     }
+                    if (!done && progressive && VIDEO_FILE.containsMatchIn(u) && !PageStreamResolver.looksLikeAd(u)) {
+                        val ref = request.requestHeaders.entries.firstOrNull { it.key.equals("Referer", true) }?.value
+                        val refOrigin = (userReferer ?: ref ?: pageUrl).let {
+                            try { val x = android.net.Uri.parse(it); x.scheme + "://" + x.host + "/" } catch (e: Exception) { it }
+                        }
+                        val result = PageStreamResolver.Result(u, refOrigin, ua, "MP4")
+                        main.post { finish(result) }
+                    }
                     if (!done && MEDIA.containsMatchIn(u.lowercase()) && !PageStreamResolver.isVariantPlaylist(u)) {
                         val ref = request.requestHeaders.entries.firstOrNull { it.key.equals("Referer", true) }?.value
                         val refOrigin = (userReferer ?: ref ?: pageUrl).let {
@@ -105,7 +116,9 @@ object HiddenWebResolver {
                 // Se impide que la página se lleve el navegador a otro sitio (anuncios/redirecciones).
                 override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean {
                     val h = request.url.host
-                    return request.isForMainFrame && h != null && host != null && h != host && request.url.toString() != pageUrl
+                    // Los servidores de vídeo saltan entre sus propios dominios (streamtape.com → .to…): eso se permite.
+                    fun core(x: String) = x.split('.').let { if (it.size >= 2) it[it.size - 2] else x }
+                    return request.isForMainFrame && h != null && host != null && h != host && core(h) != core(host) && request.url.toString() != pageUrl
                 }
 
                 override fun onPageFinished(v: WebView, url: String?) {

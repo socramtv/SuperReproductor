@@ -1841,7 +1841,7 @@ class PlayerActivity : AppCompatActivity() {
                     if (res != null) {
                         play(res)
                     } else {
-                        HiddenWebResolver.resolve(this, stream.url, stream.headers) { hidden ->
+                        HiddenWebResolver.resolve(this, stream.url, stream.headers, progressive = PageStreamResolver.isHoster(stream.url)) { hidden ->
                             if (isFinishing || isDestroyed || currentStream?.id != stream.id) return@resolve
                             if (hidden != null) play(hidden)
                             else Toast.makeText(this, R.string.page_resolve_failed, Toast.LENGTH_LONG).show()

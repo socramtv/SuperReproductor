@@ -4317,7 +4317,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                     scheduleReload(1000)
                 }
             }
-            "url" -> if (isTgLink(b.data)) openTgLink(b.data) else openLink(b.data)
+            "url" -> if (isTgLink(b.data)) openTgLink(b.data) else openLink(b.data, hosterName(m, b.text))
             "txt" -> sendToCurrentChat(b.data)
             else -> Toast.makeText(this, R.string.tgacc_btn_unsupported, Toast.LENGTH_SHORT).show()
         }
@@ -4442,7 +4442,19 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
     }
 
-    private fun openLink(url: String) {
+    /** Nombre para el reproductor: título de la ficha (primera línea con letras) + servidor. */
+    private fun hosterName(m: TgMessage, server: String): String {
+        val title = m.text.lines().map { it.replace(Regex("^[^\\p{L}\\p{N}]+"), "").trim() }.firstOrNull { it.isNotEmpty() } ?: ""
+        val srv = server.replace(Regex("^[^\\p{L}\\p{N}]+"), "").trim()
+        return (title.take(50) + if (srv.isNotEmpty()) " · $srv" else "").ifEmpty { "Vídeo" }
+    }
+
+    private fun openLink(url: String, name: String? = null) {
+        // Servidores de vídeo (uqload, streamtape, powvideo…): se busca el vídeo solo y se reproduce dentro de la app.
+        if (com.example.superplayer.player.PageStreamResolver.isHoster(url)) {
+            playUrl(url, name ?: (try { Uri.parse(url).host } catch (e: Exception) { null } ?: "Vídeo"))
+            return
+        }
         if (!isTgLink(url) && (url.startsWith("http://", true) || url.startsWith("https://", true))) {
             openWeb(url)
             return
