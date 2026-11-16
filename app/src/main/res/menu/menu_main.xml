@@ -86,6 +86,10 @@
                 android:title="@string/action_program_alerts"
                 app:showAsAction="never" />
             <item
+                android:id="@+id/action_match_guide"
+                android:title="@string/matchguide_menu"
+                app:showAsAction="never" />
+            <item
                 android:id="@+id/action_dns"
                 android:title="@string/action_dns"
                 app:showAsAction="never" />

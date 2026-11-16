@@ -1951,3 +1951,6 @@ Al tocar una película de un bot (foto + datos + botones de enlace) se abre una 
 - **Cambio de CDN:** si un canal de página (p. ej. cdn6) se cae, antes de reconectar se prueban cdn1…cdn12 del mismo grupo con la misma ruta y token, y se usa el primero que responde.
 - **Listas desde la web:** si pegas en la web un enlace a una lista (.m3u, .json, .w3u, get.php), se ofrece importarla a la app.
 - **Compartir favoritos:** menú Web → «🔗 Compartir favoritos» genera un enlace `socramtv://favs?d=…` (con carpetas); quien lo abre (o lo copia y usa «📥 Importar favoritos») añade los que no tenga.
+
+## Partidos de hoy
+Menú ⋮ → «⚽ Partidos de hoy»: los partidos del día de las competiciones de MatchFeed (LaLiga, Hypermotion, Copa, Champions, Europa, Conference, Premier, Serie A, Bundesliga, Ligue 1) con escudos, hora y, si ya juegan, marcador y minuto en verde. A la derecha, «📺 N» son los canales de TU lista que emiten ese partido según la guía EPG (los dos equipos en el título y hora parecida). Tocar un partido abre el canal, o deja elegir si hay varios. Si un partido no tiene canal en la guía, sale «—».

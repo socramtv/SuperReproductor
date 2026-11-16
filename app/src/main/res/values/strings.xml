@@ -1109,4 +1109,10 @@
     <string name="web_favs_import_ok">Favoritos importados.</string>
     <string name="web_favs_import_none">No hay un enlace de favoritos en el portapapeles.</string>
     <string name="web_favs_import_bad">El enlace de favoritos no es válido.</string>
+    <string name="matchguide_menu">⚽ Partidos de hoy</string>
+    <string name="matchguide_title">Partidos de hoy</string>
+    <string name="matchguide_loading">Buscando los partidos de hoy…</string>
+    <string name="matchguide_none">Hoy no hay partidos en las competiciones seguidas (o no hay conexión).</string>
+    <string name="matchguide_no_channel">Ningún canal de tu lista lo emite según la guía.</string>
+    <string name="matchguide_hint">📺 = canales de tu lista que lo emiten (según la guía EPG). Toca un partido para verlo.</string>
 </resources>

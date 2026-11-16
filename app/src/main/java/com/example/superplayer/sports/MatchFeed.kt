@@ -63,12 +63,12 @@ object MatchFeed {
     data class Result(val matches: List<Match>, val failedLeagues: Int)
 
     /** Pide todas las competiciones a la vez (hilos). Bloquea hasta terminar: llamar desde un hilo de fondo. */
-    fun fetchAll(): Result {
+    fun fetchAll(date: String? = null): Result {
         val pool = Executors.newFixedThreadPool(5)
         val futures = LEAGUES.map { (slug, name) ->
             pool.submit(java.util.concurrent.Callable<List<Match>?> {
                 try {
-                    fetchLeague(slug, name)
+                    fetchLeague(slug, name, date)
                 } catch (e: Exception) {
                     null
                 }
@@ -84,8 +84,8 @@ object MatchFeed {
         return Result(all, failed)
     }
 
-    private fun fetchLeague(slug: String, leagueName: String): List<Match> {
-        val url = URL("https://site.api.espn.com/apis/site/v2/sports/soccer/$slug/scoreboard")
+    private fun fetchLeague(slug: String, leagueName: String, date: String? = null): List<Match> {
+        val url = URL("https://site.api.espn.com/apis/site/v2/sports/soccer/$slug/scoreboard" + if (date != null) "?dates=$date" else "")
         val conn = url.openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 8_000

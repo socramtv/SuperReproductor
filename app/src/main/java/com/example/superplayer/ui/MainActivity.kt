@@ -1336,6 +1336,13 @@ class MainActivity : AppCompatActivity() {
                 toggleTheme()
                 true
             }
+            R.id.action_match_guide -> {
+                whenSearchIndexReady {
+                    val pool = (searchIndex?.map { it.stream } ?: playlist.categories.flatMap { it.streams }).distinctBy { it.id }
+                    MatchGuide.show(this, pool)
+                }
+                true
+            }
             R.id.action_dns -> {
                 val provs = com.example.superplayer.data.AppDns.Provider.values()
                 val cur = com.example.superplayer.data.AppDns.current(this)
