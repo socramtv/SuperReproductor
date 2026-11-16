@@ -1941,3 +1941,6 @@ Si un canal sacado de una página (p. ej. `/api/player/N`) se corta, se descarta
 
 ## Servidores de vídeo en las fichas de Telegram
 Los botones de enlace de los bots (uqload, streamtape, powvideo, playmogo, doodstream, voe, mixdrop, filemoon, streamwish…) ya no abren el navegador: se busca el vídeo (mp4/m3u8) en la página, o con el navegador invisible, y se reproduce en el reproductor de la app con el título de la ficha. También vale para los enlaces con texto de los mensajes. Si un servidor no da vídeo, avisa y se prueba otro botón. Los saltos entre dominios del mismo servidor (streamtape.com → .to) se permiten.
+
+## Ficha de los bots de películas (Telegram)
+Al tocar una película de un bot (foto + datos + botones de enlace) se abre una **ficha**: foto grande, título, información y un botón por servidor/enlace (uqload, streamtape… reproducen dentro de la app; «Ver ficha en TMDB» abre la web). El botón «Botones» de abajo muestra todos los botones del bot (anclar, volver, inicio…).

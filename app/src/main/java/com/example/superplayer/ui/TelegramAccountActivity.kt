@@ -4297,6 +4297,47 @@ class TelegramAccountActivity : AppCompatActivity() {
             .show()
     }
 
+    /** Ficha del bot: foto grande, información y un botón por servidor/enlace (los de uqload, streamtape… reproducen dentro de la app). */
+    private fun showBotFicha(m: TgMessage) {
+        val d = resources.displayMetrics.density
+        val root = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((16 * d).toInt(), (12 * d).toInt(), (16 * d).toInt(), (8 * d).toInt())
+        }
+        val img = ImageView(this).apply {
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            maxHeight = (320 * d).toInt()
+        }
+        thumbPaths[m.thumbId]?.let { img.load(File(it)) }
+        root.addView(img, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+        val lines = m.text.trim()
+        val firstEnd = lines.indexOf('\n').let { if (it < 0) lines.length else it }
+        val body = android.text.SpannableString(lines).apply {
+            setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, firstEnd, 0)
+            setSpan(android.text.style.RelativeSizeSpan(1.25f), 0, firstEnd, 0)
+        }
+        root.addView(android.widget.TextView(this).apply {
+            text = body
+            textSize = 15f
+            setPadding(0, (10 * d).toInt(), 0, (10 * d).toInt())
+        })
+        val dialog = AlertDialog.Builder(this)
+            .setView(android.widget.ScrollView(this).apply { addView(root) })
+            .setNegativeButton(R.string.channel_check_close, null)
+            .setNeutralButton(R.string.tgacc_buttons_title, null)
+            .create()
+        for (b in m.buttons.filter { it.kind == "url" }) {
+            root.addView(makeBotButton((if (b.text.startsWith("↗")) "" else "↗ ") + b.text).apply {
+                setOnClickListener { dialog.dismiss(); pressInline(m, b) }
+            }, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (6 * d).toInt() })
+        }
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { dialog.dismiss(); showButtons(m) } }
+        dialog.show()
+        // Foto completa (la miniatura solo se ve si ya estaba en la lista).
+        if (m.fileId != null && thumbPaths[m.thumbId] == null) download(m) { path -> if (!isFinishing && !isDestroyed && dialog.isShowing) img.load(File(path)) }
+    }
+
     private fun showButtons(m: TgMessage) {
         val list = m.buttons
         AlertDialog.Builder(this)
@@ -4723,6 +4764,11 @@ class TelegramAccountActivity : AppCompatActivity() {
         // Una lista (archivo .m3u/.w3u/.json…): se abre directa en su ventana; las opciones de siempre, con pulsación larga.
         if (m.fileId != null && looksLikePlaylist(m) && !isImageMsg(m)) {
             openListViewer(m)
+            return
+        }
+        // Ficha de un bot de películas (foto + datos + botones de servidores): se ve como una ficha, no como un menú.
+        if (withButtons && isImageMsg(m) && m.text.isNotBlank() && m.buttons.any { it.kind == "url" }) {
+            showBotFicha(m)
             return
         }
         val labels = ArrayList<String>()
