@@ -1944,3 +1944,10 @@ Los botones de enlace de los bots (uqload, streamtape, powvideo, playmogo, doods
 
 ## Ficha de los bots de películas (Telegram)
 Al tocar una película de un bot (foto + datos + botones de enlace) se abre una **ficha con el mismo estilo que la de los vídeos** (cabecera con degradado, título, nota, año, duración, géneros, sinopsis) y un botón grande por servidor/enlace (uqload, streamtape… reproducen dentro de la app; «Ver ficha en TMDB» abre la web). El botón «Botones» de abajo muestra todos los botones del bot (anclar, volver, inicio…).
+
+## Servidor siguiente, mejor servidor, CDN, listas y favoritos por enlace
+- **Servidor siguiente automático:** en las fichas de Telegram, si el servidor que pulsas no da vídeo o se corta, se prueba el siguiente de la ficha solo («Probando otro servidor: …»).
+- **Mejor servidor recordado:** se cuenta cuándo cada servidor (uqload, streamtape…) funciona o falla en tu móvil; en la ficha van primero los que mejor van (el primero con ⭐).
+- **Cambio de CDN:** si un canal de página (p. ej. cdn6) se cae, antes de reconectar se prueban cdn1…cdn12 del mismo grupo con la misma ruta y token, y se usa el primero que responde.
+- **Listas desde la web:** si pegas en la web un enlace a una lista (.m3u, .json, .w3u, get.php), se ofrece importarla a la app.
+- **Compartir favoritos:** menú Web → «🔗 Compartir favoritos» genera un enlace `socramtv://favs?d=…` (con carpetas); quien lo abre (o lo copia y usa «📥 Importar favoritos») añade los que no tenga.

@@ -1093,4 +1093,20 @@
     <string name="web_rec_invalid">Escribe un nombre y una dirección válida.</string>
     <string name="web_rec_token_title">Token de administrador</string>
     <string name="web_rec_token_msg">Pega tu token de GitHub (permiso Contents lectura/escritura sobre el repositorio de acceso). Se guarda solo en este móvil.</string>
+    <string name="player_try_next">Probando otro servidor: %1$s</string>
+    <string name="player_try_cdn">Probando otro servidor del canal: %1$s</string>
+    <string name="web_list_title">Lista de canales</string>
+    <string name="web_list_msg">Este enlace parece una lista de canales (m3u/json). ¿Quieres importarla a la app o abrirla en la web?</string>
+    <string name="web_list_import">Importar</string>
+    <string name="web_list_open">Abrir en la web</string>
+    <string name="web_list_loading">Descargando lista…</string>
+    <string name="web_list_error">No se pudo leer esa lista.</string>
+    <string name="web_favs_share">🔗 Compartir favoritos (enlace)</string>
+    <string name="web_favs_import">📥 Importar favoritos (portapapeles)</string>
+    <string name="web_favs_share_text">Mis webs favoritas en Socram TV+. Ábrelo en tu móvil con la app, o cópialo y en Web usa «Importar favoritos»:\n%1$s</string>
+    <string name="web_favs_import_title">Importar favoritos</string>
+    <string name="web_favs_import_msg">Se añadirán %1$d webs nuevas (de %2$d). Las que ya tienes no se duplican.</string>
+    <string name="web_favs_import_ok">Favoritos importados.</string>
+    <string name="web_favs_import_none">No hay un enlace de favoritos en el portapapeles.</string>
+    <string name="web_favs_import_bad">El enlace de favoritos no es válido.</string>
 </resources>

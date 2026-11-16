@@ -54,6 +54,31 @@ object PageStreamResolver {
 
     private val EMBED_HINTS = listOf("/embed", "/p2p/", "/player", "/iframe", "/watch/", "/live/embed", "/stream.php", "/api/player/")
 
+    /** Otros servidores del mismo grupo (cdn6.x → cdn1…cdn12.x) con la misma ruta y token: muchos repartos de canales los comparten. */
+    fun siblingUrls(url: String): List<String> {
+        val host = try { URI(url).host } catch (e: Exception) { null } ?: return emptyList()
+        val m = Regex("""^([a-z\-]*?)(\d{1,2})(\..+)$""", RegexOption.IGNORE_CASE).find(host) ?: return emptyList()
+        val width = m.groupValues[2].length
+        val cur = m.groupValues[2].toInt()
+        return (1..12).filter { it != cur }.map { n ->
+            url.replaceFirst(host, m.groupValues[1] + n.toString().padStart(width, '0') + m.groupValues[3])
+        }
+    }
+
+    /** ¿Esa lista .m3u8 responde y es de verdad una lista HLS? (prueba rápida, ~4 s) */
+    fun alive(url: String, referer: String, ua: String): Boolean = try {
+        val c = URL(url).openConnection() as HttpURLConnection
+        c.connectTimeout = 3500
+        c.readTimeout = 3500
+        c.setRequestProperty("User-Agent", ua)
+        if (referer.isNotBlank()) c.setRequestProperty("Referer", referer)
+        try {
+            c.responseCode == 200 && c.inputStream.bufferedReader().use { r ->
+                val buf = CharArray(16); val n = r.read(buf); n > 6 && String(buf, 0, n).trimStart().startsWith("#EXTM3U")
+            }
+        } finally { c.disconnect() }
+    } catch (e: Exception) { false }
+
     /** Sublistas de calidad (tracks-v1a1/mono.m3u8, chunklist…): no son el canal, es la lista principal la que hay que reproducir. */
     fun isVariantPlaylist(url: String): Boolean {
         val path = url.substringBefore('?').substringBefore('#').lowercase()

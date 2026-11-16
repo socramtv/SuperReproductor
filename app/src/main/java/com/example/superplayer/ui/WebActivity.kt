@@ -200,6 +200,7 @@ class WebActivity : AppCompatActivity() {
         else { newTab(null); goHome() }
         updateNavButtons()
         updateSaveButton()
+        binding.root.post { handleFavsIntent(intent) }
     }
 
     // ---- Pestañas ----
@@ -804,6 +805,7 @@ class WebActivity : AppCompatActivity() {
     /** Texto compartido desde otra app: el primer enlace que lleve, o si no, se busca el texto. */
     private fun sharedTarget(i: Intent?): String? {
         if (i == null) return null
+        if (favsCodeIn(i) != null) return null // es un enlace de favoritos: se importa aparte
         i.data?.toString()?.takeIf { it.isNotBlank() }?.let { return it }
         if (i.action != Intent.ACTION_SEND) return null
         val text = i.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
@@ -814,6 +816,7 @@ class WebActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (favsCodeIn(intent) != null) { handleFavsIntent(intent); return }
         val target = sharedTarget(intent) ?: return
         if (tabs.isEmpty()) return
         // Se abre en una pestaña nueva para no perder lo que se estuviera viendo.
@@ -914,6 +917,17 @@ class WebActivity : AppCompatActivity() {
     private fun load(input: String) {
         val t = input.trim()
         if (t.isEmpty()) return
+        // Un enlace a una lista de canales (m3u/json/get.php): se ofrece importarla en vez de verla como texto.
+        if (!t.contains(' ') && (t.startsWith("http://", true) || t.startsWith("https://", true)) && TelegramImport.looksLikeListUrl(t)) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.web_list_title)
+                .setMessage(R.string.web_list_msg)
+                .setPositiveButton(R.string.web_list_import) { _, _ -> importListUrl(t) }
+                .setNeutralButton(R.string.web_list_open) { _, _ -> hideHome(); webView.loadUrl(t) }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            return
+        }
         hideHome()
         val url = when {
             t.startsWith("http://", true) || t.startsWith("https://", true) -> t
@@ -922,6 +936,97 @@ class WebActivity : AppCompatActivity() {
             else -> "https://www.google.com/search?q=" + URLEncoder.encode(t, "UTF-8")
         }
         webView.loadUrl(url)
+    }
+
+    private fun importListUrl(url: String) {
+        Toast.makeText(this, R.string.web_list_loading, Toast.LENGTH_SHORT).show()
+        Thread {
+            val data = try { com.example.superplayer.data.PlaylistRepository.loadFromUrl(url) } catch (e: Exception) { null }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (data == null || data.categories.sumOf { it.streams.size } == 0) Toast.makeText(this, R.string.web_list_error, Toast.LENGTH_LONG).show()
+                else TelegramImport.openInMain(this, data)
+            }
+        }.start()
+    }
+
+    // ---- Compartir / importar favoritos por enlace (socramtv://favs?d=…) ----
+
+    private val FAVS_RE = Regex("socramtv://favs\\?d=([A-Za-z0-9_\\-]+)")
+
+    private fun favsCodeIn(i: Intent?): String? {
+        if (i == null) return null
+        i.data?.toString()?.let { FAVS_RE.find(it)?.let { m -> return m.groupValues[1] } }
+        if (i.action == Intent.ACTION_SEND) i.getStringExtra(Intent.EXTRA_TEXT)?.let { FAVS_RE.find(it)?.let { m -> return m.groupValues[1] } }
+        return null
+    }
+
+    private fun handleFavsIntent(i: Intent?) {
+        val code = favsCodeIn(i) ?: return
+        importFavs(code)
+    }
+
+    private fun encodeFavs(): String {
+        val list = bookmarks()
+        val names = folderNames()
+        val fm = folderMap()
+        val o = JSONObject()
+        val b = JSONArray()
+        for ((t, u) in list) b.put(JSONArray().put(t).put(u).put(folderOf(u, names, fm)))
+        o.put("b", b)
+        val bos = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(bos).use { it.write(o.toString().toByteArray(Charsets.UTF_8)) }
+        return android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
+    }
+
+    private fun shareFavs() {
+        val link = "socramtv://favs?d=" + encodeFavs()
+        startActivity(Intent.createChooser(
+            Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, getString(R.string.web_favs_share_text, link)),
+            getString(R.string.web_favs_share)
+        ))
+    }
+
+    private fun importFavsFromClipboard() {
+        val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty()
+        val code = FAVS_RE.find(text)?.groupValues?.get(1)
+        if (code == null) Toast.makeText(this, R.string.web_favs_import_none, Toast.LENGTH_LONG).show() else importFavs(code)
+    }
+
+    private fun importFavs(code: String) {
+        val incoming: List<Triple<String, String, String>> = try {
+            val raw = android.util.Base64.decode(code, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
+            val text = java.util.zip.GZIPInputStream(java.io.ByteArrayInputStream(raw)).bufferedReader(Charsets.UTF_8).readText()
+            val arr = JSONObject(text).getJSONArray("b")
+            (0 until arr.length()).mapNotNull { k ->
+                val r = arr.optJSONArray(k) ?: return@mapNotNull null
+                val u = r.optString(1)
+                if (u.startsWith("http", true)) Triple(r.optString(0).ifBlank { u }, u, r.optString(2)) else null
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.web_favs_import_bad, Toast.LENGTH_LONG).show()
+            return
+        }
+        val have = bookmarks().map { it.second }.toSet()
+        val fresh = incoming.filter { it.second !in have }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_favs_import_title)
+            .setMessage(getString(R.string.web_favs_import_msg, fresh.size, incoming.size))
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val list = bookmarks()
+                val names = folderNames()
+                val fm = folderMap()
+                for ((t, u, f) in fresh) {
+                    list.add(t to u)
+                    if (f.isNotEmpty()) { if (f !in names) names.add(f); fm[u] = f }
+                }
+                saveBookmarks(list); saveFolderNames(names); saveFolderMap(fm)
+                refreshFavUi()
+                Toast.makeText(this, R.string.web_favs_import_ok, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun updateNavButtons() {
@@ -1882,6 +1987,8 @@ class WebActivity : AppCompatActivity() {
         item(getString(R.string.web_bookmarks)) { showBookmarks() }
         item(getString(R.string.web_add_bookmark)) { addBookmark() }
         item(getString(R.string.web_organize_favs)) { favAddMenu() }
+        item(getString(R.string.web_favs_share)) { shareFavs() }
+        item(getString(R.string.web_favs_import)) { importFavsFromClipboard() }
         item(getString(R.string.web_rec_menu, WebSites.cached(this).size)) { openRecommended() }
         item(getString(R.string.web_rec_admin)) { AccessControl.requireMaster(this) { showSitesAdmin() } }
         item(getString(R.string.web_history)) { showHistory() }

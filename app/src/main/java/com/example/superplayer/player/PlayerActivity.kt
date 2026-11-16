@@ -450,6 +450,37 @@ class PlayerActivity : AppCompatActivity() {
             }
             return
         }
+        // Servidor de vídeo de una ficha que falla: se apunta como malo y se pasa al siguiente servidor.
+        if (PageStreamResolver.isHoster(stream.url)) {
+            com.example.superplayer.data.HosterStats.bad(this, stream.url)
+            if (tryNextAlternate()) return
+        }
+        // Canal de página que se cae: se prueba el mismo canal en otros servidores del grupo (cdn6 → cdn7…) antes de reconectar.
+        val lr = lastPageResult
+        if (!failoverSkipOnce && !failoverBusy && lr != null && PageStreamResolver.needsResolve(stream) && !PageStreamResolver.isHoster(stream.url)) {
+            PageStreamResolver.markBadHost(lr.url)
+            failoverBusy = true
+            Thread {
+                val ua = lr.ua ?: PageStreamResolver.UA
+                val alt = PageStreamResolver.siblingUrls(lr.url).firstOrNull { !PageStreamResolver.isBadHost(it) && PageStreamResolver.alive(it, lr.referer, ua) }
+                runOnUiThread {
+                    failoverBusy = false
+                    if (isFinishing || isDestroyed || currentStream?.id != stream.id) return@runOnUiThread
+                    if (alt != null) {
+                        Toast.makeText(this, getString(R.string.player_try_cdn, try { Uri.parse(alt).host ?: "" } catch (e: Exception) { "" }), Toast.LENGTH_LONG).show()
+                        val res = PageStreamResolver.Result(alt, lr.referer, lr.ua, lr.type)
+                        lastPageResult = res
+                        lastPageResolvedUrl = alt
+                        resolveAndPlay(PageStreamResolver.toStream(stream, res).copy(tokenUrl = stream.tokenUrl), resolved = true)
+                    } else {
+                        failoverSkipOnce = true
+                        scheduleAutoReconnectOrShowError(error)
+                    }
+                }
+            }.start()
+            return
+        }
+        failoverSkipOnce = false
         // Canal sacado de una página: el servidor que falló se descarta para que al resolver otra vez salga otro.
         if (PageStreamResolver.needsResolve(stream)) lastPageResolvedUrl?.let { PageStreamResolver.markBadHost(it) }
         if (autoReconnectAttempts >= RECONNECT_DELAYS_MS.size) {
@@ -714,6 +745,13 @@ class PlayerActivity : AppCompatActivity() {
             // su cupo completo de reintentos para la próxima vez que se corte.
             if (isPlaying) {
                 autoReconnectAttempts = 0
+                failoverSkipOnce = false
+                currentStream?.let { s ->
+                    if (PageStreamResolver.isHoster(s.url) && statsRecordedFor != s.url) {
+                        statsRecordedFor = s.url
+                        com.example.superplayer.data.HosterStats.good(this@PlayerActivity, s.url)
+                    }
+                }
             }
         }
 
@@ -1174,6 +1212,7 @@ class PlayerActivity : AppCompatActivity() {
         currentStream = stream
         channelList = pendingChannelList
         currentIndex = channelList.indexOfFirst { it.id == stream.id }
+        alternates.clear(); alternates.addAll(pendingAlternates); pendingAlternates = emptyList()
 
         binding.nowPlayingTitle.text = stream.name
         binding.nowPlayingLogo.load(stream.icon) {
@@ -1426,6 +1465,7 @@ class PlayerActivity : AppCompatActivity() {
         }
         pendingStream = null
         pendingChannelList = emptyList()
+        pendingAlternates = emptyList()
     }
 
     // -----------------------------------------------------------------
@@ -1823,6 +1863,27 @@ class PlayerActivity : AppCompatActivity() {
     // -----------------------------------------------------------------
 
     private var lastPageResolvedUrl: String? = null
+    private var lastPageResult: PageStreamResolver.Result? = null
+    private val alternates = ArrayList<Stream>()
+    private var failoverBusy = false
+    private var failoverSkipOnce = false
+    private var statsRecordedFor: String? = null
+
+    /** Pasa al siguiente servidor de la ficha (si queda alguno). */
+    private fun tryNextAlternate(): Boolean {
+        if (alternates.isEmpty() || isFinishing || isDestroyed) return false
+        val next = alternates.removeAt(0)
+        Toast.makeText(this, getString(R.string.player_try_next, next.name), Toast.LENGTH_LONG).show()
+        cancelPendingReconnect()
+        currentStream = next
+        title = next.name
+        binding.nowPlayingTitle.text = next.name
+        autoReconnectAttempts = 0
+        playbackStarted = false
+        pendingMediaItem = null
+        resolveAndPlay(next)
+        return true
+    }
 
     private fun resolveAndPlay(stream: Stream, resolved: Boolean = false) {
         // Si la «dirección» es una página web con un reproductor dentro, se saca de ella el vídeo real: primero leyendo su
@@ -1832,6 +1893,7 @@ class PlayerActivity : AppCompatActivity() {
             fun play(res: PageStreamResolver.Result) {
                 if (isFinishing || isDestroyed || currentStream?.id != stream.id) return
                 lastPageResolvedUrl = res.url
+                lastPageResult = res
                 resolveAndPlay(PageStreamResolver.toStream(stream, res).copy(tokenUrl = stream.tokenUrl), resolved = true)
             }
             Thread {
@@ -1844,7 +1906,10 @@ class PlayerActivity : AppCompatActivity() {
                         HiddenWebResolver.resolve(this, stream.url, stream.headers, progressive = PageStreamResolver.isHoster(stream.url)) { hidden ->
                             if (isFinishing || isDestroyed || currentStream?.id != stream.id) return@resolve
                             if (hidden != null) play(hidden)
-                            else Toast.makeText(this, R.string.page_resolve_failed, Toast.LENGTH_LONG).show()
+                            else {
+                                if (PageStreamResolver.isHoster(stream.url)) com.example.superplayer.data.HosterStats.bad(this, stream.url)
+                                if (!tryNextAlternate()) Toast.makeText(this, R.string.page_resolve_failed, Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                 }
@@ -2653,6 +2718,9 @@ class PlayerActivity : AppCompatActivity() {
         @Volatile private var activeInstance: PlayerActivity? = null
 
         var pendingStream: Stream? = null
+
+        /** Otros servidores del mismo vídeo (los otros botones de la ficha): si uno falla se pasa al siguiente solo. */
+        var pendingAlternates: List<Stream> = emptyList()
 
         // Lista de canales de la categoría/favoritos/búsqueda desde la que
         // se abre pendingStream; la rellenan MainActivity y StreamListActivity

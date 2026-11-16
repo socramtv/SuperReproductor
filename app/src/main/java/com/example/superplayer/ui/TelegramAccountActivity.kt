@@ -4434,11 +4434,12 @@ class TelegramAccountActivity : AppCompatActivity() {
         // ---- Servidores: botón grande por cada enlace de vídeo; el resto (TMDB…) en gris ----
         val urls = m.buttons.filter { it.kind == "url" }
         fun clean(t: String) = t.replace(Regex("^[^\\p{L}\\p{N}]+"), "").trim()
-        val hosters = urls.filter { com.example.superplayer.player.PageStreamResolver.isHoster(it.data) }
+        val hosters = orderedHosters(m)
         val others = urls.filter { it !in hosters }
         var first: TextView? = null
         for (b in hosters) {
-            val btn = pill("▶  " + clean(b.text), accent, sizeSp = 16f, heightDp = 46) { dialog.dismiss(); pressInline(m, b) }
+            val star = if (b === hosters.first() && com.example.superplayer.data.HosterStats.score(this, b.data) > 0) "⭐ " else ""
+            val btn = pill("▶  $star" + clean(b.text), accent, sizeSp = 16f, heightDp = 46) { dialog.dismiss(); pressInline(m, b) }
             if (first == null) first = btn
             col.addView(btn, lp(MATCH, dp(46), l = 28, t = if (b === hosters.first()) 16 else 8, r = 28))
         }
@@ -4512,7 +4513,11 @@ class TelegramAccountActivity : AppCompatActivity() {
                     scheduleReload(1000)
                 }
             }
-            "url" -> if (isTgLink(b.data)) openTgLink(b.data) else openLink(b.data, hosterName(m, b.text))
+            "url" -> when {
+                isTgLink(b.data) -> openTgLink(b.data)
+                com.example.superplayer.player.PageStreamResolver.isHoster(b.data) -> playHosters(m, b)
+                else -> openLink(b.data, hosterName(m, b.text))
+            }
             "txt" -> sendToCurrentChat(b.data)
             else -> Toast.makeText(this, R.string.tgacc_btn_unsupported, Toast.LENGTH_SHORT).show()
         }
@@ -4635,6 +4640,19 @@ class TelegramAccountActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, R.string.tgacc_live_error, Toast.LENGTH_LONG).show()
         }
+    }
+
+    /** Botones de servidores de vídeo de la ficha, los que mejor han funcionado primero. */
+    private fun orderedHosters(m: TgMessage): List<com.example.superplayer.telegram.TgButton> =
+        m.buttons.filter { it.kind == "url" && com.example.superplayer.player.PageStreamResolver.isHoster(it.data) }
+            .sortedByDescending { com.example.superplayer.data.HosterStats.score(this, it.data) }
+
+    /** Reproduce el servidor elegido y deja los demás de la ficha como relevo por si falla. */
+    private fun playHosters(m: TgMessage, chosen: com.example.superplayer.telegram.TgButton) {
+        fun st(b: com.example.superplayer.telegram.TgButton) =
+            Stream(name = hosterName(m, b.text).take(80), type = "MP4", url = b.data, icon = null, category = "Telegram")
+        PlayerActivity.pendingAlternates = orderedHosters(m).filter { it !== chosen && it.data != chosen.data }.map { st(it) }
+        open(st(chosen))
     }
 
     /** Nombre para el reproductor: título de la ficha (primera línea con letras) + servidor. */

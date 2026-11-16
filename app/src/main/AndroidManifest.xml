@@ -127,6 +127,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!-- Enlace socramtv://favs?d=… para importar los favoritos de otro móvil -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="socramtv" android:host="favs" />
+            </intent-filter>
         </activity>
 
         <!-- Ver directos de Telegram dentro de la app (ver LiveActivity) -->
