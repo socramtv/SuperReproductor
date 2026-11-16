@@ -4297,44 +4297,198 @@ class TelegramAccountActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Ficha del bot: foto grande, información y un botón por servidor/enlace (los de uqload, streamtape… reproducen dentro de la app). */
+    /** Ficha de un bot de películas con el MISMO estilo que la ficha de los vídeos: cabecera con degradado, título, nota, géneros, un botón por servidor y sinopsis. */
     private fun showBotFicha(m: TgMessage) {
-        val d = resources.displayMetrics.density
-        val root = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding((16 * d).toInt(), (12 * d).toInt(), (16 * d).toInt(), (8 * d).toInt())
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+        val cBg = 0xFF12121C.toInt()
+        val cCard = 0xFF222232.toInt()
+        val cText = 0xFFFFFFFF.toInt()
+        val cMuted = 0xFFB4B4C6.toInt()
+        val accent = androidx.core.content.ContextCompat.getColor(this, R.color.primary)
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        fun shape(fill: Int, radius: Int, stroke: Int = 0, strokeColor: Int = 0) = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(radius).toFloat()
+            setColor(fill)
+            if (stroke > 0) setStroke(dp(stroke), strokeColor)
         }
-        val img = ImageView(this).apply {
-            adjustViewBounds = true
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            maxHeight = (320 * d).toInt()
+        fun focusBg(fill: Int, radius: Int, stroke: Int = 0, strokeColor: Int = 0) = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), shape(fill, radius, 3, cText))
+            addState(intArrayOf(android.R.attr.state_pressed), shape(fill, radius, 3, cText))
+            addState(intArrayOf(), shape(fill, radius, stroke, strokeColor))
+        }
+        fun pill(text: String, fill: Int, sizeSp: Float = 15f, heightDp: Int = 46, stroke: Int = 0, strokeColor: Int = 0, onClick: () -> Unit) =
+            TextView(this).apply {
+                this.text = text
+                textSize = sizeSp
+                setTextColor(cText)
+                gravity = android.view.Gravity.CENTER
+                typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+                background = focusBg(fill, heightDp / 2, stroke, strokeColor)
+                setPadding(dp(14), 0, dp(14), 0)
+                minHeight = dp(heightDp)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { onClick() }
+            }
+        fun lp(w: Int, h: Int, l: Int = 0, t: Int = 0, r: Int = 0, b: Int = 0) =
+            android.widget.LinearLayout.LayoutParams(w, h).apply { setMargins(dp(l), dp(t), dp(r), dp(b)) }
+        val MATCH = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        val WRAP = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+
+        // ---- Datos sacados del texto del bot ----
+        val lines = m.text.lines().map { it.trim() }
+        fun field(vararg keys: String): String? = lines.firstNotNullOfOrNull { l ->
+            val clean = l.replace(Regex("^[^\\p{L}\\p{N}]+"), "")
+            keys.firstNotNullOfOrNull { k -> if (clean.startsWith(k, true)) clean.substringAfter(':', "").trim().ifEmpty { null } else null }
+        }
+        val title = lines.map { it.replace(Regex("^[^\\p{L}\\p{N}]+"), "") }.firstOrNull { it.isNotEmpty() } ?: "Vídeo"
+        val year = field("Año")
+        val genres = field("Géneros", "Genero", "Género")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        val minutes = field("Duración")?.let { Regex("\\d+").find(it)?.value?.toIntOrNull() }
+        val rating = field("Valoración")?.let { Regex("[0-9]+([.,][0-9]+)?").find(it)?.value?.replace(',', '.')?.toDoubleOrNull() }
+        val votes = field("Votos")
+        val synopsis = run {
+            val idx = lines.indexOfFirst { it.replace(Regex("^[^\\p{L}\\p{N}]+"), "").startsWith("Sinopsis", true) }
+            if (idx < 0) "" else lines.drop(idx + 1)
+                .takeWhile { !it.replace(Regex("^[^\\p{L}\\p{N}]+"), "").startsWith("Servidores", true) }
+                .joinToString("\n").trim()
+        }
+
+        val col = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+
+        // ---- Cabecera ----
+        val header = android.widget.FrameLayout(this)
+        val img = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(cCard)
         }
         thumbPaths[m.thumbId]?.let { img.load(File(it)) }
-        root.addView(img, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
-        val lines = m.text.trim()
-        val firstEnd = lines.indexOf('\n').let { if (it < 0) lines.length else it }
-        val body = android.text.SpannableString(lines).apply {
-            setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, firstEnd, 0)
-            setSpan(android.text.style.RelativeSizeSpan(1.25f), 0, firstEnd, 0)
+        header.addView(img, android.widget.FrameLayout.LayoutParams(MATCH, MATCH))
+        header.addView(android.view.View(this).apply {
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x00000000, cBg)
+            )
+        }, android.widget.FrameLayout.LayoutParams(MATCH, dp(130), android.view.Gravity.BOTTOM))
+        col.addView(header, lp(MATCH, dp(300)))
+
+        col.addView(TextView(this).apply {
+            text = title
+            textSize = 24f
+            setTextColor(cText)
+            gravity = android.view.Gravity.CENTER
+            typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(20), 0, dp(20), 0)
+        }, lp(MATCH, WRAP, t = -34))
+
+        // ---- Nota, año, duración ----
+        val facts = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER
         }
-        root.addView(android.widget.TextView(this).apply {
-            text = body
+        if (rating != null && rating > 0.0) facts.addView(TextView(this).apply {
+            text = "★ " + String.format(java.util.Locale.US, "%.1f", rating)
+            textSize = 14f
+            setTextColor(0xFFFFC107.toInt())
+            typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
+            background = shape(0x33FFC107, 14)
+            setPadding(dp(10), dp(3), dp(10), dp(3))
+        }, lp(WRAP, WRAP, r = 8))
+        val rest = listOfNotNull(
+            year,
+            minutes?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
+            votes?.let { "👥 $it" }
+        ).joinToString("  ·  ")
+        if (rest.isNotEmpty()) facts.addView(TextView(this).apply { text = rest; textSize = 14f; setTextColor(cMuted) })
+        col.addView(facts, lp(MATCH, WRAP, t = 8))
+
+        if (genres.isNotEmpty()) {
+            val avail = resources.displayMetrics.widthPixels * 0.95f - dp(36)
+            val paint = android.graphics.Paint().apply { textSize = 13f * resources.displayMetrics.scaledDensity }
+            val gbox = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL; gravity = android.view.Gravity.CENTER_HORIZONTAL }
+            var line: android.widget.LinearLayout? = null
+            var used = 0f
+            for (g in genres) {
+                val w = paint.measureText(g) + dp(28) + dp(8)
+                if (line == null || used + w > avail) {
+                    line = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER }
+                    gbox.addView(line, lp(WRAP, WRAP, t = 6))
+                    used = 0f
+                }
+                line!!.addView(TextView(this).apply {
+                    text = g
+                    textSize = 13f
+                    setTextColor(cText)
+                    maxLines = 1
+                    background = shape(0x1AFFFFFF, 16, 1, 0x40FFFFFF)
+                    setPadding(dp(14), dp(6), dp(14), dp(6))
+                }, lp(WRAP, WRAP, l = 4, r = 4))
+                used += w
+            }
+            col.addView(gbox, lp(MATCH, WRAP, t = 6))
+        }
+
+        // ---- Servidores: botón grande por cada enlace de vídeo; el resto (TMDB…) en gris ----
+        val urls = m.buttons.filter { it.kind == "url" }
+        fun clean(t: String) = t.replace(Regex("^[^\\p{L}\\p{N}]+"), "").trim()
+        val hosters = urls.filter { com.example.superplayer.player.PageStreamResolver.isHoster(it.data) }
+        val others = urls.filter { it !in hosters }
+        var first: TextView? = null
+        for (b in hosters) {
+            val btn = pill("▶  " + clean(b.text), accent, sizeSp = 16f, heightDp = 46) { dialog.dismiss(); pressInline(m, b) }
+            if (first == null) first = btn
+            col.addView(btn, lp(MATCH, dp(46), l = 28, t = if (b === hosters.first()) 16 else 8, r = 28))
+        }
+        for (b in others) {
+            col.addView(pill("↗  " + clean(b.text), 0x1FFFFFFF, sizeSp = 15f, heightDp = 44, stroke = 1, strokeColor = 0x40FFFFFF) { dialog.dismiss(); pressInline(m, b) },
+                lp(MATCH, dp(44), l = 28, t = if (hosters.isEmpty() && b === others.first()) 16 else 8, r = 28))
+        }
+        if (m.buttons.size > urls.size) col.addView(pill("⋯  " + getString(R.string.tgacc_buttons, m.buttons.size), 0x1FFFFFFF, sizeSp = 14f, heightDp = 44, stroke = 1, strokeColor = 0x40FFFFFF) {
+            dialog.dismiss(); showButtons(m)
+        }, lp(MATCH, dp(44), l = 28, t = 8, r = 28))
+
+        // ---- Sinopsis ----
+        if (synopsis.isNotEmpty()) col.addView(TextView(this).apply {
+            text = synopsis
             textSize = 15f
-            setPadding(0, (10 * d).toInt(), 0, (10 * d).toInt())
-        })
-        val dialog = AlertDialog.Builder(this)
-            .setView(android.widget.ScrollView(this).apply { addView(root) })
-            .setNegativeButton(R.string.channel_check_close, null)
-            .setNeutralButton(R.string.tgacc_buttons_title, null)
-            .create()
-        for (b in m.buttons.filter { it.kind == "url" }) {
-            root.addView(makeBotButton((if (b.text.startsWith("↗")) "" else "↗ ") + b.text).apply {
-                setOnClickListener { dialog.dismiss(); pressInline(m, b) }
-            }, android.widget.LinearLayout.LayoutParams(android.widget.LinearLayout.LayoutParams.MATCH_PARENT, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (6 * d).toInt() })
+            setTextColor(cMuted)
+            setLineSpacing(0f, 1.25f)
+            setPadding(dp(24), 0, dp(24), 0)
+        }, lp(MATCH, WRAP, t = 20))
+        col.addView(android.view.View(this), lp(MATCH, dp(28)))
+
+        val scroll = android.widget.ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            addView(col)
         }
-        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { dialog.dismiss(); showButtons(m) } }
+        val root = android.widget.FrameLayout(this).apply {
+            background = shape(cBg, 22)
+            clipToOutline = true
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            addView(scroll, android.widget.FrameLayout.LayoutParams(MATCH, MATCH))
+            addView(TextView(this@TelegramAccountActivity).apply {
+                text = "✕"
+                textSize = 18f
+                setTextColor(cText)
+                gravity = android.view.Gravity.CENTER
+                background = focusBg(0x99000000.toInt(), 20)
+                isFocusable = true
+                isClickable = true
+                setOnClickListener { dialog.dismiss() }
+            }, android.widget.FrameLayout.LayoutParams(dp(40), dp(40), android.view.Gravity.TOP or android.view.Gravity.END).apply { setMargins(0, dp(12), dp(12), 0) })
+        }
+        dialog.setContentView(root)
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0x00000000))
+            setLayout((resources.displayMetrics.widthPixels * 0.95f).toInt(), (resources.displayMetrics.heightPixels * 0.92f).toInt())
+            setDimAmount(0.75f)
+        }
         dialog.show()
-        // Foto completa (la miniatura solo se ve si ya estaba en la lista).
+        first?.requestFocus()
+        // La miniatura solo se ve si ya estaba cargada; si no, se descarga la foto.
         if (m.fileId != null && thumbPaths[m.thumbId] == null) download(m) { path -> if (!isFinishing && !isDestroyed && dialog.isShowing) img.load(File(path)) }
     }
 
