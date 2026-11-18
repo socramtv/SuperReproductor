@@ -1115,4 +1115,5 @@
     <string name="matchguide_none">Hoy no hay partidos en las competiciones seguidas (o no hay conexión).</string>
     <string name="matchguide_no_channel">Ningún canal de tu lista lo emite según la guía.</string>
     <string name="matchguide_hint">📺 = canales de tu lista que lo emiten (según la guía EPG). Toca un partido para verlo.</string>
+    <string name="web_fit">Ajustar a la pantalla (webs anchas)</string>
 </resources>

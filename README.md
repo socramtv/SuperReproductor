@@ -1954,3 +1954,6 @@ Al tocar una película de un bot (foto + datos + botones de enlace) se abre una 
 
 ## Partidos de hoy
 Menú ⋮ → «⚽ Partidos de hoy»: los partidos del día de las competiciones de MatchFeed (LaLiga, Hypermotion, Copa, Champions, Europa, Conference, Premier, Serie A, Bundesliga, Ligue 1) con escudos, hora y, si ya juegan, marcador y minuto en verde. A la derecha, «📺 N» son los canales de TU lista que emiten ese partido según la guía EPG (los dos equipos en el título y hora parecida). Tocar un partido abre el canal, o deja elegir si hay varios. Si un partido no tiene canal en la guía, sale «—».
+
+## Ajustar a la pantalla
+Menú Web → Ajustes → «Ajustar a la pantalla» (activado por defecto): si una web es más ancha que el móvil (diseño de escritorio, tablas fijas), se le fuerza un viewport más ancho con zoom inicial para que se vea entera sin desplazarse de lado; si no trae viewport, usa el ancho del móvil. Se aplica al cargar y de nuevo a 1,5 s y 4 s. Se puede desactivar si una web se ve peor.

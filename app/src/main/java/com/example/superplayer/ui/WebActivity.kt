@@ -308,6 +308,12 @@ class WebActivity : AppCompatActivity() {
                 t.page = url
                 view.evaluateJavascript(SCOUT_JS, null)
                 if (adBlockOn()) view.evaluateJavascript(HIDE_ADS_JS, null)
+                if (fitOn()) {
+                    // Webs de escritorio o con tablas anchas: se encogen para que quepan (algunas cambian el ancho tarde, por eso se repite).
+                    view.evaluateJavascript(FIT_JS, null)
+                    view.postDelayed({ view.evaluateJavascript(FIT_JS, null) }, 1500)
+                    view.postDelayed({ view.evaluateJavascript(FIT_JS, null) }, 4000)
+                }
                 addHistory(url, view.title.orEmpty())
                 if (t === curTab) {
                     binding.webProgress.visibility = View.GONE
@@ -2018,6 +2024,11 @@ class WebActivity : AppCompatActivity() {
             webView.reload()
             hideHome()
         }
+        item(check(fitOn(), getString(R.string.web_fit))) {
+            prefs().edit().putBoolean("fit", !fitOn()).apply()
+            webView.reload()
+            hideHome()
+        }
         item(getString(R.string.web_agent_menu, agentLabel())) { chooseAgent() }
         if (isTv) item(check(cursorEnabled(), getString(R.string.web_cursor_opt))) {
             prefs().edit().putBoolean("cursor", !cursorEnabled()).apply()
@@ -2127,6 +2138,9 @@ class WebActivity : AppCompatActivity() {
     private var okDownAt = 0L
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val fadeCursor = Runnable { cursorView?.animate()?.alpha(0.4f)?.setDuration(300)?.start() }
+
+    /** «Ajustar a la pantalla»: por defecto activado. */
+    private fun fitOn() = prefs().getBoolean("fit", true)
 
     private fun cursorEnabled() = prefs().getBoolean("cursor", true)
 
@@ -2402,6 +2416,17 @@ class WebActivity : AppCompatActivity() {
             "scatteramarth.com", "vpbugplg.com", "smockeddesmoid.qpon", "terciohagrid.click", "adscore.com", "adsco.re",
             "clickaine.com", "histats.com", "pushwhy.com", "acscdn.com", "magsrv.com", "tzegilo.com", "bvtpk.com", "ofphmsg.com"
         )
+        /** Si el contenido es más ancho que la pantalla, fuerza un «viewport» más ancho con zoom inicial para que se vea entero; si la web no trae viewport, usa el ancho del móvil. */
+        private const val FIT_JS = """(function(){try{
+var de=document.documentElement,b=document.body;if(!de||!b)return;
+var iw=window.innerWidth||de.clientWidth,sw=Math.max(de.scrollWidth,b.scrollWidth);
+var m=document.querySelector('meta[name=viewport]');
+if(sw>iw+8){var w=Math.min(sw,2400);
+if(!m){m=document.createElement('meta');m.name='viewport';(document.head||de).appendChild(m);}
+m.setAttribute('content','width='+w+', initial-scale='+(iw/w).toFixed(3)+', minimum-scale=0.15, maximum-scale=5, user-scalable=yes');}
+else if(!m){m=document.createElement('meta');m.name='viewport';m.content='width=device-width, initial-scale=1';(document.head||de).appendChild(m);}
+}catch(e){}})();"""
+
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }
