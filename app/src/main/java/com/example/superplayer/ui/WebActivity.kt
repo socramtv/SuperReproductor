@@ -2416,14 +2416,26 @@ class WebActivity : AppCompatActivity() {
             "scatteramarth.com", "vpbugplg.com", "smockeddesmoid.qpon", "terciohagrid.click", "adscore.com", "adsco.re",
             "clickaine.com", "histats.com", "pushwhy.com", "acscdn.com", "magsrv.com", "tzegilo.com", "bvtpk.com", "ofphmsg.com"
         )
-        /** Si el contenido es más ancho que la pantalla, fuerza un «viewport» más ancho con zoom inicial para que se vea entero; si la web no trae viewport, usa el ancho del móvil. */
+        /**
+         * Mide lo que de verdad desborda a lo ancho (sin contar rótulos «marquee», cajas con scroll u ocultas, ni elementos fijos).
+         * Si no desborda, la web se ve como en Chrome: ancho del móvil y zoom 1. Si desborda de verdad, se encoge lo justo (máx. ~45 %).
+         */
         private const val FIT_JS = """(function(){try{
 var de=document.documentElement,b=document.body;if(!de||!b)return;
-var iw=window.innerWidth||de.clientWidth,sw=Math.max(de.scrollWidth,b.scrollWidth);
+var iw=window.innerWidth||de.clientWidth;
 var m=document.querySelector('meta[name=viewport]');
-if(sw>iw+8){var w=Math.min(sw,2400);
+var all=b.getElementsByTagName('*'),max=0,n=Math.min(all.length,6000),sx=window.pageXOffset||0;
+for(var i=0;i<n;i++){var e=all[i],r=e.getBoundingClientRect();
+if(r.width<=0||r.right<=iw+8||r.right<=max)continue;
+var p=e,skip=false;
+while(p&&p!==de){if(p.tagName==='MARQUEE'){skip=true;break}
+var cs=getComputedStyle(p);
+if((p!==e&&/(hidden|auto|scroll|clip)/.test(cs.overflowX))||cs.position==='fixed'||cs.display==='none'||cs.visibility==='hidden'){skip=true;break}
+p=p.parentElement;}
+if(!skip)max=r.right;}
+if(max>iw+8){var w=Math.min(Math.ceil(max+sx),Math.round(iw*2.2));
 if(!m){m=document.createElement('meta');m.name='viewport';(document.head||de).appendChild(m);}
-m.setAttribute('content','width='+w+', initial-scale='+(iw/w).toFixed(3)+', minimum-scale=0.15, maximum-scale=5, user-scalable=yes');}
+m.setAttribute('content','width='+w+', initial-scale='+(iw/w).toFixed(3)+', minimum-scale=0.2, maximum-scale=5, user-scalable=yes');}
 else if(!m){m=document.createElement('meta');m.name='viewport';m.content='width=device-width, initial-scale=1';(document.head||de).appendChild(m);}
 }catch(e){}})();"""
 
