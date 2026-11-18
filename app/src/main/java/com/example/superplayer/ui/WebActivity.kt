@@ -217,7 +217,7 @@ class WebActivity : AppCompatActivity() {
         s.builtInZoomControls = true
         s.displayZoomControls = false
         s.useWideViewPort = true
-        s.loadWithOverviewMode = true
+        s.loadWithOverviewMode = false
         s.allowFileAccess = false
         if (defaultUa.isEmpty()) defaultUa = s.userAgentString
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
@@ -279,6 +279,7 @@ class WebActivity : AppCompatActivity() {
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                applyZoomFor(view, url)
                 if (t.isPopupTab && adBlockOn() && url != "about:blank") {
                     t.popupStarts++
                     val u = Uri.parse(url)
@@ -308,7 +309,7 @@ class WebActivity : AppCompatActivity() {
                 t.page = url
                 view.evaluateJavascript(SCOUT_JS, null)
                 if (adBlockOn()) view.evaluateJavascript(HIDE_ADS_JS, null)
-                if (fitOn()) {
+                if (fitOn(url)) {
                     // Webs de escritorio o con tablas anchas: se encogen para que quepan (algunas cambian el ancho tarde, por eso se repite).
                     view.evaluateJavascript(FIT_JS, null)
                     view.postDelayed({ view.evaluateJavascript(FIT_JS, null) }, 1500)
@@ -2024,11 +2025,7 @@ class WebActivity : AppCompatActivity() {
             webView.reload()
             hideHome()
         }
-        item(check(fitOn(), getString(R.string.web_fit))) {
-            prefs().edit().putBoolean("fit", !fitOn()).apply()
-            webView.reload()
-            hideHome()
-        }
+        item(getString(R.string.web_zoom_menu)) { showZoomDialog() }
         item(getString(R.string.web_agent_menu, agentLabel())) { chooseAgent() }
         if (isTv) item(check(cursorEnabled(), getString(R.string.web_cursor_opt))) {
             prefs().edit().putBoolean("cursor", !cursorEnabled()).apply()
@@ -2140,7 +2137,103 @@ class WebActivity : AppCompatActivity() {
     private val fadeCursor = Runnable { cursorView?.animate()?.alpha(0.4f)?.setDuration(300)?.start() }
 
     /** «Ajustar a la pantalla»: por defecto activado. */
-    private fun fitOn() = prefs().getBoolean("fit", true)
+    private fun fitOn(url: String? = webView.url) = zoomFor(url).first != "mobile"
+
+    // ---- Zoom y ancho de página: global y por web ----
+    // Modos: «auto» (como Chrome: respeta la web y encoge solo lo que desborda de verdad), «fit» (vista general: todo
+    // encogido al ancho de pantalla) y «mobile» (fuerza el ancho del móvil, ignora el ancho que pida la web).
+
+    private fun hostKey(url: String?): String = try { Uri.parse(url ?: "").host?.removePrefix("www.").orEmpty() } catch (e: Exception) { "" }
+
+    private fun zoomFor(url: String?): Pair<String, Int> {
+        val h = hostKey(url)
+        if (h.isNotEmpty()) {
+            try {
+                val o = JSONObject(prefs().getString("zhost", "{}") ?: "{}").optJSONObject(h)
+                if (o != null) return o.optString("m", "auto") to o.optInt("z", 100)
+            } catch (e: Exception) { }
+        }
+        return (prefs().getString("zmode", "auto") ?: "auto") to prefs().getInt("zoom", 100)
+    }
+
+    private fun applyZoomFor(view: WebView, url: String) {
+        val (mode, zoom) = zoomFor(url)
+        val st = view.settings
+        val wide = mode != "mobile"
+        val overview = mode == "fit"
+        if (st.useWideViewPort != wide) st.useWideViewPort = wide
+        if (st.loadWithOverviewMode != overview) st.loadWithOverviewMode = overview
+        if (st.textZoom != zoom) st.textZoom = zoom
+    }
+
+    private fun showZoomDialog() {
+        val url = webView.url
+        val host = hostKey(url)
+        val d = resources.displayMetrics.density
+        val (curMode, curZoom) = zoomFor(url)
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding((22 * d).toInt(), (10 * d).toInt(), (22 * d).toInt(), 0)
+        }
+        val modes = listOf(
+            "auto" to getString(R.string.web_zoom_auto),
+            "fit" to getString(R.string.web_zoom_fit),
+            "mobile" to getString(R.string.web_zoom_mobile)
+        )
+        val group = android.widget.RadioGroup(this)
+        modes.forEachIndexed { i, (k, label) ->
+            group.addView(android.widget.RadioButton(this).apply { id = 1000 + i; text = label; isChecked = k == curMode })
+        }
+        box.addView(group)
+        val zl = android.widget.TextView(this).apply { textSize = 15f; setPadding(0, (14 * d).toInt(), 0, 0) }
+        val bar = android.widget.SeekBar(this).apply {
+            max = 200 // 50 % … 250 %
+            progress = (curZoom - 50).coerceIn(0, 200)
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar?, p: Int, u: Boolean) { zl.text = getString(R.string.web_zoom_text, p + 50) }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+            })
+        }
+        zl.text = getString(R.string.web_zoom_text, bar.progress + 50)
+        box.addView(zl); box.addView(bar)
+        val only = android.widget.CheckBox(this).apply {
+            text = getString(R.string.web_zoom_only, host.ifEmpty { "—" })
+            isEnabled = host.isNotEmpty()
+            isChecked = host.isNotEmpty()
+        }
+        box.addView(only)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.web_zoom_title)
+            .setView(box)
+            .setPositiveButton(R.string.web_zoom_apply) { _, _ ->
+                val m = modes.getOrNull(group.checkedRadioButtonId - 1000)?.first ?: "auto"
+                val z = bar.progress + 50
+                if (only.isChecked && host.isNotEmpty()) {
+                    val o = try { JSONObject(prefs().getString("zhost", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+                    o.put(host, JSONObject().put("m", m).put("z", z))
+                    prefs().edit().putString("zhost", o.toString()).apply()
+                } else {
+                    prefs().edit().putString("zmode", m).putInt("zoom", z).apply()
+                }
+                applyZoomFor(webView, url ?: "")
+                webView.reload()
+                hideHome()
+            }
+            .setNeutralButton(R.string.web_zoom_reset) { _, _ ->
+                if (host.isNotEmpty()) {
+                    val o = try { JSONObject(prefs().getString("zhost", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+                    o.remove(host)
+                    prefs().edit().putString("zhost", o.toString()).apply()
+                }
+                prefs().edit().putString("zmode", "auto").putInt("zoom", 100).apply()
+                applyZoomFor(webView, url ?: "")
+                webView.reload()
+                hideHome()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
 
     private fun cursorEnabled() = prefs().getBoolean("cursor", true)
 
