@@ -54,6 +54,7 @@ class WebActivity : AppCompatActivity() {
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var desktop = false
     private var defaultUa = ""
+    private var rawUa = ""
     /** Una pestaña: su WebView, la página actual (guardada desde el hilo principal: shouldInterceptRequest corre en otro hilo) y sus vídeos detectados. */
     private class Tab(val view: WebView) {
         @Volatile var page = ""
@@ -219,7 +220,10 @@ class WebActivity : AppCompatActivity() {
         s.useWideViewPort = true
         s.loadWithOverviewMode = false
         s.allowFileAccess = false
-        if (defaultUa.isEmpty()) defaultUa = s.userAgentString
+        if (defaultUa.isEmpty()) {
+            rawUa = s.userAgentString
+            defaultUa = cleanUa(rawUa)
+        }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
         wv.addJavascriptInterface(Scout(t), "SocramScout")
         if (isTv) {
@@ -2241,7 +2245,8 @@ class WebActivity : AppCompatActivity() {
 
     /** Agentes predefinidos: clave, nombre y cadena (vacía = el del propio móvil/tele). */
     private val agents = listOf(
-        Triple("", "📱 Predeterminado (este dispositivo)", ""),
+        Triple("", "📱 Predeterminado (como Chrome móvil)", ""),
+        Triple("wv", "🔧 Navegador integrado (WebView original)", ""),
         Triple("desktop", "🖥 Escritorio · Chrome (Linux)", DESKTOP_UA),
         Triple("win", "🖥 Escritorio · Chrome (Windows)",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
@@ -2272,14 +2277,21 @@ class WebActivity : AppCompatActivity() {
         applySavedAgent()
     }
 
+    /**
+     * El agente de un WebView lleva «; wv» y «Version/4.0»: muchas webs (y sus «iframes») lo detectan y se niegan a cargar
+     * (ERR_BLOCKED_BY_RESPONSE, «refused to connect»). Se limpia para que parezca Chrome móvil normal.
+     */
+    private fun cleanUa(ua: String): String = ua.replace("; wv)", ")").replace(Regex("\\sVersion/\\d+(\\.\\d+)*"), "")
+
     private fun applySavedAgent() {
         val k = agentKey()
         val ua = when {
             k == "custom" -> (prefs().getString("ua_custom", "") ?: "").ifBlank { defaultUa }
             k.isEmpty() -> defaultUa
+            k == "wv" -> rawUa.ifEmpty { defaultUa }
             else -> agents.firstOrNull { it.first == k }?.third?.ifEmpty { defaultUa } ?: defaultUa
         }
-        desktop = k.isNotEmpty() && k != "iphone" && k != "ipad" && k != "tv"
+        desktop = k.isNotEmpty() && k != "iphone" && k != "ipad" && k != "tv" && k != "wv"
         for (t in tabs) t.view.settings.userAgentString = ua
     }
 

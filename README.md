@@ -1957,3 +1957,6 @@ Menú ⋮ → «⚽ Partidos de hoy»: los partidos del día de las competicione
 
 ## Zoom y ancho de página
 La web ya no se abre en «vista general» (era lo que encogía páginas como socialcreator.com por culpa de un rótulo deslizante muy ancho): por defecto se ve como en Chrome. Menú Web → Ajustes → «🔍 Zoom y ancho de página…»: modo **Automático** (respeta la web y encoge solo lo que desborda de verdad; ignora `marquee`, cajas con scroll y elementos fijos), **Vista general** (todo encogido al ancho de pantalla) o **Ancho del móvil** (fuerza el ancho del móvil), y un control de **tamaño del texto** de 50 % a 250 %. Se guarda para esa web («Solo para …», marcado por defecto) o para todas; «Restablecer» vuelve a lo normal.
+
+## Agente «como Chrome móvil»
+El agente por defecto del navegador ya no lleva `; wv` ni `Version/4.0` (las marcas de un WebView), que hacían que algunas webs y sus iframes se negaran a cargar (`ERR_BLOCKED_BY_RESPONSE`). En el selector de agente sigue la opción «🔧 Navegador integrado (WebView original)» por si alguna web va mejor así.
