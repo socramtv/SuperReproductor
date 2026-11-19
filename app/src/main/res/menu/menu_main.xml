@@ -52,6 +52,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_match_guide"
+        android:title="@string/matchguide_menu"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_web"
         android:title="@string/action_web"
         app:showAsAction="never" />
@@ -84,10 +89,6 @@
             <item
                 android:id="@+id/action_program_alerts"
                 android:title="@string/action_program_alerts"
-                app:showAsAction="never" />
-            <item
-                android:id="@+id/action_match_guide"
-                android:title="@string/matchguide_menu"
                 app:showAsAction="never" />
             <item
                 android:id="@+id/action_dns"
