@@ -252,7 +252,7 @@ class WebActivity : AppCompatActivity() {
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url.toString()
-                if (adBlockOn() && !request.isForMainFrame && (isAdHost(request.url.host) || looksLikeAd(request.url, t.page))) {
+                if (adBlockOn(t.page) && !request.isForMainFrame && (isAdHost(request.url.host) || looksLikeAd(request.url, t.page))) {
                     t.blocked++
                     request.url.host?.lowercase()?.let { if (t.blockedHosts.size < 200) t.blockedHosts.add(it) }
                     return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
@@ -284,7 +284,7 @@ class WebActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 applyZoomFor(view, url)
-                if (t.isPopupTab && adBlockOn() && url != "about:blank") {
+                if (t.isPopupTab && adBlockOn(t.opener?.page ?: url) && url != "about:blank") {
                     t.popupStarts++
                     val u = Uri.parse(url)
                     val untouched = t.lastTouch < t.popupOpenedAt
@@ -312,7 +312,8 @@ class WebActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 t.page = url
                 view.evaluateJavascript(SCOUT_JS, null)
-                if (adBlockOn()) view.evaluateJavascript(HIDE_ADS_JS, null)
+                if (adBlockOn(url)) view.evaluateJavascript(HIDE_ADS_JS, null)
+                view.postDelayed({ checkAntiAdblock(view, url) }, 1800)
                 if (fitOn(url)) {
                     // Webs de escritorio o con tablas anchas: se encogen para que quepan (algunas cambian el ancho tarde, por eso se repite).
                     view.evaluateJavascript(FIT_JS, null)
@@ -337,9 +338,9 @@ class WebActivity : AppCompatActivity() {
         wv.webChromeClient = object : WebChromeClient() {
             /** window.open / target=_blank: con el bloqueador, solo si lo ha tocado el usuario (y se abre en una pestaña nueva). */
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
-                if (adBlockOn() && !isUserGesture) { t.blocked++; return false }
+                if (adBlockOn(t.page) && !isUserGesture) { t.blocked++; return false }
                 // Toque sobre algo que no es un enlace (capa de anuncio sobre el vídeo): ventana emergente de publicidad.
-                if (adBlockOn() && view.hitTestResult.type == WebView.HitTestResult.UNKNOWN_TYPE) {
+                if (adBlockOn(t.page) && view.hitTestResult.type == WebView.HitTestResult.UNKNOWN_TYPE) {
                     t.blocked++
                     Toast.makeText(this@WebActivity, R.string.web_popup_closed, Toast.LENGTH_SHORT).show()
                     return false
@@ -713,6 +714,58 @@ class WebActivity : AppCompatActivity() {
 
     private fun adBlockOn() = prefs().getBoolean("adblock", true)
 
+    // ---- Excepciones por web: webs que detectan el bloqueador («Bloqueador detectado…») ----
+    private fun siteOffSet(): Set<String> = (prefs().getStringSet("adblock_off_sites", emptySet()) ?: emptySet()).toSet()
+
+    private fun siteBlockOff(url: String?): Boolean {
+        val h = hostKey(url)
+        if (h.isEmpty()) return false
+        val off = siteOffSet()
+        var x = h
+        while (true) {
+            if (x in off) return true
+            val dot = x.indexOf('.')
+            if (dot < 0) return false
+            x = x.substring(dot + 1)
+        }
+    }
+
+    /** ¿Bloquear anuncios en la página de esta pestaña? (global activado y la web no está en excepciones) */
+    private fun adBlockOn(url: String?) = adBlockOn() && !siteBlockOff(url)
+
+    private fun setSiteBlock(url: String?, enabled: Boolean) {
+        val h = hostKey(url)
+        if (h.isEmpty()) return
+        val set = siteOffSet().toMutableSet()
+        if (enabled) set.remove(h) else set.add(h)
+        prefs().edit().putStringSet("adblock_off_sites", set).apply()
+    }
+
+    private val promptedDetect = HashSet<String>()
+
+    /** Si la página dice que detecta un bloqueador, se ofrece quitarlo solo para esa web. */
+    private fun checkAntiAdblock(view: WebView, url: String) {
+        val host = hostKey(url)
+        if (host.isEmpty() || host in promptedDetect) return
+        view.evaluateJavascript(
+            "(function(){try{var t=(document.body&&document.body.innerText)||'';" +
+                "return t.length<2500&&/(bloqueador|adblock|ad[ -]?block|desactiva\\s+tu|disable\\s+your)/i.test(t)}catch(e){return false}})()"
+        ) { r ->
+            if (r != "true" || isFinishing || isDestroyed || host in promptedDetect) return@evaluateJavascript
+            promptedDetect.add(host)
+            if (adBlockOn(url)) {
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.web_detect_title)
+                    .setMessage(getString(R.string.web_detect_msg, host))
+                    .setPositiveButton(R.string.web_detect_yes) { _, _ -> setSiteBlock(url, false); view.reload() }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            } else {
+                Toast.makeText(this, getString(R.string.web_detect_other, host), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     private var customAdHosts: Set<String>? = null
 
     private fun customHosts(): Set<String> =
@@ -784,7 +837,7 @@ class WebActivity : AppCompatActivity() {
 
     /** Navegaciones a las que la página nos lleva sola (popunders, redirecciones de anuncios): sin toque del usuario y a otro sitio. */
     private fun shouldBlockNavigation(t: Tab, request: WebResourceRequest): Boolean {
-        if (!adBlockOn()) return false
+        if (!adBlockOn(t.page)) return false
         val host = request.url.host
         if (isAdHost(host)) { t.blocked++; return true }
         if (request.hasGesture() || request.isRedirect) return false
@@ -2015,6 +2068,11 @@ class WebActivity : AppCompatActivity() {
         item(getString(R.string.web_alert_menu, alertModeLabel())) { chooseAlertMode() }
 
         head(R.string.web_sec_ads)
+        item(getString(if (siteBlockOff(webView.url)) R.string.web_site_block_off else R.string.web_site_block_on, hostKey(webView.url).ifEmpty { "—" })) {
+            setSiteBlock(webView.url, siteBlockOff(webView.url))
+            Toast.makeText(this, if (siteBlockOff(webView.url)) R.string.web_site_block_now_off else R.string.web_site_block_now_on, Toast.LENGTH_SHORT).show()
+            webView.reload()
+        }
         item(getString(if (adBlockOn()) R.string.web_adblock_on else R.string.web_adblock_off, curTab.blocked)) {
             prefs().edit().putBoolean("adblock", !adBlockOn()).apply()
             Toast.makeText(this, if (adBlockOn()) R.string.web_adblock_enabled else R.string.web_adblock_disabled, Toast.LENGTH_SHORT).show()

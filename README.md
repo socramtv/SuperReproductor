@@ -1963,3 +1963,7 @@ El agente por defecto del navegador ya no lleva `; wv` ni `Version/4.0` (las mar
 
 ## Más servidores de vídeo
 La lista de servidores reconocidos (y sus espejos) se amplía mucho: doodstream/playmogo/d000d/ds2play, mixdrop/mixdrp/m1xdrop, dropload, unlimplay, vidmoly, voe, filemoon, streamwish y espejos, vidhide, filelions, streamvid, lulustream, upstream, supervideo, streamhub, veev, vinovo, vidguard, fembed, streamsb… Además, un botón de la ficha cuenta como servidor si su **texto** lleva el nombre de un servidor conocido o, para servidores nuevos, si es un enlace que no es claramente una ficha/red social (TMDB, IMDb, YouTube, Telegram…). Esos botones se marcan como «página con vídeo» y se resuelven con el navegador invisible aunque su dominio sea desconocido.
+
+## Webs que detectan el bloqueador
+- Menú Web → «🛡 Bloqueador en <web>»: activa/desactiva el bloqueador **solo para esa web** (sin anuncios cortados, sin estilos de ocultación, sin cierre de ventanas emergentes); el interruptor global sigue igual.
+- Si una página dice que detecta un bloqueador («Bloqueador detectado», «desactiva tu bloqueador»…), la app lo nota y ofrece «Desactivar aquí» y recargar. Si el bloqueador de la app ya estaba desactivado, avisa de que el origen puede ser el DNS privado, una VPN o un bloqueador del sistema.

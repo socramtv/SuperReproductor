@@ -1124,4 +1124,12 @@
     <string name="web_zoom_only">Solo para %1$s</string>
     <string name="web_zoom_apply">Aplicar</string>
     <string name="web_zoom_reset">Restablecer</string>
+    <string name="web_detect_title">Esta web detecta el bloqueador</string>
+    <string name="web_detect_msg">%1$s dice que has activado un bloqueador de anuncios y no deja ver el contenido. ¿Desactivar el bloqueador solo para esta web y recargar?</string>
+    <string name="web_detect_yes">Desactivar aquí</string>
+    <string name="web_detect_other">%1$s dice que detecta un bloqueador, pero el de la app ya está desactivado. Puede ser el DNS privado, una VPN o un bloqueador del sistema.</string>
+    <string name="web_site_block_on">🛡 Bloqueador en %1$s: activado (tocar para desactivar)</string>
+    <string name="web_site_block_off">🛡 Bloqueador en %1$s: DESACTIVADO (tocar para activar)</string>
+    <string name="web_site_block_now_on">Bloqueador activado en esta web</string>
+    <string name="web_site_block_now_off">Bloqueador desactivado en esta web</string>
 </resources>
