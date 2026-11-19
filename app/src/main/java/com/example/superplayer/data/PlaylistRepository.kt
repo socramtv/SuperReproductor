@@ -33,7 +33,10 @@ object PlaylistRepository {
     }
 
     /** Descarga y lee una playlist alojada en una URL (p. ej. un raw de GitHub). */
-    fun loadFromUrl(urlString: String): PlaylistData = parse(downloadRaw(urlString))
+    fun loadFromUrl(urlString: String): PlaylistData {
+        eventsBase = urlString
+        return try { parse(downloadRaw(urlString)) } finally { eventsBase = null }
+    }
 
     /**
      * Solo la parte de descarga (sin analizar), para quien necesite quedarse
@@ -68,6 +71,9 @@ object PlaylistRepository {
     private fun parseJson(trimmed: String, depth: Int = 0): PlaylistData {
         val isArrayRoot = trimmed.startsWith("[")
         val rootObject: JSONObject? = if (isArrayRoot) null else JSONObject(trimmed)
+
+        // Feeds de eventos/partidos (p. ej. verpartidos.cc/api/v1/events): lista de eventos con sus enlaces.
+        parseEventsJson(trimmed)?.let { return it }
 
         // Listas públicas tipo tdtchannels.com (raíz objeto con "countries"):
         // esquema totalmente distinto, con su propia función dedicada.
@@ -141,6 +147,137 @@ object PlaylistRepository {
             categories.add(Category(categoryName, streams))
         }
         return PlaylistData(categories, epgUrl)
+    }
+
+
+    // ---------- Feeds de eventos / partidos (JSON genérico) ----------
+
+    private var eventsBase: String? = null
+    private val EV_LIST_KEYS = listOf("events", "data", "matches", "partidos", "eventos", "items", "results", "response", "games", "fixtures", "list")
+    private val EV_LINK_KEYS = listOf("url", "link", "embed", "embed_url", "embedurl", "iframe", "stream", "stream_url", "streamurl", "src", "href", "source", "file", "m3u8", "hls", "player", "watch")
+    private val EV_ARRAY_KEYS = listOf("channels", "links", "streams", "servers", "sources", "embeds", "canales", "iframes", "urls", "players", "options", "enlaces", "servidores")
+    private val EV_CAT_KEYS = listOf("league", "competition", "tournament", "liga", "competicion", "sport", "category", "deporte", "categoria", "group")
+    private val EV_ICON_KEYS = listOf("image", "poster", "logo", "thumbnail", "thumb", "icon", "banner", "img", "cover", "picture", "photo", "thumbnail_url", "home_team_badge", "away_team_badge")
+
+    private fun JSONObject.firstText(keys: List<String>): String? {
+        for (k in keys) {
+            val v = opt(k) ?: continue
+            when (v) {
+                is String -> if (v.isNotBlank() && v != "null") return v
+                is JSONObject -> (v.optStringOrNull("name") ?: v.optStringOrNull("title"))?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun evResolve(u: String): String? {
+        val t = u.trim()
+        if (t.isEmpty()) return null
+        if (t.startsWith("//")) return "https:$t"
+        if (t.startsWith("http://", true) || t.startsWith("https://", true)) return t
+        if (!t.startsWith("/")) return null
+        val base = eventsBase ?: return null
+        return try { java.net.URI(base).resolve(t).toString().takeIf { it.startsWith("http") } } catch (e: Exception) { null }
+    }
+
+    private fun evFindList(node: Any?, depth: Int): JSONArray? {
+        if (depth > 3) return null
+        if (node is JSONArray) {
+            val first = (0 until minOf(node.length(), 5)).mapNotNull { node.optJSONObject(it) }.firstOrNull() ?: return null
+            // Un array de objetos con "streams" dentro es el formato de categorías de la app, no un feed de eventos.
+            if (first.has("streams") && first.has("name") && first.optJSONArray("streams")?.optJSONObject(0)?.has("url") == true) return null
+            return node
+        }
+        if (node is JSONObject) {
+            for (k in EV_LIST_KEYS) { evFindList(node.opt(k), depth + 1)?.let { return it } }
+        }
+        return null
+    }
+
+    private fun evTime(o: JSONObject): String? {
+        for (k in listOf("time", "start_time", "starttime", "kickoff", "hora", "date", "datetime", "start", "starts_at", "fecha")) {
+            val v = o.opt(k) ?: continue
+            if (v is Number) {
+                var ms = v.toLong()
+                if (ms < 100000000000L) ms *= 1000
+                return java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(ms))
+            }
+            if (v is String && v.isNotBlank() && v.length <= 32) return v.replace('T', ' ').removeSuffix("Z").substringBefore('.').take(16)
+        }
+        return null
+    }
+
+    private fun evLinks(o: JSONObject): List<Pair<String?, String>> {
+        val out = ArrayList<Pair<String?, String>>()
+        fun add(name: String?, raw: String?) {
+            val u = raw?.let { evResolve(it) } ?: return
+            if (out.none { it.second == u }) out.add(name to u)
+        }
+        for (k in EV_LINK_KEYS) {
+            val v = o.opt(k)
+            if (v is String) add(null, v)
+        }
+        for (k in EV_ARRAY_KEYS) {
+            val arr = o.optJSONArray(k) ?: continue
+            for (i in 0 until arr.length()) {
+                when (val e = arr.opt(i)) {
+                    is String -> add(null, e)
+                    is JSONObject -> {
+                        val n = e.firstText(listOf("name", "title", "label", "channel", "server", "servidor", "language", "lang", "quality"))
+                        var found = false
+                        for (lk in EV_LINK_KEYS) { val v = e.opt(lk); if (v is String && evResolve(v) != null) { add(n, v); found = true; break } }
+                        if (!found) for (sub in EV_ARRAY_KEYS) {
+                            val a2 = e.optJSONArray(sub) ?: continue
+                            for (j in 0 until a2.length()) {
+                                val x = a2.opt(j)
+                                if (x is String) add(n, x)
+                                else if (x is JSONObject) for (lk in EV_LINK_KEYS) { val v = x.opt(lk); if (v is String) { add(x.optStringOrNull("name") ?: n, v); break } }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    /** Devuelve null si el JSON no parece un feed de eventos con enlaces. */
+    private fun parseEventsJson(trimmed: String): PlaylistData? {
+        val root: Any = try { if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONObject(trimmed) } catch (e: Exception) { return null }
+        if (root is JSONObject && (root.has("categories") || root.has("countries") || root.has("groups") || root.has("stations"))) return null
+        val list = evFindList(root, 0) ?: return null
+        val byCat = LinkedHashMap<String, ArrayList<Stream>>()
+        for (i in 0 until list.length()) {
+            val o = list.optJSONObject(i) ?: continue
+            var title = o.firstText(listOf("title", "name", "event", "match", "partido", "evento"))
+            if (title == null) {
+                val h = o.firstText(listOf("home", "home_team", "team1", "local", "homeTeam"))
+                val a = o.firstText(listOf("away", "away_team", "team2", "visitante", "awayTeam"))
+                if (h != null && a != null) title = "$h vs $a"
+            }
+            if (title == null) continue
+            val links = evLinks(o)
+            if (links.isEmpty()) continue
+            val live = o.optString("status").equals("live", true)
+            val cat = if (live) "🔴 En directo" else (o.firstText(EV_CAT_KEYS) ?: "Eventos")
+            val icon = o.firstText(EV_ICON_KEYS)?.let { evResolve(it) }
+            val time = evTime(o)
+            val head = if (time != null && !title.contains(time)) "$title · $time" else title
+            val list2 = byCat.getOrPut(cat) { ArrayList() }
+            links.forEachIndexed { idx, (n, u) ->
+                val type = when {
+                    u.contains(".m3u8", true) -> "HLS"
+                    u.contains(".mpd", true) -> "DASH"
+                    u.substringBefore('?').lowercase().endsWith(".mp4") -> "PROGRESSIVE"
+                    else -> "PAGE"
+                }
+                val nm = if (links.size == 1) head else "$head · ${n ?: "Enlace ${idx + 1}"}"
+                list2.add(Stream(name = nm.take(120), type = type, url = u, icon = icon, category = cat))
+            }
+        }
+        val total = byCat.values.sumOf { it.size }
+        if (total == 0) return null
+        return PlaylistData(byCat.map { (k, v) -> Category(k, v) }, null)
     }
 
     // ---------- Listas públicas tipo tdtchannels.com ----------

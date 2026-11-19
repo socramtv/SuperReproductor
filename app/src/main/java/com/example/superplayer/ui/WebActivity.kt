@@ -753,6 +753,7 @@ class WebActivity : AppCompatActivity() {
         ) { r ->
             if (r != "true" || isFinishing || isDestroyed || host in promptedDetect) return@evaluateJavascript
             promptedDetect.add(host)
+            removeWall(view)
             if (adBlockOn(url)) {
                 AlertDialog.Builder(this)
                     .setTitle(R.string.web_detect_title)
@@ -2040,6 +2041,136 @@ class WebActivity : AppCompatActivity() {
     private class MenuRow(val label: String, val header: Boolean = false, val section: Int = 0, val action: (() -> Unit)? = null)
 
     /** Menú del navegador agrupado por apartados (cabeceras no pulsables). */
+    // ---- Herramientas del navegador: descargar página, buscar, código fuente, compartir, borrar caché… ----
+
+    private fun pageTitleSafe(): String {
+        val base = (webView.title?.takeIf { it.isNotBlank() } ?: hostKey(webView.url).ifEmpty { "pagina" })
+        return base.replace(Regex("[^\\p{L}\\p{N}._ -]"), "_").trim().take(60).ifEmpty { "pagina" }
+    }
+
+    /** Copia un archivo a la carpeta Descargas (o, en Android antiguo, a la carpeta de la app). Devuelve dónde quedó. */
+    private fun exportToDownloads(src: java.io.File, name: String, mime: String): String? {
+        return try {
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val cv = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return null
+                contentResolver.openOutputStream(uri)?.use { o -> src.inputStream().use { it.copyTo(o) } }
+                "Descargas/$name"
+            } else {
+                val dir = getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+                val dst = java.io.File(dir, name)
+                src.copyTo(dst, true)
+                dst.absolutePath
+            }
+        } catch (e: Exception) { null }
+    }
+
+    private fun savedToast(where: String?) {
+        if (where == null) Toast.makeText(this, R.string.web_save_fail, Toast.LENGTH_LONG).show()
+        else Toast.makeText(this, getString(R.string.web_save_ok, where), Toast.LENGTH_LONG).show()
+    }
+
+    private fun showSavePageDialog() {
+        if (homeVisible() || webView.url.isNullOrEmpty()) { Toast.makeText(this, R.string.web_no_page, Toast.LENGTH_SHORT).show(); return }
+        val opts = arrayOf(getString(R.string.web_save_mht), getString(R.string.web_save_html), getString(R.string.web_save_pdf))
+        AlertDialog.Builder(this).setTitle(R.string.web_save_title).setItems(opts) { _, w ->
+            val name = pageTitleSafe()
+            when (w) {
+                0 -> {
+                    val tmp = java.io.File(cacheDir, "page.mht")
+                    webView.saveWebArchive(tmp.absolutePath, false) { p ->
+                        if (p == null) savedToast(null) else Thread {
+                            val r = exportToDownloads(java.io.File(p), "$name.mht", "multipart/related")
+                            runOnUiThread { savedToast(r) }
+                        }.start()
+                    }
+                }
+                1 -> webView.evaluateJavascript("'<!doctype html>\\n'+document.documentElement.outerHTML") { r ->
+                    val html = try { org.json.JSONTokener(r).nextValue() as? String } catch (e: Exception) { null }
+                    if (html == null) savedToast(null) else Thread {
+                        val tmp = java.io.File(cacheDir, "page.html")
+                        tmp.writeText("<!-- ${webView.url} -->\n$html")
+                        val res = exportToDownloads(tmp, "$name.html", "text/html")
+                        runOnUiThread { savedToast(res) }
+                    }.start()
+                }
+                2 -> printPage()
+            }
+        }.setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    private fun printPage() {
+        try {
+            val pm = getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
+            pm.print(pageTitleSafe(), webView.createPrintDocumentAdapter(pageTitleSafe()), android.print.PrintAttributes.Builder().build())
+        } catch (e: Exception) { Toast.makeText(this, R.string.web_save_fail, Toast.LENGTH_LONG).show() }
+    }
+
+    private fun showFindDialog() {
+        val d = resources.displayMetrics.density
+        val et = android.widget.EditText(this).apply { hint = getString(R.string.web_find_hint); setSingleLine(); setPadding((20 * d).toInt(), (14 * d).toInt(), (20 * d).toInt(), (14 * d).toInt()) }
+        val dlg = AlertDialog.Builder(this).setTitle(R.string.web_find).setView(et)
+            .setPositiveButton(R.string.web_find_go, null)
+            .setNeutralButton(R.string.web_find_next, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ -> webView.clearMatches() }
+            .setOnDismissListener { webView.clearMatches() }
+            .create()
+        dlg.show()
+        webView.setFindListener { active, total, _ -> if (total >= 0) dlg.setTitle(getString(R.string.web_find_count, if (total == 0) 0 else active + 1, total)) }
+        dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { webView.findAllAsync(et.text.toString()) }
+        dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { webView.findNext(true) }
+    }
+
+    private fun showSource() {
+        if (homeVisible()) return
+        webView.evaluateJavascript("document.documentElement.outerHTML") { r ->
+            val html = try { org.json.JSONTokener(r).nextValue() as? String } catch (e: Exception) { null } ?: return@evaluateJavascript
+            val tv = android.widget.TextView(this).apply {
+                text = if (html.length > 150000) html.take(150000) + "\n…" else html
+                textSize = 11f; typeface = android.graphics.Typeface.MONOSPACE; setTextIsSelectable(true)
+                val d = resources.displayMetrics.density; setPadding((14 * d).toInt(), (10 * d).toInt(), (14 * d).toInt(), (10 * d).toInt())
+            }
+            val sv = android.widget.ScrollView(this).apply { addView(tv) }
+            AlertDialog.Builder(this).setTitle(R.string.web_source).setView(sv)
+                .setPositiveButton(R.string.web_copy) { _, _ ->
+                    (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("html", html))
+                    Toast.makeText(this, R.string.web_copied, Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(android.R.string.cancel, null).show()
+        }
+    }
+
+    private fun shareCurrentPage() {
+        val u = webView.url ?: return
+        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, u).putExtra(Intent.EXTRA_SUBJECT, webView.title ?: u), null))
+    }
+
+    private fun copyCurrentLink() {
+        val u = webView.url ?: return
+        (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("url", u))
+        Toast.makeText(this, R.string.web_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    /** Quita el muro «Bloqueador detectado…» (capa encima de la página) y devuelve el desplazamiento. */
+    private fun removeWall(view: WebView) { view.evaluateJavascript(WALL_JS, null) }
+
+    private fun clearCacheOnly() {
+        for (t in tabs) t.view.clearCache(true)
+        Toast.makeText(this, R.string.web_cache_cleared, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun clearCookiesOnly() {
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
+        WebStorage.getInstance().deleteAllData()
+        Toast.makeText(this, R.string.web_cookies_cleared, Toast.LENGTH_SHORT).show()
+    }
+
     private fun showMenu(anchor: View) {
         fun check(on: Boolean, text: String) = (if (on) "☑ " else "☐ ") + text
         val all = ArrayList<MenuRow>()
@@ -2067,7 +2198,18 @@ class WebActivity : AppCompatActivity() {
         item(getString(R.string.web_videos_menu, detected.size)) { showDetectedVideos() }
         item(getString(R.string.web_alert_menu, alertModeLabel())) { chooseAlertMode() }
 
+        head(R.string.web_sec_tools)
+        item(getString(R.string.web_save_menu)) { showSavePageDialog() }
+        item(getString(R.string.web_find)) { showFindDialog() }
+        item(getString(R.string.web_source)) { showSource() }
+        item(getString(R.string.web_share_page)) { shareCurrentPage() }
+        item(getString(R.string.web_copy_link)) { copyCurrentLink() }
+        item(getString(R.string.web_print)) { printPage() }
+        item(getString(R.string.web_clear_cache)) { clearCacheOnly() }
+        item(getString(R.string.web_clear_cookies)) { clearCookiesOnly() }
+
         head(R.string.web_sec_ads)
+        item(getString(R.string.web_wall_remove)) { removeWall(webView) }
         item(getString(if (siteBlockOff(webView.url)) R.string.web_site_block_off else R.string.web_site_block_on, hostKey(webView.url).ifEmpty { "—" })) {
             setSiteBlock(webView.url, siteBlockOff(webView.url))
             Toast.makeText(this, if (siteBlockOff(webView.url)) R.string.web_site_block_now_off else R.string.web_site_block_now_on, Toast.LENGTH_SHORT).show()
@@ -2558,6 +2700,15 @@ class WebActivity : AppCompatActivity() {
             "s.textContent='ins.adsbygoogle,.adsbygoogle,iframe[src*=doubleclick],iframe[src*=googlesyndication],iframe[src*=adservice]," +
             "div[id^=google_ads],div[id^=taboola],div[id^=outbrain],[class*=popunder]{display:none!important}';" +
             "(document.head||document.documentElement).appendChild(s);})();"
+        /** Quita capas a pantalla completa con avisos de «bloqueador detectado» y devuelve el scroll. */
+        private const val WALL_JS = "(function(){try{var re=/(bloqueador|adblock|ad[ -]?block|desactiva\\s+tu|disable\\s+your|lista\\s+de\\s+excepciones)/i;" +
+            "function run(){var n=0;var all=document.body?document.body.querySelectorAll('div,section,aside,dialog,form,center'):[];" +
+            "for(var i=0;i<all.length;i++){var e=all[i];var t=e.innerText||'';if(t.length>1500||!re.test(t))continue;var cs=getComputedStyle(e);" +
+            "var big=e.offsetWidth>innerWidth*0.5&&e.offsetHeight>innerHeight*0.3;" +
+            "if(cs.position==='fixed'||cs.position==='absolute'||big){var v=e.querySelector('video,iframe');if(v)continue;e.remove();n++;}}" +
+            "var bs=[document.body,document.documentElement];for(var j=0;j<bs.length;j++){if(bs[j]){bs[j].style.setProperty('overflow','auto','important');bs[j].style.setProperty('filter','none','important');bs[j].style.setProperty('pointer-events','auto','important');}}" +
+            "var bl=document.querySelectorAll('[style*=\\'blur\\'],.blur,.blurred');for(var k=0;k<bl.length;k++){bl[k].style.setProperty('filter','none','important');}return n;}" +
+            "run();var c=0;var iv=setInterval(function(){run();if(++c>8)clearInterval(iv);},1000);}catch(e){}})();"
         private const val REC_KEY = "\u2605rec"
         private val MEDIA_PATH_RE = Regex("\\.(m3u8|mpd|ts|m4s|mp4|mkv|webm|aac|mp3)$")
         private val AD_HOST_RE = Regex("(^|[.-])(ads?|adserv\\w*|adsrv|adtrack\\w*|popads?|pops?|popunder|banners?|trk|tracker|track|metrics|telemetry)\\d*([.-]|$)|adscore|adsystem|adnetwork|clickid|doubleclick")

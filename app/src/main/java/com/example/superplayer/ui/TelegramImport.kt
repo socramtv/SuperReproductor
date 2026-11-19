@@ -27,7 +27,7 @@ object TelegramImport {
         val lower = url.lowercase()
         val path = lower.substringBefore('?').substringBefore('#')
         return path.endsWith(".m3u") || path.endsWith(".json") || path.endsWith(".txt") || path.endsWith(".w3u") ||
-            lower.contains("get.php") || lower.contains("type=m3u") || lower.contains("output=m3u")
+            lower.contains("get.php") || Regex("/api/(v\\d+/)?(events?|matches|partidos|eventos|channels|streams|canales)(/|$)").containsMatchIn(path) || lower.contains("type=m3u") || lower.contains("output=m3u")
     }
 
     fun openInMain(context: Context, data: PlaylistData) {

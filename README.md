@@ -1967,3 +1967,10 @@ La lista de servidores reconocidos (y sus espejos) se amplía mucho: doodstream/
 ## Webs que detectan el bloqueador
 - Menú Web → «🛡 Bloqueador en <web>»: activa/desactiva el bloqueador **solo para esa web** (sin anuncios cortados, sin estilos de ocultación, sin cierre de ventanas emergentes); el interruptor global sigue igual.
 - Si una página dice que detecta un bloqueador («Bloqueador detectado», «desactiva tu bloqueador»…), la app lo nota y ofrece «Desactivar aquí» y recargar. Si el bloqueador de la app ya estaba desactivado, avisa de que el origen puede ser el DNS privado, una VPN o un bloqueador del sistema.
+
+## Navegador: herramientas, feeds de eventos y aviso anti-bloqueador
+
+- Menú del navegador → **Herramientas**: descargar página (.mht completa, .html o PDF), buscar en la página, ver código fuente, compartir/copiar enlace, imprimir, borrar caché y borrar cookies por separado.
+- **Quitar aviso «bloqueador detectado»**: elimina la capa que tapa la página y devuelve el scroll; se ejecuta solo cuando se detecta el aviso.
+- Listas JSON de eventos/partidos (p. ej. `/api/v1/events`): se reconocen de forma genérica (título, liga, hora, imagen y enlaces/canales/servidores) y se importan como lista; los enlaces que no son vídeo directo se resuelven dentro del reproductor.
+- Feed `verpartidos.cc/api/v1/events` (`data[]` con `title`, `league`, `status`, `sources[]`): los eventos en directo van a la categoría «🔴 En directo», el resto por liga; cada fuente es un enlace de página que se resuelve en el reproductor.
