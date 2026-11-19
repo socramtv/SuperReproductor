@@ -1960,3 +1960,6 @@ La web ya no se abre en «vista general» (era lo que encogía páginas como soc
 
 ## Agente «como Chrome móvil»
 El agente por defecto del navegador ya no lleva `; wv` ni `Version/4.0` (las marcas de un WebView), que hacían que algunas webs y sus iframes se negaran a cargar (`ERR_BLOCKED_BY_RESPONSE`). En el selector de agente sigue la opción «🔧 Navegador integrado (WebView original)» por si alguna web va mejor así.
+
+## Más servidores de vídeo
+La lista de servidores reconocidos (y sus espejos) se amplía mucho: doodstream/playmogo/d000d/ds2play, mixdrop/mixdrp/m1xdrop, dropload, unlimplay, vidmoly, voe, filemoon, streamwish y espejos, vidhide, filelions, streamvid, lulustream, upstream, supervideo, streamhub, veev, vinovo, vidguard, fembed, streamsb… Además, un botón de la ficha cuenta como servidor si su **texto** lleva el nombre de un servidor conocido o, para servidores nuevos, si es un enlace que no es claramente una ficha/red social (TMDB, IMDb, YouTube, Telegram…). Esos botones se marcan como «página con vídeo» y se resuelven con el navegador invisible aunque su dominio sea desconocido.

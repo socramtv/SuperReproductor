@@ -4515,7 +4515,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             }
             "url" -> when {
                 isTgLink(b.data) -> openTgLink(b.data)
-                com.example.superplayer.player.PageStreamResolver.isHoster(b.data) -> playHosters(m, b)
+                com.example.superplayer.player.PageStreamResolver.isServerButton(b.text, b.data) -> playHosters(m, b)
                 else -> openLink(b.data, hosterName(m, b.text))
             }
             "txt" -> sendToCurrentChat(b.data)
@@ -4644,13 +4644,13 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Botones de servidores de vídeo de la ficha, los que mejor han funcionado primero. */
     private fun orderedHosters(m: TgMessage): List<com.example.superplayer.telegram.TgButton> =
-        m.buttons.filter { it.kind == "url" && com.example.superplayer.player.PageStreamResolver.isHoster(it.data) }
+        m.buttons.filter { it.kind == "url" && com.example.superplayer.player.PageStreamResolver.isServerButton(it.text, it.data) }
             .sortedByDescending { com.example.superplayer.data.HosterStats.score(this, it.data) }
 
     /** Reproduce el servidor elegido y deja los demás de la ficha como relevo por si falla. */
     private fun playHosters(m: TgMessage, chosen: com.example.superplayer.telegram.TgButton) {
         fun st(b: com.example.superplayer.telegram.TgButton) =
-            Stream(name = hosterName(m, b.text).take(80), type = "MP4", url = b.data, icon = null, category = "Telegram")
+            Stream(name = hosterName(m, b.text).take(80), type = "PAGE", url = b.data, icon = null, category = "Telegram")
         PlayerActivity.pendingAlternates = orderedHosters(m).filter { it !== chosen && it.data != chosen.data }.map { st(it) }
         open(st(chosen))
     }

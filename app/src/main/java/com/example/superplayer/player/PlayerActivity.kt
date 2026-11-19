@@ -451,13 +451,13 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         // Servidor de vídeo de una ficha que falla: se apunta como malo y se pasa al siguiente servidor.
-        if (PageStreamResolver.isHoster(stream.url)) {
+        if (PageStreamResolver.isHosterStream(stream)) {
             com.example.superplayer.data.HosterStats.bad(this, stream.url)
             if (tryNextAlternate()) return
         }
         // Canal de página que se cae: se prueba el mismo canal en otros servidores del grupo (cdn6 → cdn7…) antes de reconectar.
         val lr = lastPageResult
-        if (!failoverSkipOnce && !failoverBusy && lr != null && PageStreamResolver.needsResolve(stream) && !PageStreamResolver.isHoster(stream.url)) {
+        if (!failoverSkipOnce && !failoverBusy && lr != null && PageStreamResolver.needsResolve(stream) && !PageStreamResolver.isHosterStream(stream)) {
             PageStreamResolver.markBadHost(lr.url)
             failoverBusy = true
             Thread {
@@ -747,7 +747,7 @@ class PlayerActivity : AppCompatActivity() {
                 autoReconnectAttempts = 0
                 failoverSkipOnce = false
                 currentStream?.let { s ->
-                    if (PageStreamResolver.isHoster(s.url) && statsRecordedFor != s.url) {
+                    if (PageStreamResolver.isHosterStream(s) && statsRecordedFor != s.url) {
                         statsRecordedFor = s.url
                         com.example.superplayer.data.HosterStats.good(this@PlayerActivity, s.url)
                     }
@@ -1903,11 +1903,11 @@ class PlayerActivity : AppCompatActivity() {
                     if (res != null) {
                         play(res)
                     } else {
-                        HiddenWebResolver.resolve(this, stream.url, stream.headers, progressive = PageStreamResolver.isHoster(stream.url)) { hidden ->
+                        HiddenWebResolver.resolve(this, stream.url, stream.headers, progressive = PageStreamResolver.isHosterStream(stream)) { hidden ->
                             if (isFinishing || isDestroyed || currentStream?.id != stream.id) return@resolve
                             if (hidden != null) play(hidden)
                             else {
-                                if (PageStreamResolver.isHoster(stream.url)) com.example.superplayer.data.HosterStats.bad(this, stream.url)
+                                if (PageStreamResolver.isHosterStream(stream)) com.example.superplayer.data.HosterStats.bad(this, stream.url)
                                 if (!tryNextAlternate()) Toast.makeText(this, R.string.page_resolve_failed, Toast.LENGTH_LONG).show()
                             }
                         }

@@ -28,6 +28,7 @@ object PageStreamResolver {
         if (t.contains("hls") || t.contains("dash") || t.contains("m3u8") || t.contains("mpd") || t.contains("radio") || t.contains("audio")) return false
         val u = stream.url
         if (!u.startsWith("http", ignoreCase = true)) return false
+        if (t == "page") return true // marcado como página con vídeo (botón de servidor de una ficha)
         val path = u.substringBefore('?').substringBefore('#').lowercase()
         if (isHoster(u) && !isDirectFile(path)) return true
         if (PAGE_EXT.any { path.endsWith(it) }) return true
@@ -38,11 +39,58 @@ object PageStreamResolver {
 
     /** Servidores de vídeo («hosters») de los que se saca el vídeo directo (mp4…) en vez de una lista m3u8. */
     private val HOSTERS = listOf(
-        "uqload", "streamtape", "streamta", "strtape", "powvideo", "playmogo", "doodstream", "dood.", "dsvplay", "voe.sx", "mixdrop",
-        "filemoon", "moonplayer", "streamwish", "wishembed", "vidhide", "vidguard", "upstream", "streamlare", "supervideo", "evoload",
-        "okru", "ok.ru", "fembed", "mp4upload", "vidoza", "jetload", "streamsb", "sbembed", "lulustream", "luluvdo", "vtube", "tubeload",
-        "waaw", "netu", "hqq.", "streamhub", "krakenfiles", "cloudvideo", "uptostream", "fastream"
+        // uqload / streamtape / powvideo / playmogo
+        "uqload", "streamtape", "streamta", "strtape", "stape", "tapecontent", "adblocktape", "shavetape", "streamadblock", "strcloud",
+        "powvideo", "powv1deo", "playmogo",
+        // doodstream y sus espejos
+        "doodstream", "dood.", "dooood", "d000d", "d0000d", "d0o0d", "ds2play", "ds2video", "dsvplay", "doods.", "vidply", "vide0.", "myvidplay",
+        // mixdrop y espejos
+        "mixdrop", "mixdrp", "m1xdrop", "mxdrop", "mdy48tn97", "mdbekjwqa", "mdfx9dc8n", "mdzsmutpcvykb",
+        // dropload / unlimplay / vidmoly / vidoza / mp4upload…
+        "dropload", "droploads", "unlimplay", "vidmoly", "vidoza", "mp4upload", "gounlimited", "userload", "userscloud", "uploadever",
+        // voe
+        "voe.sx", "voe-", "voeunbl", "voe1", "jilliandescribecompany", "lauradaydo", "kristiesoundsimply", "diananatureforeign", "maxfinishseveral",
+        // filemoon
+        "filemoon", "fmoon", "moonplayer", "bysezoxexe", "bysekoze", "filemooon", "kerapoxy",
+        // streamwish y espejos
+        "streamwish", "wishembed", "wishfast", "hlswish", "awish", "dwish", "swhoi", "strwish", "flaswish", "sfastwish", "embedwish", "obeywish", "wishonly", "playerwish",
+        // vidhide / filelions / streamvid / lulustream
+        "vidhide", "vidhidepro", "vidhidevip", "nikaplayer", "filelions", "vidlions", "fviplions", "alions", "streamvid", "lulustream", "luluvdo", "lulu.st", "vidnest",
+        // upstream, supervideo, streamhub, veev, vinovo, etc.
+        "upstream", "upn.one", "streamlare", "supervideo", "evoload", "streamhub", "veev.to", "vinovo", "wolfstream", "savefiles", "streamruby", "rubystm", "rubyvid",
+        "vidguard", "vgfplay", "vembed", "listeamed", "bembed", "fembed", "femax20", "jetload", "streamsb", "sbembed", "sblongvu", "sbfull", "sbplay", "streamtavern",
+        "vtube", "tubeload", "waaw", "netu.", "hqq.", "krakenfiles", "cloudvideo", "uptostream", "fastream", "okru", "ok.ru", "hlsflex", "vudeo", "vidspeed", "embedrise"
     )
+
+    /** Nombres de servidores tal como suelen aparecer en el texto de los botones («mixdrop», «DoodStream»…). */
+    private val HOSTER_LABELS = listOf(
+        "uqload", "streamtape", "powvideo", "playmogo", "doodstream", "dood", "mixdrop", "dropload", "unlimplay", "vidmoly", "vidoza", "mp4upload",
+        "voe", "filemoon", "streamwish", "vidhide", "filelions", "streamvid", "lulustream", "upstream", "streamlare", "supervideo", "streamhub",
+        "veev", "vinovo", "wolfstream", "savefiles", "streamruby", "vidguard", "fembed", "streamsb", "vtube", "krakenfiles", "okru", "vudeo", "gounlimited"
+    )
+    private val NOT_VIDEO_HOSTS = listOf(
+        "themoviedb", "tmdb", "imdb", "youtube", "youtu.be", "t.me", "telegram", "facebook", "twitter", "x.com", "instagram", "trakt",
+        "letterboxd", "wikipedia", "google", "filmaffinity", "rottentomatoes", "paypal", "ko-fi", "buymeacoffee"
+    )
+    private val NOT_VIDEO_LABELS = listOf("ficha", "tmdb", "imdb", "trailer", "tráiler", "ayuda", "canal", "grupo", "donar", "dona", "volver", "inicio", "anclar", "web", "info")
+
+    /**
+     * ¿Es este botón de una ficha un servidor de vídeo? Sí si el dominio es un servidor conocido o el texto lleva su nombre;
+     * y, por si el servidor es nuevo, también cualquier enlace http que no sea claramente una ficha/red social.
+     */
+    fun isServerButton(label: String, url: String): Boolean {
+        if (!url.startsWith("http", ignoreCase = true)) return false
+        if (isHoster(url)) return true
+        val l = label.lowercase()
+        if (HOSTER_LABELS.any { l.contains(it) }) return true
+        val h = try { URI(url).host?.lowercase() } catch (e: Exception) { null } ?: return false
+        if (NOT_VIDEO_HOSTS.any { h.contains(it) }) return false
+        if (NOT_VIDEO_LABELS.any { l.contains(it) }) return false
+        return true
+    }
+
+    /** ¿Hay que sacar el vídeo de esta página con el modo «servidor de vídeo» (acepta .mp4 / get_video)? */
+    fun isHosterStream(stream: Stream) = stream.type.equals("PAGE", true) || isHoster(stream.url)
     private val DIRECT_EXT = listOf(".mp4", ".mkv", ".webm", ".m4v", ".m3u8", ".mpd", ".ts", ".mp3", ".aac")
 
     private fun isDirectFile(path: String) = DIRECT_EXT.any { path.endsWith(it) }
