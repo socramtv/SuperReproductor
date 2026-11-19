@@ -314,6 +314,7 @@ class WebActivity : AppCompatActivity() {
                 view.evaluateJavascript(SCOUT_JS, null)
                 if (adBlockOn(url)) view.evaluateJavascript(HIDE_ADS_JS, null)
                 view.postDelayed({ checkAntiAdblock(view, url) }, 1800)
+                if (wallRemembered(url)) { removeWall(view); view.postDelayed({ removeWall(view) }, 1200) }
                 if (fitOn(url)) {
                     // Webs de escritorio o con tablas anchas: se encogen para que quepan (algunas cambian el ancho tarde, por eso se repite).
                     view.evaluateJavascript(FIT_JS, null)
@@ -753,6 +754,7 @@ class WebActivity : AppCompatActivity() {
         ) { r ->
             if (r != "true" || isFinishing || isDestroyed || host in promptedDetect) return@evaluateJavascript
             promptedDetect.add(host)
+            setWallRemember(url, true)
             removeWall(view)
             if (adBlockOn(url)) {
                 AlertDialog.Builder(this)
@@ -1006,11 +1008,14 @@ class WebActivity : AppCompatActivity() {
     private fun importListUrl(url: String) {
         Toast.makeText(this, R.string.web_list_loading, Toast.LENGTH_SHORT).show()
         Thread {
-            val data = try { com.example.superplayer.data.PlaylistRepository.loadFromUrl(url) } catch (e: Exception) { null }
+            val data = try { com.example.superplayer.data.LoadedLists.fetchUrl(this, url) } catch (e: Exception) { null }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (data == null || data.categories.sumOf { it.streams.size } == 0) Toast.makeText(this, R.string.web_list_error, Toast.LENGTH_LONG).show()
-                else TelegramImport.openInMain(this, data)
+                else {
+                    com.example.superplayer.data.LoadedLists.add(this, "url", url, com.example.superplayer.data.LoadedLists.nameForUrl(url), data.categories.sumOf { it.streams.size })
+                    TelegramImport.openInMain(this, data)
+                }
             }
         }.start()
     }
@@ -2159,6 +2164,18 @@ class WebActivity : AppCompatActivity() {
     /** Quita el muro «Bloqueador detectado…» (capa encima de la página) y devuelve el desplazamiento. */
     private fun removeWall(view: WebView) { view.evaluateJavascript(WALL_JS, null) }
 
+    private fun wallSites(): Set<String> = (prefs().getStringSet("wall_sites", emptySet()) ?: emptySet()).toSet()
+    private fun wallRemembered(url: String?): Boolean {
+        var x = hostKey(url); if (x.isEmpty()) return false
+        val s = wallSites()
+        while (true) { if (x in s) return true; val d = x.indexOf('.'); if (d < 0) return false; x = x.substring(d + 1) }
+    }
+    private fun setWallRemember(url: String?, on: Boolean) {
+        val h = hostKey(url); if (h.isEmpty()) return
+        val s = wallSites().toMutableSet(); if (on) s.add(h) else s.remove(h)
+        prefs().edit().putStringSet("wall_sites", s).apply()
+    }
+
     private fun clearCacheOnly() {
         for (t in tabs) t.view.clearCache(true)
         Toast.makeText(this, R.string.web_cache_cleared, Toast.LENGTH_SHORT).show()
@@ -2209,7 +2226,16 @@ class WebActivity : AppCompatActivity() {
         item(getString(R.string.web_clear_cookies)) { clearCookiesOnly() }
 
         head(R.string.web_sec_ads)
-        item(getString(R.string.web_wall_remove)) { removeWall(webView) }
+        item(getString(if (wallRemembered(webView.url)) R.string.web_wall_forget else R.string.web_wall_remove)) {
+            if (wallRemembered(webView.url)) {
+                setWallRemember(webView.url, false)
+                Toast.makeText(this, R.string.web_wall_forgotten, Toast.LENGTH_SHORT).show()
+            } else {
+                setWallRemember(webView.url, true)
+                removeWall(webView)
+                Toast.makeText(this, R.string.web_wall_remembered, Toast.LENGTH_SHORT).show()
+            }
+        }
         item(getString(if (siteBlockOff(webView.url)) R.string.web_site_block_off else R.string.web_site_block_on, hostKey(webView.url).ifEmpty { "—" })) {
             setSiteBlock(webView.url, siteBlockOff(webView.url))
             Toast.makeText(this, if (siteBlockOff(webView.url)) R.string.web_site_block_now_off else R.string.web_site_block_now_on, Toast.LENGTH_SHORT).show()

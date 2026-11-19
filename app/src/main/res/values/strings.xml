@@ -1156,4 +1156,24 @@
     <string name="web_clear_cookies">🍪 Borrar cookies y datos de webs</string>
     <string name="web_cookies_cleared">Cookies y datos borrados</string>
     <string name="web_wall_remove">🚫 Quitar aviso «bloqueador detectado»</string>
+    <string name="loaded_menu">📚 Listas cargadas</string>
+    <string name="loaded_title">Listas cargadas</string>
+    <string name="loaded_empty">Aún no has cargado listas de archivo o de enlace. Las que cargues aparecerán aquí para volver a abrirlas cuando quieras.</string>
+    <string name="loaded_row">%1$d canales · %2$s</string>
+    <string name="loaded_remove_q">¿Quitar «%1$s» de esta lista?</string>
+    <string name="dns_test">Probar</string>
+    <string name="dns_more">Más…</string>
+    <string name="dns_testing">Probando DNS…</string>
+    <string name="dns_test_title">Velocidad de cada DNS</string>
+    <string name="dns_fail">falla</string>
+    <string name="dns_custom_title">Tu servidor DNS (DoH)</string>
+    <string name="dns_custom_saved">DNS personalizado guardado</string>
+    <string name="dns_custom_bad">La dirección debe empezar por https://</string>
+    <string name="dns_private_open">DNS privado de Android (para el navegador y todo)</string>
+    <string name="dns_private_msg">El DNS de la app solo afecta al reproductor y a las listas. Para que también valga en el navegador, usa el «DNS privado» del móvil: Ajustes → Red → DNS privado → escribe %1$s.</string>
+    <string name="dns_private_any">el nombre de tu proveedor (p. ej. dns.adguard-dns.com)</string>
+    <string name="dns_private_go">Abrir ajustes</string>
+    <string name="web_wall_forget">🚫 Aviso quitado solo en esta web (pulsa para olvidar)</string>
+    <string name="web_wall_remembered">Se quitará el aviso solo en esta web</string>
+    <string name="web_wall_forgotten">Olvidado</string>
 </resources>

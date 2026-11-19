@@ -97,6 +97,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.superplayer.data.AppDns.attach(this)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -730,6 +731,131 @@ class MainActivity : AppCompatActivity() {
         }, "initial-list").start()
     }
 
+
+    // ---- Listas cargadas (archivo / enlace) que no son las principales ----
+
+    private fun showLoadedLists() {
+        val items = com.example.superplayer.data.LoadedLists.all(this)
+        if (items.isEmpty()) {
+            androidx.appcompat.app.AlertDialog.Builder(this).setTitle(R.string.loaded_title).setMessage(R.string.loaded_empty)
+                .setPositiveButton(android.R.string.ok, null).show()
+            return
+        }
+        val df = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault())
+        val labels = items.map { (if (it.kind == "file") "📁 " else "🌐 ") + it.name + "\n" + getString(R.string.loaded_row, it.count, df.format(java.util.Date(it.time))) }
+        val dlg = androidx.appcompat.app.AlertDialog.Builder(this).setTitle(R.string.loaded_title)
+            .setItems(labels.toTypedArray()) { _, w -> openLoaded(items[w]) }
+            .setNegativeButton(android.R.string.cancel, null).create()
+        dlg.show()
+        dlg.listView.setOnItemLongClickListener { _, _, pos, _ ->
+            androidx.appcompat.app.AlertDialog.Builder(this).setMessage(getString(R.string.loaded_remove_q, items[pos].name))
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    com.example.superplayer.data.LoadedLists.remove(this, items[pos]); dlg.dismiss(); showLoadedLists()
+                }.setNegativeButton(android.R.string.cancel, null).show()
+            true
+        }
+    }
+
+    private fun openLoaded(e: com.example.superplayer.data.LoadedLists.Entry) {
+        if (e.kind == "file") {
+            loadFromUri(Uri.parse(e.ref))
+            return
+        }
+        Toast.makeText(this, R.string.loading_list, Toast.LENGTH_SHORT).show()
+        Thread {
+            val data = try { com.example.superplayer.data.LoadedLists.fetchUrl(this, e.ref) } catch (x: Exception) { null }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (data == null) { Toast.makeText(this, R.string.web_list_error, Toast.LENGTH_LONG).show(); return@runOnUiThread }
+                homeDismissed = true
+                setPlaylist(data, "ext_" + Integer.toHexString(e.ref.hashCode()))
+                com.example.superplayer.data.LoadedLists.add(this, "url", e.ref, e.name, data.categories.sumOf { it.streams.size })
+                Toast.makeText(this, getString(R.string.load_success, data.categories.size, data.categories.sumOf { it.streams.size }), Toast.LENGTH_SHORT).show()
+            }
+        }.start()
+    }
+
+    // ---- DNS ----
+
+    private fun showDnsDialog() {
+        val provs = com.example.superplayer.data.AppDns.Provider.values()
+        val cur = com.example.superplayer.data.AppDns.current(this)
+        val dlg = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.dns_title)
+            .setSingleChoiceItems(provs.map { it.label }.toTypedArray(), provs.indexOf(cur)) { d, w ->
+                val p = provs[w]
+                if (p == com.example.superplayer.data.AppDns.Provider.CUSTOM) {
+                    d.dismiss(); askCustomDns()
+                } else {
+                    com.example.superplayer.data.AppDns.set(this, p)
+                    Toast.makeText(this, p.label, Toast.LENGTH_SHORT).show()
+                    d.dismiss()
+                }
+            }
+            .setPositiveButton(R.string.dns_test, null)
+            .setNeutralButton(R.string.dns_more) { _, _ -> showDnsMore() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dlg.show()
+        // «Probar» no cierra el diálogo: se ven los tiempos de cada DNS.
+        dlg.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener { runDnsTest() }
+    }
+
+    private fun askCustomDns() {
+        val et = android.widget.EditText(this).apply {
+            hint = "https://dominio/dns-query"; setSingleLine()
+            setText(com.example.superplayer.data.AppDns.customUrl(this@MainActivity))
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this).setTitle(R.string.dns_custom_title).setView(et)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val u = et.text.toString().trim()
+                if (u.startsWith("https://")) {
+                    com.example.superplayer.data.AppDns.setCustomUrl(this, u)
+                    com.example.superplayer.data.AppDns.set(this, com.example.superplayer.data.AppDns.Provider.CUSTOM)
+                    Toast.makeText(this, R.string.dns_custom_saved, Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(this, R.string.dns_custom_bad, Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null).show()
+    }
+
+    private fun runDnsTest() {
+        Toast.makeText(this, R.string.dns_testing, Toast.LENGTH_SHORT).show()
+        val app = applicationContext
+        Thread {
+            val host = "www.google.com"
+            val lines = ArrayList<String>()
+            for (p in com.example.superplayer.data.AppDns.Provider.values()) {
+                if (p == com.example.superplayer.data.AppDns.Provider.CUSTOM && com.example.superplayer.data.AppDns.customUrl(app).isBlank()) continue
+                val ms = com.example.superplayer.data.AppDns.probe(app, p, host)
+                lines.add((if (ms < 0) "❌ " else "✅ ") + p.label + ": " + (if (ms < 0) getString(R.string.dns_fail) else "$ms ms"))
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                androidx.appcompat.app.AlertDialog.Builder(this).setTitle(R.string.dns_test_title)
+                    .setMessage(lines.joinToString("\n")).setPositiveButton(android.R.string.ok, null).show()
+            }
+        }.start()
+    }
+
+    private fun showDnsMore() {
+        val cur = com.example.superplayer.data.AppDns.current(this)
+        val host = com.example.superplayer.data.AppDns.privateDnsHost(cur)
+        val opts = arrayOf(getString(R.string.dns_private_open), getString(R.string.dns_what))
+        androidx.appcompat.app.AlertDialog.Builder(this).setTitle(R.string.dns_more).setItems(opts) { _, w ->
+            if (w == 0) {
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setMessage(getString(R.string.dns_private_msg, host ?: getString(R.string.dns_private_any)))
+                    .setPositiveButton(R.string.dns_private_go) { _, _ ->
+                        try { startActivity(Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)) }
+                        catch (e: Exception) { try { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } catch (x: Exception) { } }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null).show()
+            } else {
+                androidx.appcompat.app.AlertDialog.Builder(this).setMessage(R.string.dns_hint).setPositiveButton(android.R.string.ok, null).show()
+            }
+        }.setNegativeButton(android.R.string.cancel, null).show()
+    }
+
     private fun loadFromUri(uri: Uri, announce: Boolean = true) {
         try {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -748,6 +874,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
         AppPrefs.saveLastPlaylistUri(this, uri.toString())
+        if (announce) {
+            val nm = try {
+                contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null }
+            } catch (e: Exception) { null } ?: uri.lastPathSegment ?: "archivo"
+            com.example.superplayer.data.LoadedLists.add(this, "file", uri.toString(), nm, data.categories.sumOf { it.streams.size })
+        }
         if (announce) homeDismissed = true
         setPlaylist(data, "file")
         if (announce) {
@@ -1343,22 +1475,12 @@ class MainActivity : AppCompatActivity() {
                 }
                 true
             }
+            R.id.action_loaded_lists -> {
+                showLoadedLists()
+                true
+            }
             R.id.action_dns -> {
-                val provs = com.example.superplayer.data.AppDns.Provider.values()
-                val cur = com.example.superplayer.data.AppDns.current(this)
-                androidx.appcompat.app.AlertDialog.Builder(this)
-                    .setTitle(R.string.dns_title)
-                    .setSingleChoiceItems(provs.map { it.label }.toTypedArray(), provs.indexOf(cur)) { d, w ->
-                        com.example.superplayer.data.AppDns.set(this, provs[w])
-                        Toast.makeText(this, provs[w].label, Toast.LENGTH_SHORT).show()
-                        d.dismiss()
-                    }
-                    .setNeutralButton(R.string.dns_what) { _, _ ->
-                        androidx.appcompat.app.AlertDialog.Builder(this).setMessage(R.string.dns_hint)
-                            .setPositiveButton(android.R.string.ok, null).show()
-                    }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
+                showDnsDialog()
                 true
             }
             R.id.action_backup_export -> {

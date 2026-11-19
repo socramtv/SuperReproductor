@@ -44,6 +44,13 @@ object PlaylistRepository {
      * lo guarda en PlaylistCache para poder abrirlo sin red más adelante).
      */
     fun downloadRaw(urlString: String): String {
+        val doh = AppDns.clientOrNull()
+        if (doh != null) {
+            try {
+                val req = okhttp3.Request.Builder().url(urlString).build()
+                doh.newCall(req).execute().use { r -> if (r.isSuccessful) return r.body?.string().orEmpty() }
+            } catch (e: Exception) { }
+        }
         val connection = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
         return try {
             connection.connectTimeout = 10_000
@@ -55,6 +62,12 @@ object PlaylistRepository {
     }
 
     fun parse(text: String): PlaylistData = parseDepth(text, 0)
+
+    /** Como [parse], pero con la dirección de origen (para resolver enlaces relativos de feeds JSON). */
+    fun parseFrom(url: String, text: String): PlaylistData {
+        eventsBase = url
+        return try { parse(text) } finally { eventsBase = null }
+    }
 
     /** [depth]: cuántas listas «anfitrión» (enlaces a otras listas dentro de una .w3u) se han abierto ya para llegar aquí. */
     private fun parseDepth(text: String, depth: Int): PlaylistData {

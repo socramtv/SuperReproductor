@@ -137,6 +137,11 @@
     </item>
 
     <item
+        android:id="@+id/action_loaded_lists"
+        android:title="@string/loaded_menu"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_load_file"
         android:title="@string/action_load_file_menu"
         app:showAsAction="never" />

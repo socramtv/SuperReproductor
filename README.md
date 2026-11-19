@@ -1974,3 +1974,9 @@ La lista de servidores reconocidos (y sus espejos) se amplía mucho: doodstream/
 - **Quitar aviso «bloqueador detectado»**: elimina la capa que tapa la página y devuelve el scroll; se ejecuta solo cuando se detecta el aviso.
 - Listas JSON de eventos/partidos (p. ej. `/api/v1/events`): se reconocen de forma genérica (título, liga, hora, imagen y enlaces/canales/servidores) y se importan como lista; los enlaces que no son vídeo directo se resuelven dentro del reproductor.
 - Feed `verpartidos.cc/api/v1/events` (`data[]` con `title`, `league`, `status`, `sources[]`): los eventos en directo van a la categoría «🔴 En directo», el resto por liga; cada fuente es un enlace de página que se resuelve en el reproductor.
+
+## Listas cargadas, DNS y aviso recordado
+
+- Menú principal → **📚 Listas cargadas**: todas las listas externas cargadas (de archivo o de enlace, también las importadas desde el navegador) quedan guardadas; pulsa para abrir una, mantén pulsado para quitarla. Las de enlace guardan copia y abren sin red.
+- **DNS**: nuevos Mullvad y «Personalizado» (tu URL DoH), botón **Probar** (ms de cada DNS), también se usa al descargar listas, y atajo a «DNS privado» de Android para que valga en el navegador.
+- Navegador: «Quitar aviso de bloqueador» se recuerda por web y se aplica solo al volver a entrar.
