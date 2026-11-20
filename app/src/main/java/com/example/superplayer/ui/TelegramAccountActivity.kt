@@ -2860,7 +2860,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         dialog.show()
         playBtn.requestFocus()
-        attachPreview(header, dialog, playTarget?.third ?: options.firstOrNull { it.fileId != null && it.size > 0 })
+        if (!trailerKey.isNullOrBlank()) attachTrailerPreview(header, dialog, trailerKey)
+        else attachPreview(header, dialog, playTarget?.third ?: options.firstOrNull { it.fileId != null && it.size > 0 })
         applyLogo(info?.title ?: query, info?.year, if (info != null) info.isTv else null, titleTv, logoIv, dialog)
     }
 
@@ -4500,6 +4501,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 if (bd != null) img.load(bd)
                 val tk = info.trailerKey
                 if (!tk.isNullOrBlank()) {
+                    attachTrailerPreview(header, dialog, tk)
                     val tb = tile(getString(R.string.tile_trailer)) {
                         try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$tk"))) }
                         catch (e: Exception) { Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show() }
@@ -4583,6 +4585,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed || !dialog.isShowing) return@runOnUiThread
                 logoIv.load(url) {
+                    size(900, 300)
                     listener(onSuccess = { _, _ ->
                         titleTv.visibility = View.GONE
                         logoIv.visibility = View.VISIBLE
@@ -4631,6 +4634,65 @@ class TelegramAccountActivity : AppCompatActivity() {
         exo.prepare()
         exo.playWhenReady = true
         h.postDelayed({ release(); pv.visibility = View.GONE }, 40_000)
+        dialog.setOnDismissListener { release() }
+    }
+
+
+    /** Tráiler de YouTube en la cabecera de la ficha: ~10 s con sonido y se vuelve a la carátula. Si el tráiler no se deja incrustar, no se ve nada. */
+    @android.annotation.SuppressLint("SetJavaScriptEnabled")
+    private fun attachTrailerPreview(header: android.widget.FrameLayout, dialog: android.app.Dialog, key: String) {
+        if (!previewOn() || !Regex("^[A-Za-z0-9_-]{6,20}$").matches(key)) return
+        val wv = try { android.webkit.WebView(this) } catch (e: Exception) { return }
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        var released = false
+        val wrap = object : android.widget.FrameLayout(this@TelegramAccountActivity) {
+            override fun onInterceptTouchEvent(ev: android.view.MotionEvent?): Boolean = true
+            override fun onTouchEvent(event: android.view.MotionEvent?): Boolean = false
+        }
+        wrap.alpha = 0f
+        wrap.addView(wv, android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+        header.addView(wrap, 1, android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+        fun release() {
+            if (released) return
+            released = true
+            h.removeCallbacksAndMessages(null)
+            try { (wrap.parent as? android.view.ViewGroup)?.removeView(wrap) } catch (e: Exception) { }
+            try { wv.stopLoading(); wv.destroy() } catch (e: Exception) { }
+        }
+        fun fadeOut() {
+            if (!released) wrap.animate().alpha(0f).setDuration(600).withEndAction { release() }.start()
+        }
+        wv.settings.javaScriptEnabled = true
+        wv.settings.domStorageEnabled = true
+        wv.settings.mediaPlaybackRequiresUserGesture = false
+        wv.setBackgroundColor(0xFF000000.toInt())
+        wv.isVerticalScrollBarEnabled = false
+        wv.webChromeClient = android.webkit.WebChromeClient()
+        wv.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface fun playing() {
+                h.post {
+                    if (released) return@post
+                    wrap.animate().alpha(1f).setDuration(500).start()
+                    h.postDelayed({ fadeOut() }, 10_500)
+                }
+            }
+            @android.webkit.JavascriptInterface fun ended() { h.post { fadeOut() } }
+            @android.webkit.JavascriptInterface fun failed() { h.post { release() } }
+        }, "A")
+        val html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>" +
+            "html,body{margin:0;height:100%;background:#000;overflow:hidden}" +
+            "#p{position:absolute;top:50%;left:50%;width:177.78vh;height:100vh;min-width:100%;min-height:56.25vw;transform:translate(-50%,-50%);pointer-events:none}" +
+            "</style></head><body><div id='p'></div><script src='https://www.youtube.com/iframe_api'></script><script>" +
+            "function onYouTubeIframeAPIReady(){new YT.Player('p',{width:'100%',height:'100%',videoId:'" + key + "'," +
+            "playerVars:{autoplay:1,controls:0,playsinline:1,rel:0,modestbranding:1,iv_load_policy:3,disablekb:1,fs:0,start:3,end:14}," +
+            "events:{onReady:function(e){e.target.unMute();e.target.setVolume(100);e.target.playVideo();}," +
+            "onStateChange:function(e){if(e.data==1)A.playing();if(e.data==0)A.ended();}," +
+            "onError:function(e){A.failed();}}});}" +
+            "</script></body></html>"
+        wv.loadDataWithBaseURL("https://www.youtube.com/", html, "text/html", "utf-8", null)
+        h.postDelayed({ release() }, 45_000)
         dialog.setOnDismissListener { release() }
     }
 

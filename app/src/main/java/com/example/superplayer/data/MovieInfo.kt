@@ -343,14 +343,21 @@ object MovieInfo {
         if (tmdbKey.isBlank() || title.isBlank()) { onDone(null); return }
         val key = (if (isTv == null) "x" else if (isTv) "t" else "m") + "|" + norm(title) + "|" + (year ?: "")
         val cached = logoPrefs(appContext).getString(key, null)
-        if (cached != null) { onDone(cached.ifEmpty { null }); return }
+        if (cached != null) {
+            if (cached.startsWith("http")) { onDone(cached); return }
+            // Un «no hay logo» solo se recuerda unos días.
+            val at = cached.removePrefix("-").toLongOrNull() ?: 0L
+            if (System.currentTimeMillis() - at < 3L * 24 * 3_600_000L) { onDone(null); return }
+        }
         pool.execute {
             var url: String? = null
+            var reached = false
             try {
                 val kinds = when (isTv) { true -> listOf("tv"); false -> listOf("movie"); null -> listOf("movie", "tv") }
                 for (kind in kinds) {
                     val yp = if (year.isNullOrBlank()) "" else (if (kind == "movie") "&year=" else "&first_air_date_year=") + year
                     val body = httpGet("$TMDB/search/$kind?api_key=$tmdbKey&language=es-ES&query=" + URLEncoder.encode(title, "UTF-8") + yp) ?: continue
+                    reached = true
                     val res = JSONObject(body).optJSONArray("results") ?: continue
                     if (res.length() == 0) continue
                     val id = res.optJSONObject(0)?.optInt("id", 0) ?: 0
@@ -371,7 +378,8 @@ object MovieInfo {
                     best?.optString("file_path")?.takeIf { it.isNotEmpty() }?.let { url = TMDB_IMG + "w500" + it }
                     if (url != null) break
                 }
-                logoPrefs(appContext).edit().putString(key, url ?: "").apply()
+                if (url != null) logoPrefs(appContext).edit().putString(key, url).apply()
+                else if (reached) logoPrefs(appContext).edit().putString(key, "-" + System.currentTimeMillis()).apply()
             } catch (e: Exception) { }
             onDone(url)
         }
