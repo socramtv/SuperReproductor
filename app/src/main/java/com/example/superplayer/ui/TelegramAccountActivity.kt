@@ -4686,25 +4686,34 @@ class TelegramAccountActivity : AppCompatActivity() {
             ".ytp-impression-link,.ytp-show-cards-title,.ytp-ce-element,.ytp-large-play-button,.ytp-spinner{display:none!important}" +
             "html,body{background:#000!important;overflow:hidden!important}"
         val inject = "(function(){var s=document.createElement('style');s.innerHTML='" + css + "';document.head.appendChild(s);})();"
-        // Cada segundo: ¿está sonando el vídeo (se muestra) o salió un error (se quita)?
+        // Cada segundo: ¿está sonando el vídeo (se muestra) o salió un error (se quita, y se avisa del motivo)?
         var checks = 0
+        fun fail(why: String) {
+            if (released) return
+            release()
+            Toast.makeText(this, getString(R.string.tile_trailer_fail, why), Toast.LENGTH_LONG).show()
+        }
         fun check() {
             if (released) return
             checks++
             wv.evaluateJavascript(
-                "(function(){if(document.querySelector('.ytp-error'))return 'err';var v=document.querySelector('video');" +
-                "if(v&&!v.paused&&v.currentTime>0)return 'play';return 'wait';})()"
+                "(function(){var e=document.querySelector('.ytp-error');if(e){var r=document.querySelector('.ytp-error-content-wrap-reason');return 'err:'+(r?r.innerText:e.innerText);}" +
+                "var v=document.querySelector('video');if(!v)return 'wait:sinvideo:'+document.title;" +
+                "if(!v.paused&&v.currentTime>0)return 'play';" +
+                "try{var b=document.querySelector('.ytp-large-play-button');if(b)b.click();v.muted=false;v.play();}catch(x){}" +
+                "return 'wait:pausado:'+v.readyState;})()"
             ) { r ->
                 if (released) return@evaluateJavascript
+                val t = (r ?: "").trim('"')
                 when {
-                    r?.contains("err") == true -> release()
-                    r?.contains("play") == true -> if (!shown) {
+                    t.startsWith("err:") -> fail(t.removePrefix("err:").take(80).ifBlank { "error de YouTube" })
+                    t == "play" -> if (!shown) {
                         shown = true
                         wrap.animate().alpha(1f).setDuration(500).start()
                         h.postDelayed({ fadeOut() }, 10_500)
                     }
                     checks < 14 -> h.postDelayed({ check() }, 1000)
-                    else -> release()
+                    else -> fail(t.removePrefix("wait:").take(80).ifBlank { "sin respuesta" })
                 }
             }
         }
@@ -4715,7 +4724,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 h.postDelayed({ check() }, 1200)
             }
             override fun onReceivedError(view: android.webkit.WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
-                if (request?.isForMainFrame == true) release()
+                if (request?.isForMainFrame == true) fail(error?.description?.toString() ?: "sin conexión")
             }
         }
         val url = "https://www.youtube.com/embed/$key?autoplay=1&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3" +
