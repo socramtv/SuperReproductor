@@ -115,7 +115,7 @@ object PageStreamResolver {
 
     /** ¿Esa lista .m3u8 responde y es de verdad una lista HLS? (prueba rápida, ~4 s) */
     fun alive(url: String, referer: String, ua: String): Boolean = try {
-        val c = URL(url).openConnection() as HttpURLConnection
+        val c = com.example.superplayer.data.NetShield.openConnection(url)
         c.connectTimeout = 3500
         c.readTimeout = 3500
         c.setRequestProperty("User-Agent", ua)
@@ -221,7 +221,7 @@ object PageStreamResolver {
     private fun probe(url: String, referer: String?, ua: String): Probe? {
         var c: HttpURLConnection? = null
         return try {
-            c = URL(url).openConnection() as HttpURLConnection
+            c = com.example.superplayer.data.NetShield.openConnection(url)
             c.connectTimeout = 10_000
             c.readTimeout = 15_000
             c.instanceFollowRedirects = true

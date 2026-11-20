@@ -79,7 +79,8 @@ class StreamMediaSourceFactory(context: Context) : MediaSource.Factory {
                 androidx.media3.datasource.FileDataSource.Factory()
             } else {
                 val local = mediaItem.localConfiguration?.uri?.host == "127.0.0.1"
-                val dohClient = if (local) null else com.example.superplayer.data.AppDns.client(appContext)
+                val dohClient = if (local) null
+                    else (com.example.superplayer.data.NetShield.client(appContext) ?: com.example.superplayer.data.AppDns.client(appContext))
                 if (dohClient != null) {
                     // DNS elegido en Ajustes → DNS de los canales (DNS sobre HTTPS)
                     androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(dohClient)

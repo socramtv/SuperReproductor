@@ -47,6 +47,38 @@ object AppDns {
         cached = null
     }
 
+    private val dohCache = HashMap<String, DnsOverHttps>()
+
+    private fun dohFor(c: Context, p: Provider): DnsOverHttps? {
+        val url = (if (p == Provider.CUSTOM) customUrl(c).takeIf { it.isNotBlank() } else p.url) ?: return null
+        synchronized(dohCache) {
+            return dohCache.getOrPut(p.name + url) {
+                val b = OkHttpClient.Builder().connectTimeout(6, TimeUnit.SECONDS).readTimeout(6, TimeUnit.SECONDS).build()
+                DnsOverHttps.Builder().client(b).url(url.toHttpUrl())
+                    .apply { if (p.bootstrap.isNotEmpty()) bootstrapDnsHosts(p.bootstrap.map { InetAddress.getByName(it) }) }
+                    .build()
+            }
+        }
+    }
+
+    /**
+     * Resolutor para el intermediario del navegador: el DNS elegido (o xdp.es / Cloudflare si se usa el del sistema),
+     * y el del sistema solo como último recurso.
+     */
+    fun resolve(c: Context, host: String): List<InetAddress> {
+        val chosen = current(c)
+        val order = ArrayList<Provider>()
+        if (chosen != Provider.SYSTEM) order.add(chosen)
+        for (x in listOf(Provider.XDP, Provider.CLOUDFLARE, Provider.GOOGLE)) if (x !in order) order.add(x)
+        for (p in order) {
+            try {
+                val r = dohFor(c, p)?.lookup(host)
+                if (!r.isNullOrEmpty()) return r
+            } catch (e: Exception) { }
+        }
+        return Dns.SYSTEM.lookup(host)
+    }
+
     /** Milisegundos que tarda un DNS en resolver [host] (-1 si falla). Para el botón «Probar». */
     fun probe(c: Context, p: Provider, host: String): Long {
         val t0 = System.currentTimeMillis()

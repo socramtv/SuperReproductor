@@ -51,7 +51,7 @@ object PlaylistRepository {
                 doh.newCall(req).execute().use { r -> if (r.isSuccessful) return r.body?.string().orEmpty() }
             } catch (e: Exception) { }
         }
-        val connection = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
+        val connection = NetShield.openConnection(urlString)
         return try {
             connection.connectTimeout = 10_000
             connection.readTimeout = 10_000

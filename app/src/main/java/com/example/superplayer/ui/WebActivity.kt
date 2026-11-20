@@ -103,6 +103,7 @@ class WebActivity : AppCompatActivity() {
         WebSites.refresh(applicationContext) { l -> if (l != null) runOnUiThread { if (!isFinishing && !isDestroyed) refreshFavUi() } }
 
         isTv = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+        applyShield()
 
         // Peticiones que hacen los Service Workers de la página (algunos reproductores cargan el vídeo desde ahí).
         if (android.os.Build.VERSION.SDK_INT >= 24) {
@@ -2176,6 +2177,20 @@ class WebActivity : AppCompatActivity() {
         prefs().edit().putStringSet("wall_sites", s).apply()
     }
 
+    // ---- Modo anti-bloqueo de red (DNS por HTTPS + conexión partida) ----
+
+    private fun shieldOn() = com.example.superplayer.data.NetShield.enabled(this)
+
+    private fun applyShield() = com.example.superplayer.data.NetShield.applyWebProxy(this)
+
+    private fun toggleShield() {
+        val supported = try { androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.PROXY_OVERRIDE) } catch (e: Exception) { false }
+        if (!supported) { Toast.makeText(this, R.string.web_shield_unsupported, Toast.LENGTH_LONG).show(); return }
+        com.example.superplayer.data.NetShield.setEnabled(this, !shieldOn())
+        Toast.makeText(this, if (shieldOn()) R.string.web_shield_now_on else R.string.web_shield_now_off, Toast.LENGTH_SHORT).show()
+        webView.reload()
+    }
+
     private fun clearCacheOnly() {
         for (t in tabs) t.view.clearCache(true)
         Toast.makeText(this, R.string.web_cache_cleared, Toast.LENGTH_SHORT).show()
@@ -2255,6 +2270,7 @@ class WebActivity : AppCompatActivity() {
             webView.reload()
             hideHome()
         }
+        item(check(shieldOn(), getString(R.string.web_shield))) { toggleShield() }
         item(getString(R.string.web_zoom_menu)) { showZoomDialog() }
         item(getString(R.string.web_agent_menu, agentLabel())) { chooseAgent() }
         if (isTv) item(check(cursorEnabled(), getString(R.string.web_cursor_opt))) {

@@ -1985,3 +1985,8 @@ La lista de servidores reconocidos (y sus espejos) se amplía mucho: doodstream/
 
 - Se leen JSON con `{"hashes":[{"title","hash","group","logo","tvg_id"}]}`: cada hash se convierte en `http://127.0.0.1:6878/ace/getstream?id=<hash>` (motor local de Acestream/AceServe), agrupado por `group`, con logo y tvg_id. También vale `acestream://<hash>` como entrada (`PlaylistRepository.aceUrl`).
 - DNS: añadido **xdp.es** (DoH `https://dns.xdp.es/dns-query`, DNS privado `dns.xdp.es`).
+
+## Modo anti-bloqueo de red (navegador)
+
+- Navegador → Ajustes → **🛡 Modo anti-bloqueo de red**: el navegador de la app (y el resolutor de enlaces) pasa por un intermediario local (`data/NetShield.kt`, usa `androidx.webkit` ProxyController) que resuelve con el DNS por HTTPS elegido (o xdp.es/Cloudflare/Google si es el del sistema) y parte por la mitad del nombre del servidor el primer mensaje TLS. Sirve cuando la operadora corta con `ERR_CONNECTION_RESET` en datos móviles. No descifra el tráfico.
+- El modo anti-bloqueo es ahora global (`NetShield.enabled`): también lo usa el **reproductor** (OkHttp por el intermediario), el resolutor de páginas y la descarga de listas. Se activa desde el navegador (Ajustes) o desde «DNS de los canales → Más…».

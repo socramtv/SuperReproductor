@@ -1176,4 +1176,10 @@
     <string name="web_wall_forget">🚫 Aviso quitado solo en esta web (pulsa para olvidar)</string>
     <string name="web_wall_remembered">Se quitará el aviso solo en esta web</string>
     <string name="web_wall_forgotten">Olvidado</string>
+    <string name="web_shield">🛡 Modo anti-bloqueo de red (DNS seguro + conexión partida)</string>
+    <string name="web_shield_now_on">Modo anti-bloqueo activado</string>
+    <string name="web_shield_now_off">Modo anti-bloqueo desactivado</string>
+    <string name="web_shield_unsupported">Tu WebView no admite este modo; actualiza «Android System WebView» o Chrome</string>
+    <string name="shield_on_item">🛡 Activar modo anti-bloqueo (reproductor y navegador)</string>
+    <string name="shield_off_item">🛡 Desactivar modo anti-bloqueo (ahora activado)</string>
 </resources>

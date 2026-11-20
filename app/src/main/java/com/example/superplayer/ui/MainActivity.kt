@@ -98,6 +98,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.example.superplayer.data.AppDns.attach(this)
+        com.example.superplayer.data.NetShield.attach(this)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -840,9 +841,13 @@ class MainActivity : AppCompatActivity() {
     private fun showDnsMore() {
         val cur = com.example.superplayer.data.AppDns.current(this)
         val host = com.example.superplayer.data.AppDns.privateDnsHost(cur)
-        val opts = arrayOf(getString(R.string.dns_private_open), getString(R.string.dns_what))
+        val shieldOn = com.example.superplayer.data.NetShield.enabled(this)
+        val opts = arrayOf(getString(if (shieldOn) R.string.shield_off_item else R.string.shield_on_item), getString(R.string.dns_private_open), getString(R.string.dns_what))
         androidx.appcompat.app.AlertDialog.Builder(this).setTitle(R.string.dns_more).setItems(opts) { _, w ->
             if (w == 0) {
+                com.example.superplayer.data.NetShield.setEnabled(this, !shieldOn)
+                Toast.makeText(this, if (shieldOn) R.string.web_shield_now_off else R.string.web_shield_now_on, Toast.LENGTH_LONG).show()
+            } else if (w == 1) {
                 androidx.appcompat.app.AlertDialog.Builder(this)
                     .setMessage(getString(R.string.dns_private_msg, host ?: getString(R.string.dns_private_any)))
                     .setPositiveButton(R.string.dns_private_go) { _, _ ->
