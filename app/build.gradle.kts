@@ -67,7 +67,7 @@ android {
         // DRM, MediaSource.Factory, MediaSession...) como @UnstableApi. Las
         // clases que la usan también llevan @OptIn(UnstableApi::class); esto
         // es solo una red de seguridad adicional a nivel de módulo.
-        freeCompilerArgs += listOf("-opt-in=androidx.media3.common.util.UnstableApi", "-Xskip-metadata-version-check")
+        freeCompilerArgs += listOf("-opt-in=androidx.media3.common.util.UnstableApi")
     }
 
     buildFeatures {
@@ -119,10 +119,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.webkit:webkit:1.12.1")
     // Tráiler de YouTube: saca la dirección directa del vídeo (sin WebView) y la reproduce en ExoPlayer
-    implementation("com.github.teamnewpipe:NewPipeExtractor:dev-SNAPSHOT") {
-        // JitPack no sirve esta pieza (401) y solo lee fechas tipo "hace 2 días", que no usamos
-        exclude(group = "com.github.teamnewpipe", module = "timeago-parser")
-    }
+    implementation("com.github.teamnewpipe:NewPipeExtractor:v0.24.8")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Media3 / ExoPlayer: soporte DASH + HLS + UI del reproductor + sesión
