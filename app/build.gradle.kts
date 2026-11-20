@@ -67,7 +67,7 @@ android {
         // DRM, MediaSource.Factory, MediaSession...) como @UnstableApi. Las
         // clases que la usan también llevan @OptIn(UnstableApi::class); esto
         // es solo una red de seguridad adicional a nivel de módulo.
-        freeCompilerArgs += listOf("-opt-in=androidx.media3.common.util.UnstableApi")
+        freeCompilerArgs += listOf("-opt-in=androidx.media3.common.util.UnstableApi", "-Xskip-metadata-version-check")
     }
 
     buildFeatures {
