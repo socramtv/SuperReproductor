@@ -4696,6 +4696,15 @@ class TelegramAccountActivity : AppCompatActivity() {
         fun check() {
             if (released) return
             checks++
+            // YouTube móvil no carga el vídeo hasta un toque real: se simula uno en el centro
+            if (checks in 2..8 && checks % 2 == 0) {
+                val t = android.os.SystemClock.uptimeMillis()
+                val cx = wv.width / 2f; val cy = wv.height / 2f
+                for ((i, a) in intArrayOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP).withIndex()) {
+                    val ev = android.view.MotionEvent.obtain(t, t + i * 60L, a, cx, cy, 0)
+                    wv.dispatchTouchEvent(ev); ev.recycle()
+                }
+            }
             wv.evaluateJavascript(
                 "(function(){var e=document.querySelector('.ytp-error');if(e){var r=document.querySelector('.ytp-error-content-wrap-reason');return 'err:'+(r?r.innerText:e.innerText);}" +
                 "var v=document.querySelector('video');if(!v)return 'wait:sinvideo:'+document.title;" +
@@ -4712,7 +4721,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                         wrap.animate().alpha(1f).setDuration(500).start()
                         h.postDelayed({ fadeOut() }, 10_500)
                     }
-                    checks < 14 -> h.postDelayed({ check() }, 1000)
+                    checks < 20 -> h.postDelayed({ check() }, 1000)
                     else -> fail(t.removePrefix("wait:").take(80).ifBlank { "sin respuesta" })
                 }
             }
