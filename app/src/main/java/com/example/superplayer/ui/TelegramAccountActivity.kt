@@ -2632,7 +2632,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         val tiles = ArrayList<TextView>()
         if (!trailerKey.isNullOrBlank()) tiles.add(tile(getString(R.string.tile_trailer)) {
             try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$trailerKey")))
+                startActivity(Intent(this, WebActivity::class.java).setData(Uri.parse("https://m.youtube.com/watch?v=$trailerKey")))
             } catch (e: Exception) {
                 Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show()
             }
@@ -2860,8 +2860,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         dialog.show()
         playBtn.requestFocus()
-        if (!trailerKey.isNullOrBlank()) attachTrailerPreview(header, dialog, trailerKey)
-        else attachPreview(header, dialog, playTarget?.third ?: options.firstOrNull { it.fileId != null && it.size > 0 })
+        attachPreview(header, dialog, playTarget?.third ?: options.firstOrNull { it.fileId != null && it.size > 0 })
         applyLogo(info?.title ?: query, info?.year, if (info != null) info.isTv else null, titleTv, logoIv, dialog)
     }
 
@@ -4501,9 +4500,8 @@ class TelegramAccountActivity : AppCompatActivity() {
                 if (bd != null) img.load(bd)
                 val tk = info.trailerKey
                 if (!tk.isNullOrBlank()) {
-                    attachTrailerPreview(header, dialog, tk)
                     val tb = tile(getString(R.string.tile_trailer)) {
-                        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$tk"))) }
+                        try { startActivity(Intent(this, WebActivity::class.java).setData(Uri.parse("https://m.youtube.com/watch?v=$tk"))) }
                         catch (e: Exception) { Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show() }
                     }
                     tileRow.addView(tb, 0, android.widget.LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(0, 0, dp(5), 0) })
@@ -4637,78 +4635,6 @@ class TelegramAccountActivity : AppCompatActivity() {
         dialog.setOnDismissListener { release() }
     }
 
-
-    /** Tráiler de YouTube en la cabecera de la ficha: ~10 s con sonido (desde el segundo 3) y se vuelve a la carátula. */
-    private fun attachTrailerPreview(header: android.widget.FrameLayout, dialog: android.app.Dialog, key: String) {
-        if (!previewOn() || !Regex("^[A-Za-z0-9_-]{6,20}$").matches(key)) return
-        val h = android.os.Handler(android.os.Looper.getMainLooper())
-        var released = false
-        var exo: androidx.media3.exoplayer.ExoPlayer? = null
-        var pv: androidx.media3.ui.PlayerView? = null
-        fun release() {
-            if (released) return
-            released = true
-            h.removeCallbacksAndMessages(null)
-            try { pv?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) } } catch (e: Exception) { }
-            try { exo?.release() } catch (e: Exception) { }
-        }
-        fun fail(why: String) {
-            if (released) return
-            release()
-            try {
-                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
-                    .setPrimaryClip(android.content.ClipData.newPlainText("trailer", why))
-            } catch (e: Exception) { }
-            Toast.makeText(this, getString(R.string.tile_trailer_fail, why.take(60)) + " (error copiado)", Toast.LENGTH_LONG).show()
-        }
-        dialog.setOnDismissListener { release() }
-        Thread {
-            val r = com.example.superplayer.data.YtTrailer.resolve(key)
-            runOnUiThread {
-                if (released) return@runOnUiThread
-                if (r == null) { fail(com.example.superplayer.data.YtTrailer.lastError.ifBlank { "sin vídeo" }); return@runOnUiThread }
-                try {
-                    val player = androidx.media3.exoplayer.ExoPlayer.Builder(this).build()
-                    exo = player
-                    val view = androidx.media3.ui.PlayerView(this).apply {
-                        useController = false
-                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        setShutterBackgroundColor(0x00000000)
-                        alpha = 0f
-                        this.player = player
-                    }
-                    pv = view
-                    header.addView(view, 1, android.widget.FrameLayout.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
-                    val df = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-                        .setUserAgent("Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0")
-                        .setAllowCrossProtocolRedirects(true)
-                    val pf = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(df)
-                    val vs = pf.createMediaSource(androidx.media3.common.MediaItem.fromUri(r.video))
-                    val src = if (r.audio != null)
-                        androidx.media3.exoplayer.source.MergingMediaSource(vs, pf.createMediaSource(androidx.media3.common.MediaItem.fromUri(r.audio)))
-                    else vs
-                    player.volume = 1f
-                    player.setMediaSource(src)
-                    player.seekTo(3_000)
-                    player.addListener(object : androidx.media3.common.Player.Listener {
-                        override fun onRenderedFirstFrame() {
-                            view.animate().alpha(1f).setDuration(500).start()
-                            h.postDelayed({
-                                if (!released) view.animate().alpha(0f).setDuration(600).withEndAction { release() }.start()
-                            }, 10_000)
-                        }
-                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                            fail((error.errorCodeName).take(60))
-                        }
-                    })
-                    player.prepare()
-                    player.playWhenReady = true
-                    h.postDelayed({ release() }, 40_000)
-                } catch (e: Throwable) { fail((e.message ?: e.javaClass.simpleName).take(60)) }
-            }
-        }.start()
-    }
 
     private fun pendingPrefs() = getSharedPreferences("tg_pending", MODE_PRIVATE)
 
