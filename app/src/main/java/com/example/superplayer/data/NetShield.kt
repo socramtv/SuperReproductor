@@ -104,6 +104,57 @@ object NetShield {
         return r
     }
 
+
+    private val good = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val logLines = java.util.concurrent.ConcurrentLinkedQueue<String>()
+
+    private fun note(t: String) {
+        logLines.add(java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date()) + " " + t)
+        while (logLines.size > 60) logLines.poll()
+    }
+
+    fun logText(): String = logLines.toList().asReversed().joinToString("\n").ifEmpty { "(sin actividad todavía)" }
+
+    /**
+     * Modos de enviar el primer mensaje TLS: 0 = partido en dos paquetes TCP por la mitad del nombre; 1 = partido en dos
+     * registros TLS (y dos paquetes); 2 = registro TLS de 1 byte + resto; 3 = sin trucos (solo DNS seguro).
+     */
+    private fun sendHello(out: OutputStream, hello: ByteArray, host: String, mode: Int) {
+        val n = hello.size
+        val recLen = ((hello[3].toInt() and 0xff) shl 8) or (hello[4].toInt() and 0xff)
+        var sni = -1
+        val hb = host.toByteArray(Charsets.ISO_8859_1)
+        outer@ for (i in 0..n - hb.size) {
+            for (j in hb.indices) if (hello[i + j] != hb[j]) continue@outer
+            sni = i + hb.size / 2
+            break
+        }
+        fun pause() { try { Thread.sleep(40) } catch (e: Exception) { } }
+        when (mode) {
+            0 -> {
+                val cut = if (sni in 1 until n) sni else minOf(n - 1, 40)
+                out.write(hello, 0, cut); out.flush(); pause()
+                out.write(hello, cut, n - cut); out.flush()
+            }
+            1, 2 -> {
+                if (5 + recLen > n) { out.write(hello); out.flush(); return }
+                val k = if (mode == 2) 1 else (if (sni > 6) sni - 5 else 20).coerceIn(1, recLen - 1)
+                fun rec(from: Int, to: Int): ByteArray {
+                    val len = to - from
+                    val b = ByteArray(5 + len)
+                    b[0] = hello[0]; b[1] = hello[1]; b[2] = hello[2]
+                    b[3] = (len shr 8).toByte(); b[4] = len.toByte()
+                    System.arraycopy(hello, 5 + from, b, 5, len)
+                    return b
+                }
+                out.write(rec(0, k)); out.flush(); pause()
+                out.write(rec(k, recLen)); out.flush()
+                if (5 + recLen < n) { out.write(hello, 5 + recLen, n - 5 - recLen); out.flush() }
+            }
+            else -> { out.write(hello); out.flush() }
+        }
+    }
+
     private fun readHead(inp: InputStream): ByteArray? {
         val buf = java.io.ByteArrayOutputStream()
         var last4 = 0
@@ -142,31 +193,42 @@ object NetShield {
         if (parts[0].equals("CONNECT", true)) {
             val host = parts[1].substringBeforeLast(':').trim('[', ']')
             val port = parts[1].substringAfterLast(':').toIntOrNull() ?: 443
-            val remote = try { connect(host, port) } catch (e: Exception) {
-                cout.write("HTTP/1.1 502 Bad Gateway\r\n\r\n".toByteArray()); client.close(); return
-            }
             cout.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray()); cout.flush()
-            // Primer mensaje del cliente (el «ClientHello» de TLS): se parte por la mitad del nombre del servidor.
             val first0 = ByteArray(16384)
             val n = cin.read(first0)
-            if (n <= 0) { client.close(); remote.close(); return }
-            val out = remote.getOutputStream()
-            var cut = -1
-            if (port == 443 && n > 6 && first0[0].toInt() == 0x16) {
-                val hb = host.toByteArray(Charsets.ISO_8859_1)
-                outer@ for (i in 0..n - hb.size) {
-                    for (j in hb.indices) if (first0[i + j] != hb[j]) continue@outer
-                    cut = i + hb.size / 2
-                    break
-                }
-                if (cut < 0) cut = minOf(n - 1, 40)
+            if (n <= 0) { client.close(); return }
+            val hello = first0.copyOf(n)
+            val isTls = hello[0].toInt() == 0x16 && n > 9
+            if (!isTls) {
+                val remote = try { connect(host, port) } catch (e: Exception) { client.close(); return }
+                remote.getOutputStream().write(hello); remote.getOutputStream().flush()
+                pipe(client, remote)
+                return
             }
-            if (cut in 1 until n) {
-                out.write(first0, 0, cut); out.flush()
-                try { Thread.sleep(40) } catch (e: Exception) { }
-                out.write(first0, cut, n - cut); out.flush()
-            } else { out.write(first0, 0, n); out.flush() }
-            pipe(client, remote)
+            // TLS: se prueban varias formas de enviar el primer mensaje hasta que el servidor responda; se recuerda la que funcionó.
+            val order = LinkedHashSet<Int>()
+            good[host]?.let { order.add(it) }
+            order.addAll(listOf(1, 0, 2, 3))
+            for (st in order) {
+                val remote = try { connect(host, port) } catch (e: Exception) { note("$host: sin conexion TCP"); continue }
+                val resp = ByteArray(16384)
+                val r = try {
+                    sendHello(remote.getOutputStream(), hello, host, st)
+                    remote.soTimeout = 5000
+                    remote.getInputStream().read(resp)
+                } catch (e: Exception) { -1 }
+                if (r > 0) {
+                    remote.soTimeout = 0
+                    good[host] = st
+                    note("$host: OK (modo $st)")
+                    cout.write(resp, 0, r); cout.flush()
+                    pipe(client, remote)
+                    return
+                }
+                note("$host: fallo (modo $st)")
+                try { remote.close() } catch (e: Exception) { }
+            }
+            client.close()
         } else {
             // HTTP normal: se reenvía como petición de origen, una por conexión.
             val m = Regex("^(\\w+) (\\S+) (HTTP/\\d\\.\\d)$").find(first) ?: run { client.close(); return }

@@ -1182,4 +1182,5 @@
     <string name="web_shield_unsupported">Tu WebView no admite este modo; actualiza «Android System WebView» o Chrome</string>
     <string name="shield_on_item">🛡 Activar modo anti-bloqueo (reproductor y navegador)</string>
     <string name="shield_off_item">🛡 Desactivar modo anti-bloqueo (ahora activado)</string>
+    <string name="web_shield_log">📋 Registro del modo anti-bloqueo</string>
 </resources>

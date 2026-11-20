@@ -2271,6 +2271,16 @@ class WebActivity : AppCompatActivity() {
             hideHome()
         }
         item(check(shieldOn(), getString(R.string.web_shield))) { toggleShield() }
+        if (shieldOn()) item(getString(R.string.web_shield_log)) {
+            AlertDialog.Builder(this).setTitle(R.string.web_shield_log)
+                .setMessage(com.example.superplayer.data.NetShield.logText())
+                .setPositiveButton(R.string.web_copy) { _, _ ->
+                    (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                        .setPrimaryClip(android.content.ClipData.newPlainText("log", com.example.superplayer.data.NetShield.logText()))
+                    Toast.makeText(this, R.string.web_copied, Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(android.R.string.cancel, null).show()
+        }
         item(getString(R.string.web_zoom_menu)) { showZoomDialog() }
         item(getString(R.string.web_agent_menu, agentLabel())) { chooseAgent() }
         if (isTv) item(check(cursorEnabled(), getString(R.string.web_cursor_opt))) {
