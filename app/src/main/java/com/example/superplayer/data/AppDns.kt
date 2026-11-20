@@ -20,6 +20,7 @@ object AppDns {
         GOOGLE("Google 8.8.8.8", "https://dns.google/dns-query", listOf("8.8.8.8", "8.8.4.4")),
         ADGUARD("AdGuard (sin anuncios)", "https://dns.adguard-dns.com/dns-query", listOf("94.140.14.14", "94.140.15.15")),
         QUAD9("Quad9 9.9.9.9", "https://dns.quad9.net/dns-query", listOf("9.9.9.9", "149.112.112.112")),
+        XDP("xdp.es (España, sin bloqueos a CDN)", "https://dns.xdp.es/dns-query", listOf("85.208.114.51", "51.170.52.10")),
         MULLVAD("Mullvad (sin anuncios)", "https://dns.mullvad.net/dns-query", listOf("194.242.2.2")),
         CUSTOM("Personalizado (tu URL DoH)", null, emptyList())
     }
@@ -31,6 +32,7 @@ object AppDns {
         Provider.ADGUARD -> "dns.adguard-dns.com"
         Provider.QUAD9 -> "dns.quad9.net"
         Provider.MULLVAD -> "dns.mullvad.net"
+        Provider.XDP -> "dns.xdp.es"
         else -> null
     }
 
