@@ -4645,15 +4645,27 @@ class TelegramAccountActivity : AppCompatActivity() {
         val wv = try { android.webkit.WebView(this) } catch (e: Exception) { return }
         val h = android.os.Handler(android.os.Looper.getMainLooper())
         var released = false
+        var shown = false
         val wrap = object : android.widget.FrameLayout(this@TelegramAccountActivity) {
             override fun onInterceptTouchEvent(ev: android.view.MotionEvent?): Boolean = true
             override fun onTouchEvent(event: android.view.MotionEvent?): Boolean = false
         }
         wrap.alpha = 0f
+        wrap.setBackgroundColor(0xFF000000.toInt())
+        // El vídeo es 16:9: se agranda el WebView para que llene la cabecera (recorta lo que sobra).
         wrap.addView(wv, android.widget.FrameLayout.LayoutParams(
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.Gravity.CENTER))
         header.addView(wrap, 1, android.widget.FrameLayout.LayoutParams(
             android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+        header.post {
+            val hw = header.width
+            val hh = header.height
+            if (hw > 0 && hh > 0) {
+                val w = maxOf(hw, hh * 16 / 9)
+                val hgt = maxOf(hh, hw * 9 / 16)
+                wv.layoutParams = android.widget.FrameLayout.LayoutParams(w, hgt, android.view.Gravity.CENTER)
+            }
+        }
         fun release() {
             if (released) return
             released = true
@@ -4670,28 +4682,45 @@ class TelegramAccountActivity : AppCompatActivity() {
         wv.setBackgroundColor(0xFF000000.toInt())
         wv.isVerticalScrollBarEnabled = false
         wv.webChromeClient = android.webkit.WebChromeClient()
-        wv.addJavascriptInterface(object {
-            @android.webkit.JavascriptInterface fun playing() {
-                h.post {
-                    if (released) return@post
-                    wrap.animate().alpha(1f).setDuration(500).start()
-                    h.postDelayed({ fadeOut() }, 10_500)
+        val css = ".ytp-chrome-top,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-chrome-bottom,.ytp-pause-overlay,.ytp-watermark," +
+            ".ytp-impression-link,.ytp-show-cards-title,.ytp-ce-element,.ytp-large-play-button,.ytp-spinner{display:none!important}" +
+            "html,body{background:#000!important;overflow:hidden!important}"
+        val inject = "(function(){var s=document.createElement('style');s.innerHTML='" + css + "';document.head.appendChild(s);})();"
+        // Cada segundo: ¿está sonando el vídeo (se muestra) o salió un error (se quita)?
+        var checks = 0
+        fun check() {
+            if (released) return
+            checks++
+            wv.evaluateJavascript(
+                "(function(){if(document.querySelector('.ytp-error'))return 'err';var v=document.querySelector('video');" +
+                "if(v&&!v.paused&&v.currentTime>0)return 'play';return 'wait';})()"
+            ) { r ->
+                if (released) return@evaluateJavascript
+                when {
+                    r?.contains("err") == true -> release()
+                    r?.contains("play") == true -> if (!shown) {
+                        shown = true
+                        wrap.animate().alpha(1f).setDuration(500).start()
+                        h.postDelayed({ fadeOut() }, 10_500)
+                    }
+                    checks < 14 -> h.postDelayed({ check() }, 1000)
+                    else -> release()
                 }
             }
-            @android.webkit.JavascriptInterface fun ended() { h.post { fadeOut() } }
-            @android.webkit.JavascriptInterface fun failed() { h.post { release() } }
-        }, "A")
-        val html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'><style>" +
-            "html,body{margin:0;height:100%;background:#000;overflow:hidden}" +
-            "#p{position:absolute;top:50%;left:50%;width:177.78vh;height:100vh;min-width:100%;min-height:56.25vw;transform:translate(-50%,-50%);pointer-events:none}" +
-            "</style></head><body><div id='p'></div><script src='https://www.youtube.com/iframe_api'></script><script>" +
-            "function onYouTubeIframeAPIReady(){new YT.Player('p',{width:'100%',height:'100%',videoId:'" + key + "'," +
-            "playerVars:{autoplay:1,controls:0,playsinline:1,rel:0,modestbranding:1,iv_load_policy:3,disablekb:1,fs:0,start:3,end:14}," +
-            "events:{onReady:function(e){e.target.unMute();e.target.setVolume(100);e.target.playVideo();}," +
-            "onStateChange:function(e){if(e.data==1)A.playing();if(e.data==0)A.ended();}," +
-            "onError:function(e){A.failed();}}});}" +
-            "</script></body></html>"
-        wv.loadDataWithBaseURL("https://www.youtube.com/", html, "text/html", "utf-8", null)
+        }
+        wv.webViewClient = object : android.webkit.WebViewClient() {
+            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                if (released) return
+                view?.evaluateJavascript(inject, null)
+                h.postDelayed({ check() }, 1200)
+            }
+            override fun onReceivedError(view: android.webkit.WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                if (request?.isForMainFrame == true) release()
+            }
+        }
+        val url = "https://www.youtube.com/embed/$key?autoplay=1&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3" +
+            "&disablekb=1&fs=0&start=3&end=14&enablejsapi=1&origin=https://www.youtube.com"
+        wv.loadUrl(url, mapOf("Referer" to "https://www.youtube.com/"))
         h.postDelayed({ release() }, 45_000)
         dialog.setOnDismissListener { release() }
     }

@@ -334,7 +334,7 @@ object MovieInfo {
 
     // ---------- Logo del título (imagen con la tipografía propia de cada película) ----------
 
-    private fun logoPrefs(context: Context) = context.applicationContext.getSharedPreferences("movie_logo", Context.MODE_PRIVATE)
+    private fun logoPrefs(context: Context) = context.applicationContext.getSharedPreferences("movie_logo2", Context.MODE_PRIVATE)
 
     /** URL del logo del título en TMDb (null si no hay o no hay clave). [isTv] null = probar película y luego serie. */
     fun logo(context: Context, title: String, year: String?, isTv: Boolean?, onDone: (String?) -> Unit) {
@@ -370,7 +370,7 @@ object MovieInfo {
                         val l = logos.optJSONObject(i) ?: continue
                         if (l.optString("file_path").endsWith(".svg", true)) continue
                         val lang = l.optString("iso_639_1")
-                        val pri = when (lang) { "es" -> 3.0; "en" -> 2.0; "" , "null" -> 1.0; else -> -1.0 }
+                        val pri = when (lang) { "es" -> 9.0; "en" -> 2.0; "" , "null" -> 1.0; else -> -1.0 }
                         if (pri < 0) continue
                         val score = pri * 100 + l.optDouble("vote_average", 0.0)
                         if (score > bestScore) { bestScore = score; best = l }
