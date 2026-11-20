@@ -85,6 +85,9 @@ object PlaylistRepository {
         val isArrayRoot = trimmed.startsWith("[")
         val rootObject: JSONObject? = if (isArrayRoot) null else JSONObject(trimmed)
 
+        // Listas de hashes de Acestream ({"hashes":[{title,hash,group,logo,tvg_id}]}): cada hash pasa a enlace del motor local.
+        parseHashesJson(trimmed)?.let { return it }
+
         // Feeds de eventos/partidos (p. ej. verpartidos.cc/api/v1/events): lista de eventos con sus enlaces.
         parseEventsJson(trimmed)?.let { return it }
 
@@ -162,6 +165,42 @@ object PlaylistRepository {
         return PlaylistData(categories, epgUrl)
     }
 
+
+
+    // ---------- Listas de hashes de Acestream ----------
+
+    private val ACE_HASH = Regex("^[0-9a-fA-F]{40}$")
+    const val ACE_BASE = "http://127.0.0.1:6878/ace/getstream?id="
+
+    /** Hash (o acestream://hash) -> enlace del motor local; null si no es un hash. */
+    fun aceUrl(raw: String?): String? {
+        val h = raw?.trim()?.removePrefix("acestream://")?.removePrefix("ace://") ?: return null
+        return if (ACE_HASH.matches(h)) ACE_BASE + h.lowercase() else null
+    }
+
+    private fun parseHashesJson(trimmed: String): PlaylistData? {
+        if (!trimmed.startsWith("{")) return null
+        val root = try { JSONObject(trimmed) } catch (e: Exception) { return null }
+        val arr = root.optJSONArray("hashes") ?: return null
+        val byCat = LinkedHashMap<String, ArrayList<Stream>>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val url = aceUrl(o.optStringOrNull("hash") ?: o.optStringOrNull("infohash") ?: o.optStringOrNull("id")) ?: continue
+            val cat = o.optStringOrNull("group") ?: o.optStringOrNull("category") ?: "Acestream"
+            byCat.getOrPut(cat) { ArrayList() }.add(
+                Stream(
+                    name = (o.optStringOrNull("title") ?: o.optStringOrNull("name") ?: "Acestream ${i + 1}").take(120),
+                    type = "PROGRESSIVE",
+                    url = url,
+                    icon = o.optStringOrNull("logo") ?: o.optStringOrNull("icon"),
+                    category = cat,
+                    tvgId = o.optStringOrNull("tvg_id") ?: o.optStringOrNull("tvgId")
+                )
+            )
+        }
+        if (byCat.isEmpty()) return null
+        return PlaylistData(byCat.map { (k, v) -> Category(k, v) }, null)
+    }
 
     // ---------- Feeds de eventos / partidos (JSON genérico) ----------
 

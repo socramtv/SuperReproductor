@@ -1980,3 +1980,7 @@ La lista de servidores reconocidos (y sus espejos) se amplía mucho: doodstream/
 - Menú principal → **📚 Listas cargadas**: todas las listas externas cargadas (de archivo o de enlace, también las importadas desde el navegador) quedan guardadas; pulsa para abrir una, mantén pulsado para quitarla. Las de enlace guardan copia y abren sin red.
 - **DNS**: nuevos Mullvad y «Personalizado» (tu URL DoH), botón **Probar** (ms de cada DNS), también se usa al descargar listas, y atajo a «DNS privado» de Android para que valga en el navegador.
 - Navegador: «Quitar aviso de bloqueador» se recuerda por web y se aplica solo al volver a entrar.
+
+## Listas de hashes de Acestream
+
+- Se leen JSON con `{"hashes":[{"title","hash","group","logo","tvg_id"}]}`: cada hash se convierte en `http://127.0.0.1:6878/ace/getstream?id=<hash>` (motor local de Acestream/AceServe), agrupado por `group`, con logo y tvg_id. También vale `acestream://<hash>` como entrada (`PlaylistRepository.aceUrl`).
