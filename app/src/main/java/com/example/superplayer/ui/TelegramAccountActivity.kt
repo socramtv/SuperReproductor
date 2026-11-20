@@ -4650,7 +4650,7 @@ class TelegramAccountActivity : AppCompatActivity() {
             override fun onInterceptTouchEvent(ev: android.view.MotionEvent?): Boolean = true
             override fun onTouchEvent(event: android.view.MotionEvent?): Boolean = false
         }
-        wrap.alpha = 0f
+        wrap.alpha = 0.01f
         wrap.setBackgroundColor(0xFF000000.toInt())
         // El vídeo es 16:9: se agranda el WebView para que llene la cabecera (recorta lo que sobra).
         wrap.addView(wv, android.widget.FrameLayout.LayoutParams(
@@ -4683,7 +4683,7 @@ class TelegramAccountActivity : AppCompatActivity() {
         wv.isVerticalScrollBarEnabled = false
         wv.webChromeClient = android.webkit.WebChromeClient()
         val css = ".ytp-chrome-top,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-chrome-bottom,.ytp-pause-overlay,.ytp-watermark," +
-            ".ytp-impression-link,.ytp-show-cards-title,.ytp-ce-element,.ytp-large-play-button,.ytp-spinner{display:none!important}" +
+            ".ytp-impression-link,.ytp-show-cards-title,.ytp-ce-element,.ytp-spinner{display:none!important}.ytp-large-play-button{opacity:0!important}" +
             "html,body{background:#000!important;overflow:hidden!important}"
         val inject = "(function(){var s=document.createElement('style');s.innerHTML='" + css + "';document.head.appendChild(s);})();"
         // Cada segundo: ¿está sonando el vídeo (se muestra) o salió un error (se quita, y se avisa del motivo)?
