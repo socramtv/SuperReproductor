@@ -168,6 +168,18 @@ object NetShield {
         return null
     }
 
+    private val ipCache = java.util.concurrent.ConcurrentHashMap<String, Pair<List<InetAddress>, Long>>()
+
+    private fun allIps(host: String): List<InetAddress> {
+        val now = System.currentTimeMillis()
+        ipCache[host]?.let { if (it.second > now) return it.first }
+        val ctx = appCtx
+        val r = (if (ctx != null) AppDns.resolveAll(ctx, host) else InetAddress.getAllByName(host).toList())
+            .sortedBy { if (it is java.net.Inet4Address) 0 else 1 }
+        if (r.isNotEmpty()) ipCache[host] = r to now + 120_000
+        return r
+    }
+
     private fun connect(host: String, port: Int): Socket {
         var err: Exception? = null
         for (a in lookup(host).sortedBy { if (it is java.net.Inet4Address) 0 else 1 }) {
@@ -205,28 +217,40 @@ object NetShield {
                 pipe(client, remote)
                 return
             }
-            // TLS: se prueban varias formas de enviar el primer mensaje hasta que el servidor responda; se recuerda la que funcionó.
+            // TLS: se prueban varias direcciones del servidor y varias formas de enviar el primer mensaje hasta que responda.
             val order = LinkedHashSet<Int>()
             good[host]?.let { order.add(it) }
-            order.addAll(listOf(1, 0, 2, 3))
-            for (st in order) {
-                val remote = try { connect(host, port) } catch (e: Exception) { note("$host: sin conexion TCP"); continue }
-                val resp = ByteArray(16384)
-                val r = try {
-                    sendHello(remote.getOutputStream(), hello, host, st)
-                    remote.soTimeout = 5000
-                    remote.getInputStream().read(resp)
-                } catch (e: Exception) { -1 }
-                if (r > 0) {
-                    remote.soTimeout = 0
-                    good[host] = st
-                    note("$host: OK (modo $st)")
-                    cout.write(resp, 0, r); cout.flush()
-                    pipe(client, remote)
-                    return
+            order.addAll(listOf(1, 0, 3))
+            val ips = allIps(host)
+            note("$host -> " + ips.take(6).joinToString(",") { it.hostAddress ?: "?" })
+            var tries = 0
+            for (ip in ips.take(6)) {
+                for (st in order) {
+                    if (tries++ > 12) break
+                    val remote = Socket()
+                    val ok = try {
+                        remote.tcpNoDelay = true
+                        remote.connect(InetSocketAddress(ip, port), 5000)
+                        true
+                    } catch (e: Exception) { false }
+                    if (!ok) { note("$host ${ip.hostAddress}: sin conexion TCP"); try { remote.close() } catch (e: Exception) { }; break }
+                    val resp = ByteArray(16384)
+                    val r = try {
+                        sendHello(remote.getOutputStream(), hello, host, st)
+                        remote.soTimeout = 4000
+                        remote.getInputStream().read(resp)
+                    } catch (e: Exception) { -1 }
+                    if (r > 0) {
+                        remote.soTimeout = 0
+                        good[host] = st
+                        note("$host ${ip.hostAddress}: OK (modo $st)")
+                        cout.write(resp, 0, r); cout.flush()
+                        pipe(client, remote)
+                        return
+                    }
+                    note("$host ${ip.hostAddress}: fallo (modo $st)")
+                    try { remote.close() } catch (e: Exception) { }
                 }
-                note("$host: fallo (modo $st)")
-                try { remote.close() } catch (e: Exception) { }
             }
             client.close()
         } else {

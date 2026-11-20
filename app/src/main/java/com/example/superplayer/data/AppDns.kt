@@ -79,6 +79,18 @@ object AppDns {
         return Dns.SYSTEM.lookup(host)
     }
 
+    /** Direcciones de [host] según varios DNS a la vez (el elegido, xdp.es, Cloudflare, Google y el del sistema), sin repetir. */
+    fun resolveAll(c: Context, host: String): List<InetAddress> {
+        val out = LinkedHashSet<InetAddress>()
+        val chosen = current(c)
+        val order = ArrayList<Provider>()
+        if (chosen != Provider.SYSTEM) order.add(chosen)
+        for (x in listOf(Provider.XDP, Provider.CLOUDFLARE, Provider.GOOGLE)) if (x !in order) order.add(x)
+        for (p in order) { try { dohFor(c, p)?.lookup(host)?.let { out.addAll(it) } } catch (e: Exception) { } }
+        try { out.addAll(Dns.SYSTEM.lookup(host)) } catch (e: Exception) { }
+        return out.toList()
+    }
+
     /** Milisegundos que tarda un DNS en resolver [host] (-1 si falla). Para el botón «Probar». */
     fun probe(c: Context, p: Provider, host: String): Long {
         val t0 = System.currentTimeMillis()
