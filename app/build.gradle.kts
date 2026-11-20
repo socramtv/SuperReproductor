@@ -119,7 +119,10 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.webkit:webkit:1.12.1")
     // Tráiler de YouTube: saca la dirección directa del vídeo (sin WebView) y la reproduce en ExoPlayer
-    implementation("com.github.teamnewpipe:NewPipeExtractor:dev-SNAPSHOT")
+    implementation("com.github.teamnewpipe:NewPipeExtractor:dev-SNAPSHOT") {
+        // JitPack no sirve esta pieza (401) y solo lee fechas tipo "hace 2 días", que no usamos
+        exclude(group = "com.github.teamnewpipe", module = "timeago-parser")
+    }
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Media3 / ExoPlayer: soporte DASH + HLS + UI del reproductor + sesión
