@@ -89,7 +89,7 @@ object NetShield {
         Thread({
             while (!ss.isClosed) {
                 val s = try { ss.accept() } catch (e: Exception) { break }
-                pool.execute { try { handle(s) } catch (e: Exception) { try { s.close() } catch (x: Exception) { } } }
+                pool.execute { try { handle(s) } catch (e: Throwable) { try { s.close() } catch (x: Throwable) { } } }
             }
         }, "netshield-accept").apply { isDaemon = true }.start()
         return ss.localPort
@@ -249,15 +249,17 @@ object NetShield {
     }
 
     private fun pipe(a: Socket, b: Socket) {
-        fun copy(i: InputStream, o: OutputStream) {
+        fun copy(from: Socket, to: Socket) {
             try {
+                val i = from.getInputStream()
+                val o = to.getOutputStream()
                 val buf = ByteArray(16384)
                 while (true) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n); o.flush() }
-            } catch (e: Exception) { }
-            try { a.close() } catch (e: Exception) { }
-            try { b.close() } catch (e: Exception) { }
+            } catch (e: Throwable) { }
+            try { a.close() } catch (e: Throwable) { }
+            try { b.close() } catch (e: Throwable) { }
         }
-        pool.execute { copy(b.getInputStream(), a.getOutputStream()) }
-        copy(a.getInputStream(), b.getOutputStream())
+        pool.execute { copy(b, a) }
+        copy(a, b)
     }
 }
