@@ -331,6 +331,52 @@ object MovieInfo {
         }
     }
 
+
+    // ---------- Logo del título (imagen con la tipografía propia de cada película) ----------
+
+    private fun logoPrefs(context: Context) = context.applicationContext.getSharedPreferences("movie_logo", Context.MODE_PRIVATE)
+
+    /** URL del logo del título en TMDb (null si no hay o no hay clave). [isTv] null = probar película y luego serie. */
+    fun logo(context: Context, title: String, year: String?, isTv: Boolean?, onDone: (String?) -> Unit) {
+        val appContext = context.applicationContext
+        val tmdbKey = AppPrefs.getTmdbKey(appContext)
+        if (tmdbKey.isBlank() || title.isBlank()) { onDone(null); return }
+        val key = (if (isTv == null) "x" else if (isTv) "t" else "m") + "|" + norm(title) + "|" + (year ?: "")
+        val cached = logoPrefs(appContext).getString(key, null)
+        if (cached != null) { onDone(cached.ifEmpty { null }); return }
+        pool.execute {
+            var url: String? = null
+            try {
+                val kinds = when (isTv) { true -> listOf("tv"); false -> listOf("movie"); null -> listOf("movie", "tv") }
+                for (kind in kinds) {
+                    val yp = if (year.isNullOrBlank()) "" else (if (kind == "movie") "&year=" else "&first_air_date_year=") + year
+                    val body = httpGet("$TMDB/search/$kind?api_key=$tmdbKey&language=es-ES&query=" + URLEncoder.encode(title, "UTF-8") + yp) ?: continue
+                    val res = JSONObject(body).optJSONArray("results") ?: continue
+                    if (res.length() == 0) continue
+                    val id = res.optJSONObject(0)?.optInt("id", 0) ?: 0
+                    if (id == 0) continue
+                    val img = httpGet("$TMDB/$kind/$id/images?api_key=$tmdbKey&include_image_language=es,en,null") ?: continue
+                    val logos = JSONObject(img).optJSONArray("logos") ?: continue
+                    var best: JSONObject? = null
+                    var bestScore = -1.0
+                    for (i in 0 until logos.length()) {
+                        val l = logos.optJSONObject(i) ?: continue
+                        if (l.optString("file_path").endsWith(".svg", true)) continue
+                        val lang = l.optString("iso_639_1")
+                        val pri = when (lang) { "es" -> 3.0; "en" -> 2.0; "" , "null" -> 1.0; else -> -1.0 }
+                        if (pri < 0) continue
+                        val score = pri * 100 + l.optDouble("vote_average", 0.0)
+                        if (score > bestScore) { bestScore = score; best = l }
+                    }
+                    best?.optString("file_path")?.takeIf { it.isNotEmpty() }?.let { url = TMDB_IMG + "w500" + it }
+                    if (url != null) break
+                }
+                logoPrefs(appContext).edit().putString(key, url ?: "").apply()
+            } catch (e: Exception) { }
+            onDone(url)
+        }
+    }
+
     private fun httpGet(url: String): String? {
         val conn = URL(url).openConnection() as HttpURLConnection
         return try {

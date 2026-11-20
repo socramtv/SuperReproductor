@@ -2458,14 +2458,21 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         col.addView(header, lp(MATCH, dp(240)))
 
-        col.addView(TextView(this).apply {
+        val titleTv = TextView(this).apply {
             text = info?.title ?: query
             textSize = 24f
             setTextColor(cText)
             gravity = android.view.Gravity.CENTER
             typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
             setPadding(dp(20), 0, dp(20), 0)
-        }, lp(MATCH, WRAP, t = -34))
+        }
+        col.addView(titleTv, lp(MATCH, WRAP, t = -34))
+        val logoIv = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            visibility = View.GONE
+        }
+        col.addView(logoIv, lp(MATCH, dp(88), l = 40, t = -44, r = 40))
 
         // ---- Datos: nota, año, duración, clasificación ----
         if (info != null) {
@@ -2571,34 +2578,12 @@ class TelegramAccountActivity : AppCompatActivity() {
             col.addView(tvBtn, lp(MATCH, dp(44), l = 28, t = 8, r = 28))
         }
 
-        // ---- Fila secundaria: tráiler, favoritos, visto, más ----
-        val row = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
-        val ghost = 0x1FFFFFFF
+        // ---- Botones en cuadrícula de dos columnas ----
         val trailerKey = info?.trailerKey
-        if (!trailerKey.isNullOrBlank()) row.addView(pill(getString(R.string.info_trailer), ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 14f, heightDp = 44) {
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$trailerKey")))
-            } catch (e: Exception) {
-                Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show()
-            }
-        }, android.widget.LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(6), 0) })
-        fun isFavNow() = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
-        lateinit var favBtn: TextView
-        favBtn = pill(getString(if (isFavNow()) R.string.info_fav_on else R.string.info_fav_add), ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 14f, heightDp = 44) {
-            toggleVideoFav(options, query, thumbId)
-            favBtn.text = getString(if (isFavNow()) R.string.info_fav_on else R.string.info_fav_add)
-        }
-        row.addView(favBtn, android.widget.LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(6), 0) })
-        if (!series) {
-            val allSeen = options.all { isSeen(it) }
-            row.addView(pill(getString(if (allSeen) R.string.info_seen_on else R.string.info_seen_off), ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 14f, heightDp = 44) {
-                TgWatched.setAll(this, options.map { watchKey(it) }, !allSeen)
-                dialog.dismiss()
-                showMovieInfo(options, query, thumbId, startSeason)
-                rerenderMarks()
-            }, android.widget.LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, 0, dp(6), 0) })
-        }
-        row.addView(pill("⋯", ghost, stroke = 1, strokeColor = 0x40FFFFFF, sizeSp = 18f, heightDp = 44) {
+        fun tile(text: String, onClick: () -> Unit) =
+            pill(text, 0x1FFFFFFF, sizeSp = 14f, heightDp = 48, stroke = 1, strokeColor = 0x40FFFFFF, onClick = onClick)
+                .also { it.background = focusBg(0x1FFFFFFF, 14, 1, 0x40FFFFFF) }
+        fun openMore() {
             val labels = ArrayList<String>()
             val acts = ArrayList<() -> Unit>()
             if (series) {
@@ -2633,11 +2618,67 @@ class TelegramAccountActivity : AppCompatActivity() {
                 labels.add(getString(R.string.tgcover_btn))
                 acts.add { dialog.dismiss(); showChangeCover(query) { showMovieInfo(options, query, thumbId, season) } }
             }
+            labels.add(getString(R.string.tile_prev_toggle, getString(if (previewOn()) R.string.tile_yes else R.string.tile_no)))
+            acts.add {
+                getSharedPreferences("tg_ficha", MODE_PRIVATE).edit().putBoolean("preview", !previewOn()).apply()
+                Toast.makeText(this, if (previewOn()) R.string.tile_prev_now_on else R.string.tile_prev_now_off, Toast.LENGTH_SHORT).show()
+            }
+            labels.add(getString(R.string.tile_pending_list, pendingTitles().size)); acts.add { showPendingList() }
             labels.add(getString(R.string.tgfwd_action)); acts.add { forwardVideoOptions(options, query) }
             labels.add(getString(R.string.tgfold_add_btn)); acts.add { addToFolder(options, query, thumbId) }
             AlertDialog.Builder(this).setItems(labels.toTypedArray()) { _, which -> acts[which]() }.show()
-        }, android.widget.LinearLayout.LayoutParams(dp(56), dp(44)))
-        col.addView(row, lp(MATCH, dp(48), l = 28, t = 10, r = 28))
+        }
+        fun isFavNow() = options.any { TelegramAccountPrefs.isVideoFavorite(this, it.chatId, it.messageId) }
+        val tiles = ArrayList<TextView>()
+        if (!trailerKey.isNullOrBlank()) tiles.add(tile(getString(R.string.tile_trailer)) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$trailerKey")))
+            } catch (e: Exception) {
+                Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show()
+            }
+        })
+        lateinit var favBtn: TextView
+        favBtn = tile(getString(if (isFavNow()) R.string.tile_fav_on else R.string.tile_fav_add)) {
+            toggleVideoFav(options, query, thumbId)
+            favBtn.text = getString(if (isFavNow()) R.string.tile_fav_on else R.string.tile_fav_add)
+        }
+        tiles.add(favBtn)
+        val pendKey = query.ifEmpty { titleOf(options[0]) }
+        lateinit var pendBtn: TextView
+        pendBtn = tile(getString(if (isPending(pendKey)) R.string.tile_pending_on else R.string.tile_pending_add)) {
+            togglePending(pendKey)
+            pendBtn.text = getString(if (isPending(pendKey)) R.string.tile_pending_on else R.string.tile_pending_add)
+        }
+        tiles.add(pendBtn)
+        if (!series) {
+            val allSeen = options.all { isSeen(it) }
+            tiles.add(tile(getString(if (allSeen) R.string.tile_seen_on else R.string.tile_seen_off)) {
+                TgWatched.setAll(this, options.map { watchKey(it) }, !allSeen)
+                dialog.dismiss()
+                showMovieInfo(options, query, thumbId, startSeason)
+                rerenderMarks()
+            })
+        } else if (totalCount > 0) {
+            tiles.add(tile(getString(if (seenCount >= totalCount) R.string.tile_seen_on else R.string.tile_seen_off)) {
+                TgWatched.setAll(this, ordered.map { watchKey(it.third) }, seenCount < totalCount)
+                dialog.dismiss()
+                showMovieInfo(options, query, thumbId, season)
+                if (!isFinishing) rerenderMarks()
+            })
+        }
+        tiles.add(tile(getString(R.string.tile_more)) { openMore() })
+        var gi = 0
+        while (gi < tiles.size) {
+            val grow = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
+            if (gi + 1 < tiles.size) {
+                grow.addView(tiles[gi], android.widget.LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(0, 0, dp(5), 0) })
+                grow.addView(tiles[gi + 1], android.widget.LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(dp(5), 0, 0, 0) })
+            } else {
+                grow.addView(tiles[gi], android.widget.LinearLayout.LayoutParams(0, dp(48), 1f))
+            }
+            col.addView(grow, lp(MATCH, dp(48), l = 28, t = if (gi == 0) 12 else 10, r = 28))
+            gi += 2
+        }
 
         // ---- Sinopsis ----
         if (info != null) {
@@ -2819,6 +2860,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         dialog.show()
         playBtn.requestFocus()
+        attachPreview(header, dialog, playTarget?.third ?: options.firstOrNull { it.fileId != null && it.size > 0 })
+        applyLogo(info?.title ?: query, info?.year, if (info != null) info.isTv else null, titleTv, logoIv, dialog)
     }
 
     private fun optionButton(m: TgMessage, n: Int, multiple: Boolean, onClick: () -> Unit): android.widget.Button {
@@ -4375,14 +4418,21 @@ class TelegramAccountActivity : AppCompatActivity() {
         }, android.widget.FrameLayout.LayoutParams(MATCH, dp(130), android.view.Gravity.BOTTOM))
         col.addView(header, lp(MATCH, dp(300)))
 
-        col.addView(TextView(this).apply {
+        val titleTv = TextView(this).apply {
             text = title
             textSize = 24f
             setTextColor(cText)
             gravity = android.view.Gravity.CENTER
             typeface = android.graphics.Typeface.create(typeface, android.graphics.Typeface.BOLD)
             setPadding(dp(20), 0, dp(20), 0)
-        }, lp(MATCH, WRAP, t = -34))
+        }
+        col.addView(titleTv, lp(MATCH, WRAP, t = -34))
+        val logoIv = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            visibility = View.GONE
+        }
+        col.addView(logoIv, lp(MATCH, dp(88), l = 40, t = -44, r = 40))
 
         // ---- Nota, año, duración ----
         val facts = android.widget.LinearLayout(this).apply {
@@ -4429,6 +4479,36 @@ class TelegramAccountActivity : AppCompatActivity() {
                 used += w
             }
             col.addView(gbox, lp(MATCH, WRAP, t = 6))
+        }
+
+        // ---- Botones en cuadrícula: tráiler (cuando se encuentra) y pendientes ----
+        fun tile(text: String, onClick: () -> Unit) =
+            pill(text, 0x1FFFFFFF, sizeSp = 14f, heightDp = 48, stroke = 1, strokeColor = 0x40FFFFFF, onClick = onClick)
+                .also { it.background = focusBg(0x1FFFFFFF, 14, 1, 0x40FFFFFF) }
+        val tileRow = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
+        lateinit var pendBtn: TextView
+        pendBtn = tile(getString(if (isPending(title)) R.string.tile_pending_on else R.string.tile_pending_add)) {
+            togglePending(title)
+            pendBtn.text = getString(if (isPending(title)) R.string.tile_pending_on else R.string.tile_pending_add)
+        }
+        tileRow.addView(pendBtn, android.widget.LinearLayout.LayoutParams(0, dp(48), 1f))
+        col.addView(tileRow, lp(MATCH, dp(48), l = 28, t = 14, r = 28))
+        MovieInfo.request(this, if (year != null) "$title ($year)" else title) { info ->
+            runOnUiThread {
+                if (info == null || isFinishing || isDestroyed || !dialog.isShowing) return@runOnUiThread
+                val bd = info.backdropUrl?.takeIf { it.isNotBlank() }
+                if (bd != null) img.load(bd)
+                val tk = info.trailerKey
+                if (!tk.isNullOrBlank()) {
+                    val tb = tile(getString(R.string.tile_trailer)) {
+                        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$tk"))) }
+                        catch (e: Exception) { Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show() }
+                    }
+                    tileRow.addView(tb, 0, android.widget.LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(0, 0, dp(5), 0) })
+                    (pendBtn.layoutParams as android.widget.LinearLayout.LayoutParams).setMargins(dp(5), 0, 0, 0)
+                    tileRow.requestLayout()
+                }
+            }
         }
 
         // ---- Servidores: botón grande por cada enlace de vídeo; el resto (TMDB…) en gris ----
@@ -4488,9 +4568,103 @@ class TelegramAccountActivity : AppCompatActivity() {
             setDimAmount(0.75f)
         }
         dialog.show()
+        applyLogo(title, year, null, titleTv, logoIv, dialog)
         first?.requestFocus()
         // La miniatura solo se ve si ya estaba cargada; si no, se descarga la foto.
         if (m.fileId != null && thumbPaths[m.thumbId] == null) download(m) { path -> if (!isFinishing && !isDestroyed && dialog.isShowing) img.load(File(path)) }
+    }
+
+
+    // ---- Fichas: logo del título, vista previa en la cabecera y lista de pendientes ----
+
+    private fun applyLogo(title: String, year: String?, isTv: Boolean?, titleTv: TextView, logoIv: android.widget.ImageView, dialog: android.app.Dialog) {
+        MovieInfo.logo(this, title, year, isTv) { url ->
+            if (url == null) return@logo
+            runOnUiThread {
+                if (isFinishing || isDestroyed || !dialog.isShowing) return@runOnUiThread
+                logoIv.load(url) {
+                    listener(onSuccess = { _, _ ->
+                        titleTv.visibility = View.GONE
+                        logoIv.visibility = View.VISIBLE
+                    })
+                }
+            }
+        }
+    }
+
+    private fun previewOn() = getSharedPreferences("tg_ficha", MODE_PRIVATE).getBoolean("preview", true)
+
+    /** Durante unos 10 s se ve el vídeo (sin sonido) en la cabecera de la ficha, en lugar de la carátula. */
+    private fun attachPreview(header: android.widget.FrameLayout, dialog: android.app.Dialog, m: TgMessage?) {
+        if (m == null || !previewOn()) return
+        if (isRarPart(m) || m.kind == "linkvideo" || m.fileId == null || m.size <= 0) return
+        val st = streamFor(m) ?: return
+        val exo = try { androidx.media3.exoplayer.ExoPlayer.Builder(this).build() } catch (e: Exception) { return }
+        val pv = androidx.media3.ui.PlayerView(this).apply {
+            useController = false
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            setShutterBackgroundColor(0x00000000)
+            alpha = 0f
+            player = exo
+        }
+        header.addView(pv, 1, android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        var released = false
+        fun release() {
+            if (released) return
+            released = true
+            h.removeCallbacksAndMessages(null)
+            try { exo.release() } catch (e: Exception) { }
+        }
+        exo.volume = 0f
+        exo.setMediaItem(androidx.media3.common.MediaItem.fromUri(st.url))
+        exo.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onRenderedFirstFrame() {
+                pv.animate().alpha(1f).setDuration(500).start()
+                h.postDelayed({
+                    if (!released) pv.animate().alpha(0f).setDuration(600).withEndAction { release(); pv.visibility = View.GONE }.start()
+                }, 10_000)
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { pv.visibility = View.GONE; release() }
+        })
+        exo.prepare()
+        exo.playWhenReady = true
+        h.postDelayed({ release(); pv.visibility = View.GONE }, 40_000)
+        dialog.setOnDismissListener { release() }
+    }
+
+    private fun pendingPrefs() = getSharedPreferences("tg_pending", MODE_PRIVATE)
+
+    private fun pendingTitles(): List<String> = try {
+        val a = org.json.JSONArray(pendingPrefs().getString("list", "[]"))
+        (0 until a.length()).map { a.getString(it) }
+    } catch (e: Exception) { emptyList() }
+
+    private fun isPending(t: String) = pendingTitles().any { it.equals(t, true) }
+
+    /** Añade o quita un título de pendientes; devuelve true si queda dentro. */
+    private fun togglePending(t: String): Boolean {
+        val l = pendingTitles().toMutableList()
+        val now = if (l.removeAll { it.equals(t, true) }) false else { l.add(0, t); true }
+        pendingPrefs().edit().putString("list", org.json.JSONArray(l).toString()).apply()
+        Toast.makeText(this, if (now) R.string.tile_pending_added else R.string.tile_pending_removed, Toast.LENGTH_SHORT).show()
+        return now
+    }
+
+    private fun showPendingList() {
+        val l = pendingTitles()
+        if (l.isEmpty()) { Toast.makeText(this, R.string.tile_pending_empty, Toast.LENGTH_LONG).show(); return }
+        val dlg = AlertDialog.Builder(this).setTitle(getString(R.string.tile_pending_title, l.size))
+            .setItems(l.toTypedArray()) { _, w ->
+                val q = l[w]
+                val opts = libraryMessages().groupBy { nameKey(searchTitle(it)) }[nameKey(q)]
+                if (opts != null) onVideoClick(opts, searchTitle(opts[0]), opts.firstOrNull { it.thumbId != 0 }?.thumbId ?: 0)
+                else Toast.makeText(this, R.string.person_not_in_lib, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.channel_check_close, null).create()
+        dlg.show()
+        dlg.listView.setOnItemLongClickListener { _, _, pos, _ -> togglePending(l[pos]); dlg.dismiss(); showPendingList(); true }
     }
 
     private fun showButtons(m: TgMessage) {

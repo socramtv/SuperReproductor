@@ -1991,3 +1991,10 @@ La lista de servidores reconocidos (y sus espejos) se amplía mucho: doodstream/
 - Navegador → Ajustes → **🛡 Modo anti-bloqueo de red**: el navegador de la app (y el resolutor de enlaces) pasa por un intermediario local (`data/NetShield.kt`, usa `androidx.webkit` ProxyController) que resuelve con el DNS por HTTPS elegido (o xdp.es/Cloudflare/Google si es el del sistema) y parte por la mitad del nombre del servidor el primer mensaje TLS. Sirve cuando la operadora corta con `ERR_CONNECTION_RESET` en datos móviles. No descifra el tráfico.
 - El modo anti-bloqueo es ahora global (`NetShield.enabled`): también lo usa el **reproductor** (OkHttp por el intermediario), el resolutor de páginas y la descarga de listas. Se activa desde el navegador (Ajustes) o desde «DNS de los canales → Más…».
 - NetShield prueba varias formas de enviar el primer mensaje TLS (registros TLS partidos, paquetes TCP partidos, sin trucos), reintenta con otra si el servidor no responde y recuerda la que funcionó por servidor. Registro en navegador → Ajustes → «📋 Registro del modo anti-bloqueo».
+
+## Fichas de Telegram más completas
+
+- Botones en cuadrícula de dos columnas: 🎬 Ver tráiler, ⭐ Añadir a favoritos, ➕ Pendientes, ○ Marcar vista y ⋯ Más opciones (también en la ficha del bot, con tráiler y fondo de TMDB cuando se encuentran).
+- **Pendientes**: lista propia de títulos por ver (⋯ → «📌 Ver pendientes»; mantén pulsado para quitar).
+- **Logo del título**: si TMDB tiene el logo de la película/serie (en español, inglés o sin idioma), sustituye al texto del título (`MovieInfo.logo`, con caché).
+- **Vista previa**: al abrir la ficha, la cabecera reproduce ~10 s del vídeo sin sonido y vuelve a la carátula (⋯ → «Vista previa» para desactivarla).

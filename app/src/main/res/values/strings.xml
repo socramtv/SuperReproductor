@@ -1183,4 +1183,22 @@
     <string name="shield_on_item">🛡 Activar modo anti-bloqueo (reproductor y navegador)</string>
     <string name="shield_off_item">🛡 Desactivar modo anti-bloqueo (ahora activado)</string>
     <string name="web_shield_log">📋 Registro del modo anti-bloqueo</string>
+    <string name="tile_trailer">🎬 Ver tráiler</string>
+    <string name="tile_fav_add">⭐ Añadir a favoritos</string>
+    <string name="tile_fav_on">★ En favoritos</string>
+    <string name="tile_pending_add">➕ Pendientes</string>
+    <string name="tile_pending_on">✓ En pendientes</string>
+    <string name="tile_seen_on">✓ Vista</string>
+    <string name="tile_seen_off">○ Marcar vista</string>
+    <string name="tile_more">⋯ Más opciones</string>
+    <string name="tile_pending_added">Añadido a pendientes</string>
+    <string name="tile_pending_removed">Quitado de pendientes</string>
+    <string name="tile_pending_empty">No tienes títulos pendientes. Pulsa «➕ Pendientes» en una ficha.</string>
+    <string name="tile_pending_title">Pendientes (%1$d) · mantén pulsado para quitar</string>
+    <string name="tile_pending_list">📌 Ver pendientes (%1$d)</string>
+    <string name="tile_prev_toggle">🎞 Vista previa del vídeo en la ficha: %1$s</string>
+    <string name="tile_yes">sí</string>
+    <string name="tile_no">no</string>
+    <string name="tile_prev_now_on">Vista previa activada (se ve al abrir la ficha)</string>
+    <string name="tile_prev_now_off">Vista previa desactivada</string>
 </resources>
