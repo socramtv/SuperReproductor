@@ -4655,7 +4655,11 @@ class TelegramAccountActivity : AppCompatActivity() {
         fun fail(why: String) {
             if (released) return
             release()
-            Toast.makeText(this, getString(R.string.tile_trailer_fail, why), Toast.LENGTH_LONG).show()
+            try {
+                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("trailer", why))
+            } catch (e: Exception) { }
+            Toast.makeText(this, getString(R.string.tile_trailer_fail, why.take(60)) + " (error copiado)", Toast.LENGTH_LONG).show()
         }
         dialog.setOnDismissListener { release() }
         Thread {

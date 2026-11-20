@@ -73,7 +73,7 @@ object YtTrailer {
             if (res != null) synchronized(cache) { cache[key] = res }
             res
         } catch (e: Throwable) {
-            lastError = (e.javaClass.simpleName + ": " + (e.message ?: "")).take(90)
+            lastError = (e.javaClass.simpleName + ": " + (e.message ?: "")).take(600)
             null
         }
     }
