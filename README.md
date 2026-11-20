@@ -2000,3 +2000,5 @@ La lista de servidores reconocidos (y sus espejos) se amplía mucho: doodstream/
 - **Vista previa**: al abrir la ficha, la cabecera reproduce ~10 s del vídeo sin sonido y vuelve a la carátula (⋯ → «Vista previa» para desactivarla).
 - La vista previa de la ficha ahora es el **tráiler de YouTube** (≈10 s, con sonido, incrustado con la API de iframe; si no se deja incrustar no se muestra) y, si no hay tráiler, el principio del vídeo. Corregido el logo del título: Coil no cargaba en una vista oculta (tamaño explícito) y los «no hay logo» ya no se guardan para siempre.
 - Vista previa del tráiler: ahora carga la página de incrustado de YouTube con `Referer` (sin él YouTube da el error 153), oculta sus controles y se muestra solo cuando el vídeo suena. Logos: el español va siempre primero y la caché de logos se renueva.
+
+- **Tráiler en la ficha (sin WebView):** la app saca la dirección directa del tráiler de YouTube (NewPipeExtractor, vía JitPack) y lo reproduce con sonido ~10 s en la cabecera de la ficha. Si falla, avisa con el motivo.

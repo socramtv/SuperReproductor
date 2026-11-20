@@ -58,6 +58,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -76,6 +77,9 @@ android {
 
     // Más ligera: las librerías nativas (TDLib) van comprimidas dentro de la APK...
     packaging {
+        resources {
+            excludes += listOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/INDEX.LIST", "META-INF/*.kotlin_module")
+        }
         jniLibs {
             useLegacyPackaging = true
         }
@@ -114,6 +118,9 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.webkit:webkit:1.12.1")
+    // Tráiler de YouTube: saca la dirección directa del vídeo (sin WebView) y la reproduce en ExoPlayer
+    implementation("com.github.teamnewpipe:NewPipeExtractor:v0.24.8")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Media3 / ExoPlayer: soporte DASH + HLS + UI del reproductor + sesión
     // multimedia (reproducción en segundo plano / pantalla de bloqueo)

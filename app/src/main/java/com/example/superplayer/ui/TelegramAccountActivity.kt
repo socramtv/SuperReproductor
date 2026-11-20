@@ -4638,109 +4638,72 @@ class TelegramAccountActivity : AppCompatActivity() {
     }
 
 
-    /** Tráiler de YouTube en la cabecera de la ficha: ~10 s con sonido y se vuelve a la carátula. Si el tráiler no se deja incrustar, no se ve nada. */
-    @android.annotation.SuppressLint("SetJavaScriptEnabled")
+    /** Tráiler de YouTube en la cabecera de la ficha: ~10 s con sonido (desde el segundo 3) y se vuelve a la carátula. */
     private fun attachTrailerPreview(header: android.widget.FrameLayout, dialog: android.app.Dialog, key: String) {
         if (!previewOn() || !Regex("^[A-Za-z0-9_-]{6,20}$").matches(key)) return
-        val wv = try { android.webkit.WebView(this) } catch (e: Exception) { return }
         val h = android.os.Handler(android.os.Looper.getMainLooper())
         var released = false
-        var shown = false
-        val wrap = object : android.widget.FrameLayout(this@TelegramAccountActivity) {
-            override fun onInterceptTouchEvent(ev: android.view.MotionEvent?): Boolean = true
-            override fun onTouchEvent(event: android.view.MotionEvent?): Boolean = false
-        }
-        wrap.alpha = 0.01f
-        wrap.setBackgroundColor(0xFF000000.toInt())
-        // El vídeo es 16:9: se agranda el WebView para que llene la cabecera (recorta lo que sobra).
-        wrap.addView(wv, android.widget.FrameLayout.LayoutParams(
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.Gravity.CENTER))
-        header.addView(wrap, 1, android.widget.FrameLayout.LayoutParams(
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
-        header.post {
-            val hw = header.width
-            val hh = header.height
-            if (hw > 0 && hh > 0) {
-                val w = maxOf(hw, hh * 16 / 9)
-                val hgt = maxOf(hh, hw * 9 / 16)
-                wv.layoutParams = android.widget.FrameLayout.LayoutParams(w, hgt, android.view.Gravity.CENTER)
-            }
-        }
+        var exo: androidx.media3.exoplayer.ExoPlayer? = null
+        var pv: androidx.media3.ui.PlayerView? = null
         fun release() {
             if (released) return
             released = true
             h.removeCallbacksAndMessages(null)
-            try { (wrap.parent as? android.view.ViewGroup)?.removeView(wrap) } catch (e: Exception) { }
-            try { wv.stopLoading(); wv.destroy() } catch (e: Exception) { }
+            try { pv?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) } } catch (e: Exception) { }
+            try { exo?.release() } catch (e: Exception) { }
         }
-        fun fadeOut() {
-            if (!released) wrap.animate().alpha(0f).setDuration(600).withEndAction { release() }.start()
-        }
-        wv.settings.javaScriptEnabled = true
-        wv.settings.domStorageEnabled = true
-        wv.settings.mediaPlaybackRequiresUserGesture = false
-        wv.setBackgroundColor(0xFF000000.toInt())
-        wv.isVerticalScrollBarEnabled = false
-        wv.webChromeClient = android.webkit.WebChromeClient()
-        val css = ".ytp-chrome-top,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-chrome-bottom,.ytp-pause-overlay,.ytp-watermark," +
-            ".ytp-impression-link,.ytp-show-cards-title,.ytp-ce-element,.ytp-spinner{display:none!important}.ytp-large-play-button{opacity:0!important}" +
-            "html,body{background:#000!important;overflow:hidden!important}"
-        val inject = "(function(){var s=document.createElement('style');s.innerHTML='" + css + "';document.head.appendChild(s);})();"
-        // Cada segundo: ¿está sonando el vídeo (se muestra) o salió un error (se quita, y se avisa del motivo)?
-        var checks = 0
         fun fail(why: String) {
             if (released) return
             release()
             Toast.makeText(this, getString(R.string.tile_trailer_fail, why), Toast.LENGTH_LONG).show()
         }
-        fun check() {
-            if (released) return
-            checks++
-            // YouTube móvil no carga el vídeo hasta un toque real: se simula uno en el centro
-            if (checks in 2..8 && checks % 2 == 0) {
-                val t = android.os.SystemClock.uptimeMillis()
-                val cx = wv.width / 2f; val cy = wv.height / 2f
-                for ((i, a) in intArrayOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP).withIndex()) {
-                    val ev = android.view.MotionEvent.obtain(t, t + i * 60L, a, cx, cy, 0)
-                    wv.dispatchTouchEvent(ev); ev.recycle()
-                }
-            }
-            wv.evaluateJavascript(
-                "(function(){var e=document.querySelector('.ytp-error');if(e){var r=document.querySelector('.ytp-error-content-wrap-reason');return 'err:'+(r?r.innerText:e.innerText);}" +
-                "var v=document.querySelector('video');if(!v)return 'wait:sinvideo:'+document.title;" +
-                "if(!v.paused&&v.currentTime>0)return 'play';" +
-                "try{var b=document.querySelector('.ytp-large-play-button');if(b)b.click();v.muted=false;v.play();}catch(x){}" +
-                "return 'wait:pausado:'+v.readyState;})()"
-            ) { r ->
-                if (released) return@evaluateJavascript
-                val t = (r ?: "").trim('"')
-                when {
-                    t.startsWith("err:") -> fail(t.removePrefix("err:").take(80).ifBlank { "error de YouTube" })
-                    t == "play" -> if (!shown) {
-                        shown = true
-                        wrap.animate().alpha(1f).setDuration(500).start()
-                        h.postDelayed({ fadeOut() }, 10_500)
-                    }
-                    checks < 20 -> h.postDelayed({ check() }, 1000)
-                    else -> fail(t.removePrefix("wait:").take(80).ifBlank { "sin respuesta" })
-                }
-            }
-        }
-        wv.webViewClient = object : android.webkit.WebViewClient() {
-            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
-                if (released) return
-                view?.evaluateJavascript(inject, null)
-                h.postDelayed({ check() }, 1200)
-            }
-            override fun onReceivedError(view: android.webkit.WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
-                if (request?.isForMainFrame == true) fail(error?.description?.toString() ?: "sin conexión")
-            }
-        }
-        val url = "https://www.youtube.com/embed/$key?autoplay=1&controls=0&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3" +
-            "&disablekb=1&fs=0&start=3&end=14&enablejsapi=1&origin=https://www.youtube.com"
-        wv.loadUrl(url, mapOf("Referer" to "https://www.youtube.com/"))
-        h.postDelayed({ release() }, 45_000)
         dialog.setOnDismissListener { release() }
+        Thread {
+            val r = com.example.superplayer.data.YtTrailer.resolve(key)
+            runOnUiThread {
+                if (released) return@runOnUiThread
+                if (r == null) { fail(com.example.superplayer.data.YtTrailer.lastError.ifBlank { "sin vídeo" }); return@runOnUiThread }
+                try {
+                    val player = androidx.media3.exoplayer.ExoPlayer.Builder(this).build()
+                    exo = player
+                    val view = androidx.media3.ui.PlayerView(this).apply {
+                        useController = false
+                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        setShutterBackgroundColor(0x00000000)
+                        alpha = 0f
+                        this.player = player
+                    }
+                    pv = view
+                    header.addView(view, 1, android.widget.FrameLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+                    val df = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                        .setUserAgent("Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0")
+                        .setAllowCrossProtocolRedirects(true)
+                    val pf = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(df)
+                    val vs = pf.createMediaSource(androidx.media3.common.MediaItem.fromUri(r.video))
+                    val src = if (r.audio != null)
+                        androidx.media3.exoplayer.source.MergingMediaSource(vs, pf.createMediaSource(androidx.media3.common.MediaItem.fromUri(r.audio)))
+                    else vs
+                    player.volume = 1f
+                    player.setMediaSource(src)
+                    player.seekTo(3_000)
+                    player.addListener(object : androidx.media3.common.Player.Listener {
+                        override fun onRenderedFirstFrame() {
+                            view.animate().alpha(1f).setDuration(500).start()
+                            h.postDelayed({
+                                if (!released) view.animate().alpha(0f).setDuration(600).withEndAction { release() }.start()
+                            }, 10_000)
+                        }
+                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            fail((error.errorCodeName).take(60))
+                        }
+                    })
+                    player.prepare()
+                    player.playWhenReady = true
+                    h.postDelayed({ release() }, 40_000)
+                } catch (e: Throwable) { fail((e.message ?: e.javaClass.simpleName).take(60)) }
+            }
+        }.start()
     }
 
     private fun pendingPrefs() = getSharedPreferences("tg_pending", MODE_PRIVATE)
