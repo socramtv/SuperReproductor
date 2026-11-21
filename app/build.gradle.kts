@@ -117,6 +117,8 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.webkit:webkit:1.12.1")
+    // Tráiler de YouTube en la ficha (reproductor incrustado con WebView ya resuelto)
+    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:13.0.0")
 
     // Media3 / ExoPlayer: soporte DASH + HLS + UI del reproductor + sesión
     // multimedia (reproducción en segundo plano / pantalla de bloqueo)

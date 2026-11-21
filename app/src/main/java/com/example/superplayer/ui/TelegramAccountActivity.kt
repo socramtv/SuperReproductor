@@ -2860,7 +2860,8 @@ class TelegramAccountActivity : AppCompatActivity() {
         }
         dialog.show()
         playBtn.requestFocus()
-        attachPreview(header, dialog, playTarget?.third ?: options.firstOrNull { it.fileId != null && it.size > 0 })
+        val fallbackPreview = { attachPreview(header, dialog, playTarget?.third ?: options.firstOrNull { it.fileId != null && it.size > 0 }) }
+        if (!trailerKey.isNullOrBlank()) attachTrailerPreview(header, dialog, trailerKey, fallbackPreview) else fallbackPreview()
         applyLogo(info?.title ?: query, info?.year, if (info != null) info.isTv else null, titleTv, logoIv, dialog)
     }
 
@@ -4500,6 +4501,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 if (bd != null) img.load(bd)
                 val tk = info.trailerKey
                 if (!tk.isNullOrBlank()) {
+                    attachTrailerPreview(header, dialog, tk) { }
                     val tb = tile(getString(R.string.tile_trailer)) {
                         try { startActivity(Intent(this, WebActivity::class.java).setData(Uri.parse("https://m.youtube.com/watch?v=$tk"))) }
                         catch (e: Exception) { Toast.makeText(this, R.string.cine_trailer_error, Toast.LENGTH_SHORT).show() }
@@ -4635,6 +4637,87 @@ class TelegramAccountActivity : AppCompatActivity() {
         dialog.setOnDismissListener { release() }
     }
 
+
+    /** Tráiler de YouTube en la cabecera de la ficha (librería android-youtube-player): ~10 s con sonido desde el segundo 3. Si falla, avisa y usa `fallback`. */
+    private fun attachTrailerPreview(header: android.widget.FrameLayout, dialog: android.app.Dialog, key: String, fallback: () -> Unit) {
+        if (!previewOn() || !Regex("^[A-Za-z0-9_-]{6,20}$").matches(key)) { fallback(); return }
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        var released = false
+        var shown = false
+        val ytv = try {
+            com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView(this)
+        } catch (e: Throwable) { fallback(); return }
+        val wrap = object : android.widget.FrameLayout(this@TelegramAccountActivity) {
+            override fun onInterceptTouchEvent(ev: android.view.MotionEvent?): Boolean = true
+            override fun onTouchEvent(event: android.view.MotionEvent?): Boolean = false
+        }
+        wrap.alpha = 0.01f
+        wrap.setBackgroundColor(0xFF000000.toInt())
+        wrap.addView(ytv, android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.Gravity.CENTER))
+        header.addView(wrap, 1, android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+        // Vídeo 16:9: se agranda para llenar la cabecera (se recorta lo que sobra).
+        header.post {
+            val hw = header.width
+            val hh = header.height
+            if (hw > 0 && hh > 0) {
+                val w = maxOf(hw, hh * 16 / 9)
+                val hgt = maxOf(hh, hw * 9 / 16)
+                ytv.layoutParams = android.widget.FrameLayout.LayoutParams(w, hgt, android.view.Gravity.CENTER)
+            }
+        }
+        fun release() {
+            if (released) return
+            released = true
+            h.removeCallbacksAndMessages(null)
+            try { (wrap.parent as? android.view.ViewGroup)?.removeView(wrap) } catch (e: Exception) { }
+            try { ytv.release() } catch (e: Throwable) { }
+        }
+        fun fail(why: String) {
+            if (released) return
+            release()
+            try {
+                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("trailer", why))
+            } catch (e: Exception) { }
+            Toast.makeText(this, getString(R.string.tile_trailer_fail, why.take(60)), Toast.LENGTH_LONG).show()
+            fallback()
+        }
+        dialog.setOnDismissListener { release() }
+        try {
+            ytv.enableAutomaticInitialization = false
+            val opts = com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions.Builder(this)
+                .controls(0).rel(0).build()
+            ytv.initialize(object : com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener() {
+                override fun onReady(youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer) {
+                    if (!released) youTubePlayer.loadVideo(key, 3f)
+                }
+                override fun onStateChange(
+                    youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer,
+                    state: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants.PlayerState
+                ) {
+                    if (released) return
+                    if (state == com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants.PlayerState.PLAYING && !shown) {
+                        shown = true
+                        h.removeCallbacksAndMessages(null)
+                        wrap.animate().alpha(1f).setDuration(500).start()
+                        h.postDelayed({
+                            if (!released) wrap.animate().alpha(0f).setDuration(600).withEndAction { release() }.start()
+                        }, 10_000)
+                    }
+                }
+                override fun onError(
+                    youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer,
+                    error: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants.PlayerError
+                ) {
+                    fail("YouTube: " + error.name)
+                }
+            }, opts)
+        } catch (e: Throwable) { fail((e.message ?: e.javaClass.simpleName)); return }
+        // Si en 20 s no ha empezado a sonar, se da por fallido.
+        h.postDelayed({ if (!shown) fail("no arranca") }, 20_000)
+    }
 
     private fun pendingPrefs() = getSharedPreferences("tg_pending", MODE_PRIVATE)
 
