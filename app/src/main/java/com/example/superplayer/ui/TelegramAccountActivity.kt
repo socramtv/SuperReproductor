@@ -4640,7 +4640,9 @@ class TelegramAccountActivity : AppCompatActivity() {
 
     /** Tráiler de YouTube en la cabecera de la ficha (librería android-youtube-player): ~10 s con sonido desde el segundo 3. Si falla, avisa y usa `fallback`. */
     private fun attachTrailerPreview(header: android.widget.FrameLayout, dialog: android.app.Dialog, key: String, fallback: () -> Unit) {
-        if (!previewOn() || !Regex("^[A-Za-z0-9_-]{6,20}$").matches(key)) { fallback(); return }
+        // En TV el vídeo del WebView se dibuja en una capa aparte, detrás de la ficha (sale negro y solo se oye):
+        // allí se usa el avance de la propia película (ExoPlayer); "Ver tráiler" sigue disponible.
+        if (isTvDevice || !previewOn() || !Regex("^[A-Za-z0-9_-]{6,20}$").matches(key)) { fallback(); return }
         val h = android.os.Handler(android.os.Looper.getMainLooper())
         var released = false
         var shown = false
