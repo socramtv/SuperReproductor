@@ -4662,8 +4662,9 @@ class TelegramAccountActivity : AppCompatActivity() {
             val hw = header.width
             val hh = header.height
             if (hw > 0 && hh > 0) {
-                val w = maxOf(hw, hh * 16 / 9)
-                val hgt = maxOf(hh, hw * 9 / 16)
+                // Se amplía un 60 % desde el centro: título, logo, compartir y marca de YouTube quedan fuera de la cabecera.
+                val w = (maxOf(hw, hh * 16 / 9) * 1.6f).toInt()
+                val hgt = (maxOf(hh, hw * 9 / 16) * 1.6f).toInt()
                 ytv.layoutParams = android.widget.FrameLayout.LayoutParams(w, hgt, android.view.Gravity.CENTER)
             }
         }
@@ -4684,6 +4685,22 @@ class TelegramAccountActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.tile_trailer_fail, why.take(60)), Toast.LENGTH_LONG).show()
             fallback()
         }
+        fun findWv(v: android.view.View): android.webkit.WebView? {
+            if (v is android.webkit.WebView) return v
+            if (v is android.view.ViewGroup) for (i in 0 until v.childCount) findWv(v.getChildAt(i))?.let { return it }
+            return null
+        }
+        val hideCss = ".ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-large-play-button,.ytp-watermark," +
+            ".ytp-pause-overlay,.ytp-share-button,.ytp-title,.ytp-title-channel,.ytp-ce-element,.ytp-spinner,.ytp-cards-teaser," +
+            ".ytp-youtube-button,.ytp-paid-content-overlay,.ytp-impression-link,.ytp-show-cards-title{display:none!important;opacity:0!important}"
+        val hideJs = "(function(){try{var f=document.querySelector('iframe');var d=null;try{d=f&&f.contentDocument}catch(e){}" +
+            "if(!d)d=document;if(d.getElementById('tvhide'))return;var s=d.createElement('style');s.id='tvhide';s.innerHTML='" + hideCss +
+            "';(d.head||d.documentElement).appendChild(s);}catch(e){}})();"
+        fun hideUi() {
+            for (t in longArrayOf(0, 300, 800, 1500, 2500, 4000)) h.postDelayed({
+                if (!released) try { findWv(ytv)?.evaluateJavascript(hideJs, null) } catch (e: Throwable) { }
+            }, t)
+        }
         dialog.setOnDismissListener { release() }
         try {
             ytv.enableAutomaticInitialization = false
@@ -4691,7 +4708,7 @@ class TelegramAccountActivity : AppCompatActivity() {
                 .controls(0).rel(0).build()
             ytv.initialize(object : com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener() {
                 override fun onReady(youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer) {
-                    if (!released) youTubePlayer.loadVideo(key, 3f)
+                    if (!released) { youTubePlayer.loadVideo(key, 3f); hideUi() }
                 }
                 override fun onStateChange(
                     youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer,
@@ -4701,10 +4718,11 @@ class TelegramAccountActivity : AppCompatActivity() {
                     if (state == com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants.PlayerState.PLAYING && !shown) {
                         shown = true
                         h.removeCallbacksAndMessages(null)
+                        hideUi()
                         wrap.animate().alpha(1f).setDuration(500).start()
                         h.postDelayed({
                             if (!released) wrap.animate().alpha(0f).setDuration(600).withEndAction { release() }.start()
-                        }, 10_000)
+                        }, 20_000)
                     }
                 }
                 override fun onError(
