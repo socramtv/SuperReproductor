@@ -4662,9 +4662,15 @@ class TelegramAccountActivity : AppCompatActivity() {
             val hw = header.width
             val hh = header.height
             if (hw > 0 && hh > 0) {
-                // Se amplía un 60 % desde el centro: título, logo, compartir y marca de YouTube quedan fuera de la cabecera.
-                val w = (maxOf(hw, hh * 16 / 9) * 1.6f).toInt()
-                val hgt = (maxOf(hh, hw * 9 / 16) * 1.6f).toInt()
+                // Vídeo 16:9 que cubre la cabecera. Título, logo, compartir y marca de YouTube deben quedar fuera:
+                // en cabecera ancha (TV) ya lo hace el recorte vertical; en la alta (móvil) se amplía un 60 %.
+                // Sin pasar de ~2000 px: una vista mayor no se dibuja en algunas GPU de TV (sale negro).
+                val bw = maxOf(hw, hh * 16 / 9)
+                val bh = maxOf(hh, hw * 9 / 16)
+                var z = if (hh.toFloat() / bh <= 0.6f) 1f else 1.6f
+                z = minOf(z, maxOf(1f, 2000f / maxOf(bw, bh)))
+                val w = (bw * z).toInt()
+                val hgt = (bh * z).toInt()
                 ytv.layoutParams = android.widget.FrameLayout.LayoutParams(w, hgt, android.view.Gravity.CENTER)
             }
         }
